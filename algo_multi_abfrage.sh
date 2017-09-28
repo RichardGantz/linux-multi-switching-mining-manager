@@ -49,8 +49,12 @@ echo $$ >algo_multi_abfrage.pid
 #"down_step":"-0.0001","min_diff_working":"0.1","min_limit":"0.2","speed_text":"GH","min_diff_initial":"0.04","name":"Skunk","algo":29,"multi":"1"
 #
 #
+SYNCFILE=you_can_read_now.sync
+
 ALGO_NAMES="ALGO_NAMES.json"
-#curl https://api.nicehash.com/api?method=buy.info -o $ALGO_NAMES
+if [ ! -f $ALGO_NAMES ]; then
+    curl https://api.nicehash.com/api?method=buy.info -o $ALGO_NAMES
+fi
 
 # KURSe extrahieren in ALGO_NAMES.in
 gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
@@ -124,12 +128,12 @@ while [ 1 -eq 1 ] ; do
     curl "https://www.bitcoin.de/de" -o $ALGOFILE_btcEUR
     echo --------------------------------------------------------------------        
         
-    #BTC kurs extrahieren und umwandeln, das dieser dann als variable verwendbar und zum rechnen geeignet ist
+    # BTC Kurs extrahieren und umwandeln, das dieser dann als Variable verwendbar und zum Rechnen geeignet ist
     gawk -e '/id="ticker_price">[0-9.,]* €</ \
         { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' $ALGOFILE_btcEUR \
     | grep -E -m 1 -o -e '[0-9.]*' \
 	   > BTC_EUR_kurs.in
-    echo BTC good >you_can_read_now.sync
+    touch $SYNCFILE
 
 ##############################################
 ##############################################
