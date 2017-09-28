@@ -26,6 +26,13 @@ bENCH_SRC=bENCH.in
 # b) sie älter ist als $BENCHFILE oben
 rm -f $bENCH_SRC
 
+# Diese Datei wird alle 31s erstelt, wen die Daten aus dem Internet aktualisiert wurden
+# Sollte diese Datei nicht da sein, weil z.B. die algo_multi_abfrage.sh
+# noch nicht gelaufen ist, warten wir das einfach ab und sehen sekündlich nach,
+# ob die Datei nun da ist und die Daten zur Verfügung stehen.
+SYNCFILE=../you_can_read_now.sync
+while [ ! -f $SYNCFILE ]; do sleep 1; done
+
 ###############################################################################
 #
 # WELCHE ALGOS DA
@@ -114,7 +121,7 @@ while [ 1 -eq 1 ] ; do
 ######################################    
 
     btcEUR=$(< ../BTC_EUR_kurs.in)
-    btcSec=$(date --utc --reference=../you_can_read_now.sync +%s)
+    btcSec=$(date --utc --reference=$SYNCFILE +%s)
     
 ###############################################################################
 #
@@ -297,7 +304,7 @@ while [ 1 -eq 1 ] ; do
     cat best_algo_solar_akku.out
     echo --------------------------------------------------------------------
 
-    while [ $btcSec == $(date --utc --reference=../you_can_read_now.sync +%s) ] ; do
+    while [ $btcSec == $(date --utc --reference=$SYNCFILE +%s) ] ; do
 	echo HAAAAAAAAALOOOOOO... Ist da Wer\? >/dev/null
     done
     
