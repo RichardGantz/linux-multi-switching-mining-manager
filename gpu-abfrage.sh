@@ -108,9 +108,9 @@ for ((i=0; $i<${#index[@]}; i+=1)) ; do
 	#erstellen des folders mit der UUID + copy einer bench-skeleton + gpu_algo.sh
 	mkdir ${uuid[${index[$i]}]}
 	cp GPU-skeleton/benchmark_skeleton.json ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json
-	cp gpu_gv-algo.sh ${uuid[${index[$i]}]}/
+	cp GPU-skeleton/gpu_gv-algo.sh ${uuid[${index[$i]}]}/
 	echo 1. die karte ist neu bitte editiere die benchmark datei
-	echo 2. gpu_gv-algo.sh reinkopieren
+	echo 2. gpu_gv-algo.sh ist reinkopiert
     fi
 
     echo Kartenverzeichnis ${name[${index[$i]}]} ist da
