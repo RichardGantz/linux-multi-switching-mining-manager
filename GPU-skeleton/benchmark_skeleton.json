@@ -1,0 +1,246 @@
+{
+  "DeviceUUID": "",
+  "DeviceName": "",
+  "AlgorithmSettings": [
+    {
+      "Name": "neoscrypt",
+      "NiceHashID": 8,
+      "MinerBaseType": 2,
+      "MinerName": "neoscrypt",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+    {
+      "Name": "lyra2rev2",
+      "NiceHashID": 14,
+      "MinerBaseType": 2,
+      "MinerName": "lyra2rev2",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+    {
+      "Name": "decred",
+      "NiceHashID": 21,
+      "MinerBaseType": 2,
+      "MinerName": "decred",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+    {
+      "Name": "cryptonight",
+      "NiceHashID": 22,
+      "MinerBaseType": 2,
+      "MinerName": "cryptonight",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+    {
+      "Name": "lbry",
+      "NiceHashID": 23,
+      "MinerBaseType": 2,
+      "MinerName": "lbry",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+    {
+      "Name": "x11gost",
+      "NiceHashID": 26,
+      "MinerBaseType": 11,
+      "MinerName": "x11gost",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+    {
+      "Name": "daggerhashimoto",
+      "NiceHashID": 20,
+      "MinerBaseType": 6,
+      "MinerName": "daggerhashimoto",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+    {
+      "Name": "equihash",
+      "NiceHashID": 24,
+      "MinerBaseType": 9,
+      "MinerName": "equihash",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+    {
+      "Name": "pascal",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "pascal",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "sia",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "sia",
+      "BenchmarkSpeed": 9,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "skunk",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "skunk",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "blake2s",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "blake2s",
+      "BenchmarkSpeed": 9,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "x11",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "x11",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "x13",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "x13",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "keccak",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "keccak",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "x15",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "x15",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "nist5",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "nist5",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "lyra2re",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "lyra2re",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "whirlpoolx",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "whirlpoolx",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "qubit",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "qubit",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "quark",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "quark",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "blake256r8",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "blake256r8",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "blake256r14",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "blake256r14",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    },
+{
+      "Name": "blake256r8vnl",
+      "NiceHashID": 25,
+      "MinerBaseType": 9,
+      "MinerName": "blake256r8vnl",
+      "BenchmarkSpeed": ,
+      "ExtraLaunchParameters": "",
+      "WATT": ,
+      "LessThreads": 0
+    }
+  ]
+}
