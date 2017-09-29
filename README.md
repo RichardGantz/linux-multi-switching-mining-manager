@@ -4,6 +4,11 @@ Only with bash scripts.
 Initial Author: Avalonis
 
 Needed commands:
-
+---------------
 curl
 nvidia-smi (nvidia-cuda-drivers)
+
+Future Extensions:
+-----------------
+Switching miner/algo on GPU
+Realtime conversion BitCoins to EUR
