@@ -6,8 +6,4 @@ Initial Author: Avalonis
 Needed commands:
 
 curl
-gawk
-sed
-nvidia-smi
-
-blablub
+nvidia-smi (nvidia-cuda-drivers)
