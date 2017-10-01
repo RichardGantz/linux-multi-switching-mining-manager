@@ -1,7 +1,7 @@
 Hier sind die scripte und config dateien welche nur zur grafikkarte gehören enthalten, welche dann zu
 den jeweiligen Grafikkarten angepasst werden müssen in ihren eigenen verzeichnissen.
 
-Diese Dateien werden von dem script gpu-abfrage sh aus dem root folder angefasst und dann zu den jeweiligen
+Diese Dateien werden von dem script gpu-abfrage.sh aus dem root folder angefasst und dann zu den jeweiligen
 gpu folder kopiert.
 
 {
@@ -15,4 +15,11 @@ gpu folder kopiert.
       "LessThreads": 0              # wird "noch" nicht benutzt ggf kann gelöscht werden
 }
 
-Wenn keine WATT zahl bekannt ist muss noch z.b. fikiver wert 1000 eingetragen werden, da die bash sonst probleme macht 
+Wenn keine WATT zahl bekannt ist muss noch z.b. fikiver wert 1000 eingetragen werden, da die bash sonst probleme macht
+
+-----------------------------
+
+If the best-price-calculating script gpu_gv-algo.sh is updated in this folder
+then the scripts, which run in all the other GPU-UUID directories update themselves
+automatically at invocation time and - if still running - just before the next calculation has to be done.
+
