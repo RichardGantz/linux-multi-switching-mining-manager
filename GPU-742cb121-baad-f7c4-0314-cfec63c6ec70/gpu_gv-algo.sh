@@ -2,8 +2,9 @@
 ###############################################################################
 #
 #  GPU - Gewinn - Verlust - Alogirthmus - Berechnung - Auswahl
-#  Schleife alle 10 sekunden in ausgabe :
-# gv_netz.out ; gv_solar_akku.out ; gv_solar.out
+#  Schleife alle 31 Sekunden, sobald neue Kurse eingelesen wurden
+#  
+# gv_GRID.out ; gv_solar_akku.out ; gv_solar.out
 # 
 # die Outs geben den zu berechnenden Algo aus
 #
@@ -11,11 +12,38 @@
 #
 #
 ###############################################################################
+SRC_DIR=GPU-skeleton
+GPU_DIR=$(pwd | gawk -e 'BEGIN { FS="/" }{print $NF}')
+_update_SELF()
+{
+    ###
+    ### DO NOT OUCH THIS FUNCTION! IT UPDATES ITSELF FROM DIR "GPU-skeleton"
+    ###
+    SRC_FILE=$(basename $0)
+    UPD_FILE="update_"${SRC_FILE}
+    rm -f $UPD_FILE
+    if [ ! "$GPU_DIR" == "$SRC_DIR" ]; then
+        src_secs=$(date --utc --reference=../${SRC_DIR}/${SRC_FILE} +%s)
+        dst_secs=$(date --utc --reference=$SRC_FILE +%s)
+        if [[ $dst_secs < $src_secs ]]; then
+            # create update command file
+            echo "cp -f ../${SRC_DIR}/${SRC_FILE} ." >$UPD_FILE
+            echo "exec ./${SRC_FILE}"               >>$UPD_FILE
+            chmod +x $UPD_FILE
+            echo "Updating the GPU-UUID-directory from $SRC_DIR"
+            exec ./$UPD_FILE
+        fi
+    else
+        echo "Exiting in the not-to-be-run $SRC_DIR directory"
+        exit
+    fi
+}
+_update_SELF
 
 echo $$ >gpu_gv-algo.pid
 
 # Die Quelldaten Miner- bzw. AlgoName, BenchmarkSpeed und WATT für diese GraKa
-BENCHFILE="benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json"
+BENCHFILE="benchmark_${GPU_DIR}.json"
 
 # Aufbereitet zum Einlesen mittels readarray und anschließendem Aufbau
 # der assoziativen Arrays bENCH[algoname] und WATTS[algoname]
@@ -95,7 +123,58 @@ done
 #     ENDLOSSCHLEIFE START
 #
 while [ 1 -eq 1 ] ; do
+    # If there is a newer version of this script, update it before the next run
+    _update_SELF
 
+    ###############################################################################
+    #
+    # Einlesen und verarbeiten der Benchmarkdatei
+    #
+    # Einlesen der Benchmarkdatei nach bench.in  
+    #
+    # 1. Datei benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json erstellen
+    # 2. IN DIESER .json DATEI SIND CR DRIN !!!!!!!!!!!!!!!!!!!!!!!
+    # 3. Array $bENCH[] in Datei bENCH.in pipen
+    # 4. Anschließend einlesen und Array mit Werten aufbauen
+    # Die begehrten Zeilen:
+    #      "MinerName":      "neoscrypt",
+    #      "BenchmarkSpeed": 896513.0,
+    #      "WATT":           320,
+    ######################################
+
+    # Ist die Benchmarkdatei mit einer aktuellen Version überschrieben worden?
+    src_secs=$(date --utc --reference=$BENCHFILE +%s); dst_secs=0
+    if [ -f $bENCH_SRC ]; then
+        #echo $bENCH_SRC availlable
+        dst_secs=$(date --utc --reference=$bENCH_SRC +%s)
+    fi
+    if [[ $src_secs > $dst_secs ]]; then
+        #echo Creating new $bENCH_SRC
+        sed -e 's/\r//g' $BENCHFILE  \
+            | gawk -e ' \
+            $1 ~ /MinerName/      { print substr( tolower($2), 2, length($2)-3 ); next } \
+            $1 ~ /BenchmarkSpeed/ { print substr( $2, 1, length($2)-1 ); next } \
+            $1 ~ /WATT/           { print substr( $2, 1, length($2)-1 ) }' \
+        >$bENCH_SRC
+        # Diese assoziativen Arrays werden immer im ersten Lauf der Endlosschleife erstellt
+        # und danach immer dann, wenn $BENCHFILE erneuert wurde.
+        unset READARR
+        readarray -n 0 -O 0 -t READARR <$bENCH_SRC
+        # Aus den MinerName:BenchmarkSpeed Paaren das assoziative Array bENCH erstellen
+        declare -A bENCH
+        declare -A WATTS
+        for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+            bENCH[${READARR[$i]}]=${READARR[$i+1]}
+            WATTS[${READARR[$i]}]=${READARR[$i+2]}
+            #echo ${READARR[$i]} : ${bENCH[${READARR[$i]}]}
+            #echo ${READARR[$i]} : ${WATTS[${READARR[$i]}]}
+        done
+    fi
+
+    ###############################################################################
+    #
+    # Einlesen und verarbeiten der aktuellen Kurse
+    #
     unset READARR
     unset KURSE
     declare -A KURSE
@@ -130,182 +209,68 @@ while [ 1 -eq 1 ] ; do
 # Berechnung der verschieden Strom bezugsarten Netz ; Solar ; Solar-Akku 
 #
 ######################################
+    GRID[0]="netz"
+    GRID[1]="solar"
+    GRID[2]="solar_akku"
 
-    kwh_netz_EUR=$(< ../kwh_netz_kosten.in)
-    kwh_solar_EUR=$(< ../kwh_solar_kosten.in)
-    kwh_solar_akku_EUR=$(< ../kwh_solar_akku_kosten.in)
+    unset kwh_EUR; declare -A kwh_EUR
+    unset kwh_BTC; declare -A kwh_BTC
+    for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
+
+        # Kosten in EUR
+        kwh_EUR[${GRID[$grid]}]=$(< ../kwh_${GRID[$grid]}_kosten.in)
     
-    # Netz-Strom-Berechnung
-    kwh_N_BTC=$(echo "scale=8; $kwh_netz_EUR/$btcEUR" | bc)
-    
-    # Solar-Strom-Berechnung
-    kwh_S_BTC=$(echo "scale=8; $kwh_solar_EUR/$btcEUR" | bc)
-
-    # Solar-Akku-Berechnung
-    kwh_SA_BTC=$(echo "scale=8; $kwh_solar_akku_EUR/$btcEUR" | bc)
-
-###############################################################################
-#
-# Einlesen und verarbeiten der Benchmarkdatei
-#
-#Einlesen der Benchmarkdatei nach bench.in  
-#
-# 1. Datei benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json erstellen
-# 2. IN DIESER .json DATEI SIND CR DRIN !!!!!!!!!!!!!!!!!!!!!!!
-# 3. Array $bENCH[] in Datei bENCH.in pipen
-# 4. Anschließend einlesen und Array mit Werten aufbauen
-# Die begehrten Zeilen:
-#      "MinerName":      "neoscrypt",
-#      "BenchmarkSpeed": 896513.0,
-#      "WATT":           320,
-######################################
-
-    # Ist die Benchmarkdatei mit einer aktuellen Version überschrieben worden?
-    src_secs=$(date --utc --reference=$BENCHFILE +%s); dst_secs=0
-    if [ -f $bENCH_SRC ]; then
-        #echo $bENCH_SRC availlable
-        dst_secs=$(date --utc --reference=$bENCH_SRC +%s)
-    fi
-    if [[ $src_secs > $dst_secs ]]; then
-        #echo Creating new $bENCH_SRC
-        sed -e 's/\r//g' $BENCHFILE  \
-        | gawk -e ' \
-            $1 ~ /MinerName/      { print substr( tolower($2), 2, length($2)-3 ); next } \
-            $1 ~ /BenchmarkSpeed/ { print substr( $2, 1, length($2)-1 ); next } \
-            $1 ~ /WATT/           { print substr( $2, 1, length($2)-1 ) }' \
-        >$bENCH_SRC
-	# Diese assoziativen Arrays werden immer im ersten Lauf der Endlosschleife erstellt
-	# und danach immer dann, wenn $BENCHFILE erneuert wurde.
-	unset READARR
-	readarray -n 0 -O 0 -t READARR <$bENCH_SRC
-	# Aus den MinerName:BenchmarkSpeed Paaren das assoziative Array bENCH erstellen
-	declare -A bENCH
-	declare -A WATTS
-	for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
-            bENCH[${READARR[$i]}]=${READARR[$i+1]}
-            WATTS[${READARR[$i]}]=${READARR[$i+2]}
-            #echo ${READARR[$i]} : ${bENCH[${READARR[$i]}]}
-            #echo ${READARR[$i]} : ${WATTS[${READARR[$i]}]}
-	done
-    fi
+        # Kosten Umrechnung in BTC
+        kwh_BTC[${GRID[$grid]}]=$(echo "scale=8; ${kwh_EUR[${GRID[$grid]}]}/$btcEUR" | bc)
     
 ###############################################################################
 #
 # Berechnung mit Netz Strom
 #
-#gv_netz.out <-- ist dann endprodukt welches algo berechnet werden soll 
+# gv_GRID.out <-- ist dann endprodukt welches algo berechnet werden soll 
 #
 ######################################
     
-    for algo in ${!ALGOs[@]}; do
-        algorithm=${ALGOs[$algo]}
-        if [[ ${#bENCH[$algorithm]}>0 && ${#kMGTP[$algorithm]}>0 && ${#KURSE[$algorithm]}>0 ]]; then
-            # 1. Werte berechnen
-            actual_gv=$(echo "scale=8; ${bENCH[$algorithm]} \
-                                     / ${kMGTP[$algorithm]} \
-                                     * ${KURSE[$algorithm]} \
-                                     - ${WATTS[$algorithm]}*24*$kwh_N_BTC/1000" | bc )
+        for algo in ${!ALGOs[@]}; do
+            algorithm=${ALGOs[$algo]}
+            if [[ ${#bENCH[$algorithm]}>0 && ${#kMGTP[$algorithm]}>0 && ${#KURSE[$algorithm]}>0 ]]; then
+                # 1. Werte berechnen
+                actual_gv=$(echo "scale=8; ${bENCH[$algorithm]} \
+                                         / ${kMGTP[$algorithm]} \
+                                         * ${KURSE[$algorithm]} \
+                                         - ${WATTS[$algorithm]}*24*${kwh_BTC[${GRID[$grid]}]}/1000" | bc )
                                    
-            echo $algorithm : BTC/D Gewinn/Verlust : $actual_gv
-            # Ausgabe in Datei zum sortieren mit externen prog (vielleicht im ram sorteiren ohne datei schreiben)
-            echo $actual_gv $algorithm ${WATTS[$algorithm]} >> gv_netz.out
-        else
-            echo KEIN Hash WERT bei $algorithm bei GPU-xyz fehlt !!! \<------------------------
-            # abfrage wegen watt wert ... dann wenn keiner da ist einfach keinen wert eintragen
-            #fehler wie kein HASH oder WATT wert --> log datei der GPU 
-        fi
-    done
+                echo $algorithm : BTC/D Gewinn/Verlust : $actual_gv
+                # Ausgabe in Datei zum sortieren mit externen prog (vielleicht im RAM sortieren ohne datei schreiben)
+                echo $actual_gv $algorithm ${WATTS[$algorithm]} >> gv_GRID.out
+            else
+                echo KEIN Hash WERT bei $algorithm bei GPU-xyz fehlt !!! \<------------------------
+                # abfrage wegen watt wert ... dann wenn keiner da ist einfach keinen wert eintragen
+                #fehler wie kein HASH oder WATT wert --> log datei der GPU 
+            fi
+        done
     
-    cat gv_netz.out | sort -rn -o gv_netz_sort.out
-    #> gv_netz_sort.out
-    sed -n '1p' gv_netz_sort.out > best_algo_netz.out 
-    rm gv_netz.out
-    
-###############################################################################
-#
-# Berechnung mit Solar Strom
-#
-# gv_netz.out <-- ist dann entprodukt welches algo berechnet werden soll 
-#
-######################################
-    
-     for algo in ${!ALGOs[@]}; do
-         algorithm=${ALGOs[$algo]}
-         if [[ ${#bENCH[$algorithm]}>0 && ${#kMGTP[$algorithm]}>0 && ${#KURSE[$algorithm]}>0 ]]; then
-             # 1. Werte berechnen
-             actual_gv=$(echo "scale=8; ${bENCH[$algorithm]} \
-                                      / ${kMGTP[$algorithm]} \
-                                      * ${KURSE[$algorithm]} \
-                                      - ${WATTS[$algorithm]}*24*$kwh_S_BTC/1000" | bc )
-                                   
-             echo $algorithm : BTC/D gewinn/verlust : $actual_gv
-             #ausgabe in datei zum sorteiren mit externen prog (vielleicht im ram sorteiren ohne datei schreiben)
-             echo $actual_gv $algorithm ${WATTS[$algorithm]} >> gv_solar.out
-        else
-            echo KEIN Hash WERT bei $algorithm bei GPU-xyz fehlt !!! \<------------------------
-            # abfrage wegen watt wert ... dann wenn keiner da ist einfach keinen wert eintragen
-            #fehler wie kein HASH oder WATT wert --> log datei der GPU 
-        fi
-    done
-    
-    cat gv_solar.out | sort -rn -o gv_solar_sort.out
-    #> gv_netz_sort.out
-    sed -n '1p' gv_solar_sort.out > best_algo_solar.out 
-    rm gv_solar.out
-    
-###############################################################################
-#
-# Berechnung mit Solar-Akku Strom
-#
-# gv_netz.out <-- ist dann entprodukt welches algo berechnet werden soll 
-#
-######################################
-    
-    for algo in ${!ALGOs[@]}; do
-        algorithm=${ALGOs[$algo]}
-        if [[ ${#bENCH[$algorithm]}>0 && ${#kMGTP[$algorithm]}>0 && ${#KURSE[$algorithm]}>0 ]]; then
-            # 1. Werte berechnen
-            actual_gv=$(echo "scale=8; ${bENCH[$algorithm]} \
-                                     / ${kMGTP[$algorithm]} \
-                                     * ${KURSE[$algorithm]} \
-                                     - ${WATTS[$algorithm]}*24*$kwh_SA_BTC/1000" | bc )
-                                   
-            echo $algorithm : BTC/D gewinn/verlust : $actual_gv
-            #ausgabe in datei zum sorteiren mit externen prog (vielleicht im ram sorteiren ohne datei schreiben)
-            echo $actual_gv $algorithm ${WATTS[$algorithm]} >> gv_solar_akku.out
-        else
-            echo KEIN Hash WERT bei $algorithm bei GPU-xyz fehlt !!! \<------------------------
-            # abfrage wegen watt wert ... dann wenn keiner da ist einfach keinen wert eintragen
-            #fehler wie kein HASH oder WATT wert --> log datei der GPU 
-        fi
-    done
-    
-    cat gv_solar_akku.out | sort -rn -o gv_solar_akku_sort.out
-    #> gv_netz_sort.out
-    sed -n '1p' gv_solar_akku_sort.out > best_algo_solar_akku.out 
-    rm gv_solar_akku.out
-    
+        cat gv_GRID.out | sort -rn | sed -n '1p' \
+            > best_algo_${GRID[$grid]}.out
+        rm gv_GRID.out
+
+    done # for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
+
 #############################################################################
 #
 #
 # Ausgabe 
 #
 #
-    echo --------------------------------------------------------------------
-    echo --------Der Beste Algo zur zeit ist mit NETZ Strom ----------------- 
-    cat best_algo_netz.out
-    echo --------------------------------------------------------------------
-    echo --------------------------------------------------------------------
-    echo --------Der Beste Algo zur zeit ist mit Solar Strom ----------------- 
-    cat best_algo_solar.out
-    echo --------------------------------------------------------------------
-    echo --------------------------------------------------------------------
-    echo -----Der Beste Algo zur zeit ist mit Solar-Akku Strom -------------- 
-    cat best_algo_solar_akku.out
-    echo --------------------------------------------------------------------
+    for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
+        echo --------------------------------------------------------------------
+        echo --------Der Beste Algo zur zeit ist mit ${GRID[$grid]^^} Strom ----------------- 
+        cat best_algo_${GRID[$grid]}.out
+        echo --------------------------------------------------------------------
+    done
 
     while [ $btcSec == $(date --utc --reference=$SYNCFILE +%s) ] ; do
-	echo HAAAAAAAAALOOOOOO... Ist da Wer\? >/dev/null
+        echo HAAAAAAAAALOOOOOO... Ist da Wer\? >/dev/null
     done
     
 done
