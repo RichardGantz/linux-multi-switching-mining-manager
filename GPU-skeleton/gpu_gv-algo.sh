@@ -270,7 +270,7 @@ while [ 1 -eq 1 ] ; do
     done
 
     while [ $btcSec == $(date --utc --reference=$SYNCFILE +%s) ] ; do
-        echo HAAAAAAAAALOOOOOO... Ist da Wer\? >/dev/null
+        sleep 1
     done
     
 done
