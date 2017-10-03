@@ -13,6 +13,18 @@
 
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >multi_mining_sort.pid
+
+GPU_SYSTEM_DATA=gpu_system.out
+if [ ! -f $GPU_SYSTEM_DATA ]; then
+    #echo "-------------------------------------------"
+    #echo "---           FATAL ERROR               ---"
+    #echo "-------------------------------------------"
+    #echo "No GPU System Data availlable."
+    #echo "Please run gpu-abfrage.sh"
+    #echo "-------------------------------------------"
+    ./gpu-abfrage.sh
+fi
+
 ###############################################################################
 #
 # Wie die abbfolge dieses Programm ist und wie es es abfragt
@@ -29,26 +41,28 @@ echo $$ >multi_mining_sort.pid
 ###############################################################################
 
 # Sortierungsquelldateien
-tmpSort[0]=0NETZ_sort
-tmpSort[1]=0SOLAR_sort
-tmpSort[2]=0AKKU_sort
-best[0]=best_all_netz.out
-best[1]=best_all_solar.out
-best[2]=best_all_solar_akku.out
-for ((n=0; $n<3; n+=1)); do rm -f ${tmpSort[$n]}.in; done
+GRID[0]="netz"
+GRID[1]="solar"
+GRID[2]="solar_akku"
+for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
+    best[$grid]=best_all_${GRID[$grid]}.out
+    rm -f ${best[$grid]}
+    tmpSort[$grid]=.0${GRID[$grid]}_sort
+    rm -f ${tmpSort[$grid]}.in
+done
 
 unset READARR
-readarray -n 0 -O 0 -t READARR <gpu_system.out
+readarray -n 0 -O 0 -t READARR <$GPU_SYSTEM_DATA
 # Aus den MinerName:BenchmarkSpeed Paaren das assoziative Array bENCH erstellen
 declare -a index
-#declare -a name
+declare -a name
 #declare -a bus
 declare -a uuid
 #declare -a auslastung
 for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     j=$(expr $i / 5)
-    index[$j]=${READARR[$i]}	# index[] = Grafikkarten-Index für miner
-    #name[${index[$j]}]=${READARR[$i+1]}
+    index[$j]=${READARR[$i]}        # index[] = Grafikkarten-Index für miner
+    name[${index[$j]}]=${READARR[$i+1]}
     #bus[${index[$j]}]=${READARR[$i+2]}
     uuid[${index[$j]}]=${READARR[$i+3]}
     #auslastung[${index[$j]}]=${READARR[$i+4]}
@@ -56,27 +70,38 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     # Quelldateien für Sortierung erstellen
     # sort-key    algo      WATT    + GPU-Index
     #-.00007377 cryptonight 270 ${index[$j]}
-    echo $(< ${uuid[${index[$j]}]}/best_algo_netz.out ) ${index[$j]} >>${tmpSort[0]}.in
-    echo $(< ${uuid[${index[$j]}]}/best_algo_solar.out ) ${index[$j]} >>${tmpSort[1]}.in
-    echo $(< ${uuid[${index[$j]}]}/best_algo_solar_akku.out ) ${index[$j]} >>${tmpSort[2]}.in
-done
-
-# Sortieren
-for ((n=0; $n<3; n+=1)); do
-    cat ${tmpSort[$n]}.in  | sort -rn -o ${tmpSort[$n]}.out
+    for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
+        if [ ! -f ${uuid[${index[$j]}]}/best_algo_${GRID[$grid]}.out ]; then
+            echo "-------------------------------------------"
+            echo "---           FATAL ERROR               ---"
+            echo "-------------------------------------------"
+            echo "No file 'best_algo_${GRID[$grid]}.out' availlable"
+            echo "for GPU ${name[${index[$j]}]}"
+            echo "Please run '${uuid[${index[$j]}]}/gpu_gv-algo.sh'"
+            echo "-------------------------------------------"
+        else
+            echo $(< ${uuid[${index[$j]}]}/best_algo_${GRID[$grid]}.out ) ${index[$j]} >>${tmpSort[$grid]}.in
+        fi
+    done
 done
 
 # Sortiert ausgeben:
-for ((n=0; $n<3; n+=1)); do
-    if [ 1 == 0 ]; then
-	txt=`echo ${tmpSort[$n]%%_sort}`; txt=${txt:1}
-	echo "--------------------------------------"
-	echo "           $txt"
-	echo "--------------------------------------"
-	gawk -e '{print "GPU " $4 ": " $1 " " $2 " " $3 }' ${tmpSort[$n]}.out
-	echo
+for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
+    if [ -f ${tmpSort[$grid]}.in ]; then
+        cat ${tmpSort[$grid]}.in                         \
+            | sort -rn                                   \
+            | tee ${tmpSort[$grid]}.out                  \
+            | gawk -e '{print $4 " " $1 " " $2 " " $3 }' \
+            | sed -n '1p' \
+            >${best[$grid]}
+        if [ 1 == 1 ]; then
+            txt=`echo ${tmpSort[$grid]%%_sort}`; txt=${txt:2}
+            echo "--------------------------------------"
+            echo "           ${txt^^}"
+            echo "--------------------------------------"
+            gawk -e '{print "GPU " $4 ": " $1 " " $2 " " $3 }' ${tmpSort[$grid]}.out
+        fi
     fi
-    gawk -e '{print $4 " " $1 " " $2 " " $3 }' ${tmpSort[$n]}.out >${best[$n]}
 done
 
 # GPU-Index-Datei für miner (==algo ?) erstellen.
@@ -84,14 +109,15 @@ done
 
 # Alle GPU-Index-Dateien löschen ?
 rm -f cfg_*
-for ((n=0; $n<3; n+=1)); do
-    txt=`echo ${tmpSort[$n]%%_sort}`       # "_sort" vom Namenende entfernen
-    gawk -v txt=${txt:1} -e ' \
+for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
+    if [ -f ${best[$grid]} ]; then
+        txt=`echo ${tmpSort[$grid]%%_sort}`       # "_sort" vom Namenende entfernen
+        gawk -v grid=${txt:2} -e ' \
              $2 > 0 { ALGO[$3]=ALGO[$3] $1 "," } \
              END { for (algo in ALGO) \
-                   print substr( ALGO[algo], 1, length(ALGO[algo])-1 ) \
-                   >"cfg_" txt "_" algo }' \
-	 ${best[$n]}
+                   print substr( ALGO[algo], 1, length(ALGO[algo])-1 ) > "cfg_" grid "_" algo }' \
+             ${best[$grid]}
+    fi
 done
 
 # ./miner --cuda_dev cfg_NETZ_equihash --solver $devices --server blablub.com -u btcadrtesse -p x 

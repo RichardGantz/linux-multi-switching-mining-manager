@@ -67,17 +67,28 @@ if [ $HOME == "/home/richard" ]; then NoCards=true; fi
 
 ### ERSTER Start und Erstellung der Grundkonfig 
 
-FIFO1=.gpu_system.out
-if [ ! -p $FIFO1 ]; then mkfifo $FIFO1; fi
 unset READARR
-if [ $NoCards ]; then
-    gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >$FIFO1 &
+if [ 1 == 0 ]; then
+    FIFO1=.gpu_system.out
+    if [ ! -p $FIFO1 ]; then mkfifo $FIFO1; fi
+    if [ $NoCards ]; then
+        gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >$FIFO1 &
+    else
+        nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
+            gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >$FIFO1 &
+    fi
+    readarray -n 0 -O 0 -t READARR <$FIFO1
 else
-    nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
-    gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >$FIFO1 &
+    if [ $NoCards ]; then
+        gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >gpu_system.out
+    else
+        nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
+            gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >gpu_system.out
+    fi
+    readarray -n 0 -O 0 -t READARR <gpu_system.out
 fi
-readarray -n 0 -O 0 -t READARR <$FIFO1
-# Aus den MinerName:BenchmarkSpeed Paaren das assoziative Array bENCH erstellen
+
+# Die Daten der GPUs in Arrays einlesen, die durch den GPU-Grafikkarten-Index indexiert werden können
 declare -a index
 declare -a name
 declare -a bus

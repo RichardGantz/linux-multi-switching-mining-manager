@@ -45,7 +45,18 @@ _update_SELF
 echo $$ >gpu_gv-algo.pid
 
 # Die Quelldaten Miner- bzw. AlgoName, BenchmarkSpeed und WATT für diese GraKa
+BENCHFILE_SRC=../${SRC_DIR}/benchmark_skeleton.json
 BENCHFILE="benchmark_${GPU_DIR}.json"
+diff -q $BENCHFILE $BENCHFILE_SRC &>/dev/null
+if [ $? == 0 ]; then
+    echo "-------------------------------------------"
+    echo "---           FATAL ERROR               ---"
+    echo "-------------------------------------------"
+    echo "File '$BENCHFILE' not yet edited!!!"
+    echo "Please edit and fill in valid data!"
+    echo "Execution stopped."
+    echo "-------------------------------------------"
+fi
 
 # Aufbereitet zum Einlesen mittels readarray und anschließendem Aufbau
 # der assoziativen Arrays bENCH[algoname] und WATTS[algoname]
