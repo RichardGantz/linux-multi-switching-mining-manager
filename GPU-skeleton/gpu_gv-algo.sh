@@ -14,7 +14,7 @@
 ###############################################################################
 SRC_DIR=GPU-skeleton
 GPU_DIR=$(pwd | gawk -e 'BEGIN { FS="/" }{print $NF}')
-_update_SELF()
+_update_SELF_if_necessary()
 {
     ###
     ### DO NOT TOUCH THIS FUNCTION! IT UPDATES ITSELF FROM DIR "GPU-skeleton"
@@ -31,7 +31,7 @@ _update_SELF()
                   exec ./${SRC_FILE}" \
                  >$UPD_FILE
             chmod +x $UPD_FILE
-            echo "Updating the GPU-UUID-directory from $SRC_DIR"
+            echo "###---> Updating the GPU-UUID-directory from $SRC_DIR"
             exec ./$UPD_FILE
         fi
     else
@@ -40,7 +40,9 @@ _update_SELF()
         exit
     fi
 }
-_update_SELF
+# Beim Neustart des Skripts gleich schauen, ob es eine aktuellere Version gibt
+# und mit der neuen Version neu starten.
+_update_SELF_if_necessary
 
 echo $$ >gpu_gv-algo.pid
 
@@ -59,16 +61,7 @@ if [ $? == 0 ]; then
     exit
 fi
 
-# Aufbereitet zum Einlesen mittels readarray und anschließendem Aufbau
-# der assoziativen Arrays bENCH[algoname] und WATTS[algoname]
-bENCH_SRC=bENCH.in
-
-# Diese Datei wird in der Endlosschleife immer erstellt, wenn
-# a) sie nicht vorhanden ist und
-# b) sie älter ist als $BENCHFILE oben
-rm -f $bENCH_SRC
-
-# Diese Datei wird alle 31s erstelt, wen die Daten aus dem Internet aktualisiert wurden
+# Diese Datei wird alle 31s erstelt, nachdem die Daten aus dem Internet aktualisiert wurden
 # Sollte diese Datei nicht da sein, weil z.B. die algo_multi_abfrage.sh
 # noch nicht gelaufen ist, warten wir das einfach ab und sehen sekündlich nach,
 # ob die Datei nun da ist und die Daten zur Verfügung stehen.
@@ -84,19 +77,118 @@ while [ ! -f $SYNCFILE ]; do sleep 1; done
 ######################################
 
 ALGO_NAMES="../ALGO_NAMES.in"
+# Ein bisschen Hygiene bei Änderung von Dateinamen
+ALGO_NAMES_OLD=""; if [ -f "$ALGO_NAMES_OLD" ]; then rm "$ALGO_NAMES_OLD"; fi
 
-# Aus den Name:kMGTP:Algo Drillingen
-#     die assoziativen Arrays ALGOs und kMGTP erstellen
-declare -A kMGTP
-declare -a ALGOs
-# KURSe extrahieren in das Standard indexed Array MAPFILE
+_read_ALGOs_in()
+{
+    # Aus den Name:kMGTP:Algo Drillingen
+    #     die assoziativen Arrays ALGOs und kMGTP erstellen
+    # 
+    unset kMGTP; declare -Ag kMGTP
+    unset ALGOs
+    unset READARR
 
-readarray -n 0 -O 0 -t <$ALGO_NAMES
-for ((i=0; $i<${#MAPFILE[@]}; i+=3)) ; do
-    #echo ${MAPFILE[$i]}
-    kMGTP[${MAPFILE[$i]}]=${MAPFILE[$i+1]}
-    ALGOs[${MAPFILE[$i+2]}]=${MAPFILE[$i]}
+    # Die Zeit merken, um aussen entscheiden zu können,
+    # ob das Array durch Aufruf von _read_ALGOs_in neu erstellt werden muss
+    # Wichtig dabei ist, die Zeit VOR dem tatsächlichen Einlesen der Datei festzuhalten !!!
+    #    Ansonsten kann der Fall eintreten, dass bis zum nächsten erforderlichen Update
+    #    - und das kann ein ganzer Tag sein - mit den alten Daten gearbeitet wird.
+    #    Ist SEEEHR unwahrscheinlich, aber möglich
+    ALGO_NAMES_last_age_in_seconds=$(date --utc --reference=$ALGO_NAMES +%s)
+
+    # $ALGO_NAMES einlesen in das indexed Array READARR
+    readarray -n 0 -O 0 -t READARR <$ALGO_NAMES
+    for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+        #echo ${READARR[$i]}
+        kMGTP[${READARR[$i]}]=${READARR[$i+1]}
+        ALGOs[${READARR[$i+2]}]=${READARR[$i]}
+    done
+}
+# Auf jeden Fall beim Starten die zwei Arrays aufbauen.
+# Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
+while [ ! -f $ALGO_NAMES ]; do
+    echo "###---> Waiting for $ALGO_NAMES to become available..."
+    sleep 1
 done
+_read_ALGOs_in
+
+###############################################################################
+#
+# Einlesen und verarbeiten der Benchmarkdatei
+#
+######################################
+
+# Zwischendatei für Diagnosezwecke.
+# Das ist das, was der readarray über Standard Input bekommt
+#    nach Auswertung der Datei $BENCHFILE
+bENCH_SRC="bENCH.in"
+# Ein bisschen Hygiene bei Änderung von Dateinamen
+bENCH_SRC_OLD=""; if [ -f "$bENCH_SRC_OLD" ]; then rm "$bENCH_SRC_OLD"; fi
+
+# Damit readarray als letzter Prozess in einer Pipeline nicht in einer subshell
+# ausgeführt wird und diese beim Austriit gleich wieder seine Variablen verwirft
+shopt -s lastpipe
+_read_BENCHFILE_in()
+{
+    unset bENCH; declare -Ag bENCH
+    unset WATTS; declare -Ag WATTS
+    unset READARR
+
+    # Dateialter zum Zeitpunkt des Array-Aufbaus festhalten
+    BENCHFILE_last_age_in_seconds=$(date --utc --reference=$BENCHFILE +%s)
+
+    # Einlesen der Benchmarkdatei nach READARR
+    #
+    # 1. Datei benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json erstellen
+    # 2. IN DIESER .json DATEI SIND CR DRIN !!!!!!!!!!!!!!!!!!!!!!!
+    # 3. Array $bENCH[] in Datei bENCH.in pipen
+    # 4. Anschließend einlesen und Array mit Werten aufbauen
+    # Die begehrten Zeilen:
+    #      "MinerName":      "neoscrypt",
+    #      "BenchmarkSpeed": 896513.0,
+    #      "WATT":           320,
+    sed -e 's/\r//g' $BENCHFILE  \
+        | gawk -e ' \
+            $1 ~ /MinerName/      { print substr( tolower($2), 2, length($2)-3 ); next } \
+            $1 ~ /BenchmarkSpeed/ { print substr( $2, 1, length($2)-1 ); next } \
+            $1 ~ /WATT/           { print substr( $2, 1, length($2)-1 ) }' \
+        | tee $bENCH_SRC \
+        | readarray -n 0 -O 0 -t READARR
+    # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
+    for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+        bENCH[${READARR[$i]}]=${READARR[$i+1]}
+        WATTS[${READARR[$i]}]=${READARR[$i+2]}
+        #echo ${READARR[$i]} : ${bENCH[${READARR[$i]}]}
+        #echo ${READARR[$i]} : ${WATTS[${READARR[$i]}]}
+    done
+}
+# Auf jeden Fall beim Starten das Array bENCH[] aufbauen
+# Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
+_read_BENCHFILE_in
+
+###############################################################################
+#
+# Einlesen und verarbeiten der aktuellen Kurse
+#
+######################################
+
+KURSE_in="../KURSE.in"
+# Ein bisschen Hygiene bei Änderung von Dateinamen
+KURSE_in_OLD=""; if [ -f "$KURSE_in_OLD" ]; then rm "$KURSE_in_OLD"; fi
+_read_KURSE_in()
+{
+    unset KURSE; declare -Ag KURSE
+    unset READARR
+
+    # Aus den ALGORITHMUS:PREIS Paaren das assoziative Array KURSE erstellen
+    readarray -n 0 -O 0 -t READARR <$KURSE_in
+    for ((i=0; $i<${#READARR[@]}; i+=2)) ; do
+        #echo ${READARR[$i]}
+        #echo ${ALGOs[${READARR[$i]}]}
+        KURSE[${ALGOs[${READARR[$i]}]}]=${READARR[$i+1]}
+    done
+}
 
 ###############################################################################
 # 1. curl "https://api.nicehash.com/api?method=stats.global.current&location=0"
@@ -137,96 +229,49 @@ done
 #     ENDLOSSCHLEIFE START
 #
 
-# Damit readarray als letzter Prozess in einer Pipeline nicht in einer subshell
-# ausgeführt wird und diese beim Austriit gleich wieder seine Variablen verwirft
-shopt -s lastpipe
 while [ 1 -eq 1 ] ; do
-    # If there is a newer version of this script, update it before the next run
-    _update_SELF
-
-    ###############################################################################
-    #
-    # Einlesen und verarbeiten der Benchmarkdatei
-    #
-    # Einlesen der Benchmarkdatei nach bench.in  
-    #
-    # 1. Datei benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json erstellen
-    # 2. IN DIESER .json DATEI SIND CR DRIN !!!!!!!!!!!!!!!!!!!!!!!
-    # 3. Array $bENCH[] in Datei bENCH.in pipen
-    # 4. Anschließend einlesen und Array mit Werten aufbauen
-    # Die begehrten Zeilen:
-    #      "MinerName":      "neoscrypt",
-    #      "BenchmarkSpeed": 896513.0,
-    #      "WATT":           320,
-    ######################################
-
-    # Ist die Benchmarkdatei mit einer aktuellen Version überschrieben worden?
-    src_secs=$(date --utc --reference=$BENCHFILE +%s); dst_secs=0
-    if [ -f $bENCH_SRC ]; then
-        #echo $bENCH_SRC availlable
-        dst_secs=$(date --utc --reference=$bENCH_SRC +%s)
-    fi
-    if [[ $src_secs > $dst_secs ]]; then
-        #echo Creating new $bENCH_SRC
-        unset READARR
-        sed -e 's/\r//g' $BENCHFILE  \
-            | gawk -e ' \
-            $1 ~ /MinerName/      { print substr( tolower($2), 2, length($2)-3 ); next } \
-            $1 ~ /BenchmarkSpeed/ { print substr( $2, 1, length($2)-1 ); next } \
-            $1 ~ /WATT/           { print substr( $2, 1, length($2)-1 ) }' \
-            | tee $bENCH_SRC \
-            | readarray -n 0 -O 0 -t READARR
-        # Diese assoziativen Arrays werden immer im ersten Lauf der Endlosschleife erstellt
-        # und danach immer dann, wenn $BENCHFILE erneuert wurde.
-        # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
-        unset bENCH; declare -A bENCH
-        unset WATTS; declare -A WATTS
-        for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
-            bENCH[${READARR[$i]}]=${READARR[$i+1]}
-            WATTS[${READARR[$i]}]=${READARR[$i+2]}
-            #echo ${READARR[$i]} : ${bENCH[${READARR[$i]}]}
-            #echo ${READARR[$i]} : ${WATTS[${READARR[$i]}]}
-        done
-    fi
-
-    ###############################################################################
-    #
-    # Einlesen und verarbeiten der aktuellen Kurse
-    #
-    unset READARR
-    unset KURSE
-    declare -A KURSE
-
-    # Aus den ALGORITHMUS:PREIS Paaren das assoziative Array KURSE erstellen
-    readarray -n 0 -O 0 -t READARR < ../KURSE.in
-    #echo ${#READARR[@]}
-    for ((i=0; $i<${#READARR[@]}; i+=2)) ; do
-        #echo ${READARR[$i]}
-        #echo ${ALGOs[${READARR[$i]}]}
-        KURSE[${ALGOs[${READARR[$i]}]}]=${READARR[$i+1]}
-    done
-#    for algo in ${!ALGOs[@]}; do
-#        echo ${ALGOs[$algo]}
-#    done
-
-###############################################################################
-#
-# BTC - EUR - Kurs
-#
-# Einlesen  
-#
-######################################    
-
-    btcEUR=$(< ../BTC_EUR_kurs.in)
-    btcSec=$(date --utc --reference=$SYNCFILE +%s)
     
-###############################################################################
-#
-#                                                Berechnung der Stromkosten
-#
-# Berechnung der verschieden Strom bezugsarten Netz ; Solar ; Solar-Akku 
-#
-######################################
+    # If there is a newer version of this script, update it before the next run
+    _update_SELF_if_necessary
+
+    # Ist die Datei ALGO_NAMES mit einer aktuellen Version überschrieben worden?
+    if [[ $ALGO_NAMES_last_age_in_seconds < $(date --utc --reference=$ALGO_NAMES +%s) ]]; then
+        echo "###---> Updating Arrays ALGOs[] und kMGTP[] from $ALGO_NAMES"
+        _read_ALGOs_in
+    fi
+        
+    # Ist die Benchmarkdatei mit einer aktuellen Version überschrieben worden?
+    if [[ $BENCHFILE_last_age_in_seconds < $(date --utc --reference=$BENCHFILE +%s) ]]; then
+        echo "###---> Updating Arrays bENCH[] und WATTs[] from $BENCHFILE"
+        _read_BENCHFILE_in
+    fi
+
+    # Die Reihenfolge der Dateierstellungen durch ../algo_multi_abfrage.sh ist:
+    #     1.: $ALGO_NAMES
+    #     2.: $KURSE_in
+    #     3.: ../BTC_EUR_kurs.in
+    # Letzte: $SYNCFILE
+    # Und die Letzte wurde gerade erst geschrieben, deshalb sind wir unten aus der
+    # Warteschleife gefallen.
+    # Es ist jetzt sehr sicher, die Daten alle einzulesen
+    # Nach der Verarbeitung warten wir unten, bis $SYNCFILE
+    #    - und damit die neuen Daten - aktualisiert wurden
+    new_Data_available=$(date --utc --reference=$SYNCFILE +%s)
+
+    # Einlesen und verarbeiten der aktuellen Kurse
+    while [ ! -f $KURSE_in ]; do
+        echo "###---> Waiting for $KURSE_in to become available..."
+        sleep 1
+    done
+    _read_KURSE_in
+
+    # BTC - EUR - Kurs Einlesen  
+    btcEUR=$(< ../BTC_EUR_kurs.in)
+    
+    ###############################################################################
+    #
+    #                                                Berechnung der Stromkosten
+    ######################################
     GRID[0]="netz"
     GRID[1]="solar"
     GRID[2]="solar_akku"
@@ -243,13 +288,13 @@ while [ 1 -eq 1 ] ; do
         # Kosten Umrechnung in BTC
         kwh_BTC[${GRID[$grid]}]=$(echo "scale=8; ${kwh_EUR[${GRID[$grid]}]}/$btcEUR" | bc)
     
-###############################################################################
-#
-# Berechnung mit Netz Strom
-#
-# gv_GRID.out <-- ist dann endprodukt welches algo berechnet werden soll 
-#
-######################################
+        ###############################################################################
+        #
+        # Schleife der verschieden Strom Bezugsarten Netz ; Solar ; Solar-Akku 
+        #
+        # gv_GRID.out <-- ist dann endprodukt welches algo berechnet werden soll 
+        #
+        ######################################
     
         for algo in ${!ALGOs[@]}; do
             algorithm=${ALGOs[$algo]}
@@ -270,18 +315,27 @@ while [ 1 -eq 1 ] ; do
             fi
         done
     
+        if [ ! -f gv_GRID.out ]; then
+            echo "Anzahl Member ALGOs[]: ${#ALGOs[@]}"
+            echo "Anzahl Member bENCH[]: ${#bENCH[@]}"
+            echo "Anzahl Member kMGTP[]: ${#kMGTP[@]}"
+            echo "Anzahl Member KURSE[]: ${#KURSE[@]}"
+            echo "Anzahl Member WATTS[]: ${#WATTS[@]}"
+            echo "---------> gv_GRID.out IST NICHT VORHANEN. ABBRUCH <---------"
+            exit
+        fi
         cat gv_GRID.out | sort -rn | sed -n '1p' \
             > best_algo_${GRID[$grid]}.out
         rm gv_GRID.out
 
     done # for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
 
-#############################################################################
-#
-#
-# Ausgabe 
-#
-#
+    #############################################################################
+    #
+    #
+    # Ausgabe 
+    #
+    #
     for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
         echo --------------------------------------------------------------------
         echo --------Der Beste Algo zur zeit ist mit ${GRID[$grid]^^} Strom ----------------- 
@@ -289,7 +343,7 @@ while [ 1 -eq 1 ] ; do
         echo --------------------------------------------------------------------
     done
 
-    while [ $btcSec == $(date --utc --reference=$SYNCFILE +%s) ] ; do
+    while [ $new_Data_available == $(date --utc --reference=$SYNCFILE +%s) ] ; do
         sleep 1
     done
     
