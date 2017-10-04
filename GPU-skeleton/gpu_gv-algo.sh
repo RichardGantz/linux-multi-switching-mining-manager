@@ -56,6 +56,7 @@ if [ $? == 0 ]; then
     echo "Please edit and fill in valid data!"
     echo "Execution stopped."
     echo "-------------------------------------------"
+    exit
 fi
 
 # Aufbereitet zum Einlesen mittels readarray und anschließendem Aufbau
