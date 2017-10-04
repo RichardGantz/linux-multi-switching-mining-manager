@@ -17,24 +17,26 @@ GPU_DIR=$(pwd | gawk -e 'BEGIN { FS="/" }{print $NF}')
 _update_SELF()
 {
     ###
-    ### DO NOT OUCH THIS FUNCTION! IT UPDATES ITSELF FROM DIR "GPU-skeleton"
+    ### DO NOT TOUCH THIS FUNCTION! IT UPDATES ITSELF FROM DIR "GPU-skeleton"
     ###
     SRC_FILE=$(basename $0)
-    UPD_FILE="update_"${SRC_FILE}
+    UPD_FILE="update_${SRC_FILE}"
     rm -f $UPD_FILE
     if [ ! "$GPU_DIR" == "$SRC_DIR" ]; then
         src_secs=$(date --utc --reference=../${SRC_DIR}/${SRC_FILE} +%s)
         dst_secs=$(date --utc --reference=$SRC_FILE +%s)
         if [[ $dst_secs < $src_secs ]]; then
             # create update command file
-            echo "cp -f ../${SRC_DIR}/${SRC_FILE} ." >$UPD_FILE
-            echo "exec ./${SRC_FILE}"               >>$UPD_FILE
+            echo "cp -f ../${SRC_DIR}/${SRC_FILE} .; \
+                  exec ./${SRC_FILE}" \
+                 >$UPD_FILE
             chmod +x $UPD_FILE
             echo "Updating the GPU-UUID-directory from $SRC_DIR"
             exec ./$UPD_FILE
         fi
     else
         echo "Exiting in the not-to-be-run $SRC_DIR directory"
+        echo "This directory doesn't represent a valid GPU"
         exit
     fi
 }
@@ -43,7 +45,18 @@ _update_SELF
 echo $$ >gpu_gv-algo.pid
 
 # Die Quelldaten Miner- bzw. AlgoName, BenchmarkSpeed und WATT für diese GraKa
+BENCHFILE_SRC=../${SRC_DIR}/benchmark_skeleton.json
 BENCHFILE="benchmark_${GPU_DIR}.json"
+diff -q $BENCHFILE $BENCHFILE_SRC &>/dev/null
+if [ $? == 0 ]; then
+    echo "-------------------------------------------"
+    echo "---           FATAL ERROR               ---"
+    echo "-------------------------------------------"
+    echo "File '$BENCHFILE' not yet edited!!!"
+    echo "Please edit and fill in valid data!"
+    echo "Execution stopped."
+    echo "-------------------------------------------"
+fi
 
 # Aufbereitet zum Einlesen mittels readarray und anschließendem Aufbau
 # der assoziativen Arrays bENCH[algoname] und WATTS[algoname]
@@ -122,6 +135,10 @@ done
 #
 #     ENDLOSSCHLEIFE START
 #
+
+# Damit readarray als letzter Prozess in einer Pipeline nicht in einer subshell
+# ausgeführt wird und diese beim Austriit gleich wieder seine Variablen verwirft
+shopt -s lastpipe
 while [ 1 -eq 1 ] ; do
     # If there is a newer version of this script, update it before the next run
     _update_SELF
@@ -150,19 +167,19 @@ while [ 1 -eq 1 ] ; do
     fi
     if [[ $src_secs > $dst_secs ]]; then
         #echo Creating new $bENCH_SRC
+        unset READARR
         sed -e 's/\r//g' $BENCHFILE  \
             | gawk -e ' \
             $1 ~ /MinerName/      { print substr( tolower($2), 2, length($2)-3 ); next } \
             $1 ~ /BenchmarkSpeed/ { print substr( $2, 1, length($2)-1 ); next } \
             $1 ~ /WATT/           { print substr( $2, 1, length($2)-1 ) }' \
-        >$bENCH_SRC
+            | tee $bENCH_SRC \
+            | readarray -n 0 -O 0 -t READARR
         # Diese assoziativen Arrays werden immer im ersten Lauf der Endlosschleife erstellt
         # und danach immer dann, wenn $BENCHFILE erneuert wurde.
-        unset READARR
-        readarray -n 0 -O 0 -t READARR <$bENCH_SRC
-        # Aus den MinerName:BenchmarkSpeed Paaren das assoziative Array bENCH erstellen
-        declare -A bENCH
-        declare -A WATTS
+        # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
+        unset bENCH; declare -A bENCH
+        unset WATTS; declare -A WATTS
         for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
             bENCH[${READARR[$i]}]=${READARR[$i+1]}
             WATTS[${READARR[$i]}]=${READARR[$i+2]}
@@ -215,6 +232,8 @@ while [ 1 -eq 1 ] ; do
 
     unset kwh_EUR; declare -A kwh_EUR
     unset kwh_BTC; declare -A kwh_BTC
+    # Damit diese Datei auf gar keinen Fall schon da ist beim Eintritt in die Schleife
+    rm -f gv_GRID.out
     for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
 
         # Kosten in EUR
