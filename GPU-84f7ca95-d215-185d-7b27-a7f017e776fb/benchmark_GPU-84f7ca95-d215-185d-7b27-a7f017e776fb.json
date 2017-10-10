@@ -37,9 +37,9 @@
       "NiceHashID": 22,
       "MinerBaseType": 2,
       "MinerName": "cryptonight",
-      "BenchmarkSpeed": ,
+      "BenchmarkSpeed": 433,
       "ExtraLaunchParameters": "",
-      "WATT": ,
+      "WATT": 55,
       "LessThreads": 0
     },
     {
