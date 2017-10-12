@@ -19,7 +19,7 @@ if [ ! -f $GPU_SYSTEM_DATA ]; then
     #echo "-------------------------------------------"
     #echo "---           FATAL ERROR               ---"
     #echo "-------------------------------------------"
-    #echo "No GPU System Data availlable."
+    #echo "No GPU System Data available."
     #echo "Please run gpu-abfrage.sh"
     #echo "-------------------------------------------"
     ./gpu-abfrage.sh
@@ -32,9 +32,16 @@ fi
 # 1.1. lade 3 arrays mit folgenden Daten "best_algo_netz.out","best_algo_solar","best_algo_solar_akku.out",
 #      "gpu_index.in" alle 10 sekunden oder direkt nach "lausche auf" aktualisierung der GPU best* daten
 # 1.2. Sortiere jeweils jedes array nach dem besten "profitabelsten" algorytmus
+#      Nee. Das macht zu wenig Sinn.
+#      Erstens hat gpu_gv-algo.sh bereits den "profitabelsten" Algorithmus ermittelt.
+#      Die Punkte 1.1. und 1.2. ENTFALLEN!!!
 # 1.3. Gebe jede dieser arrays aus "best_all_netz.out","best_all_solar.out","best_all_solar_akku.out"
 #      in diesen outs sind "index(GPU), algo, watt" pro NETZ, SOLAR, AKKU
-# 
+#
+# --->12.Oct.2017<---
+# DA IST ZU VIEL UNKLARHEIT DARÜBER, WAS DIESES SCRIPT EIGENTLIVH MACHEN SOLL.
+# ES LÄUFT MOMENTAN UND GIBT DIE BESTEN ALGORITHMEN SORTIERT AUS.
+# FÜR DEN TATSACHLICHEN SWITCHER ARBEITEN WIR AN EINER DATEI MIT DEM NAMEN multi_mining_switcher.sh WEITER
 
 ###############################################################################
 # Zu 1. Finde GPU Folder
@@ -53,7 +60,8 @@ done
 
 unset READARR
 readarray -n 0 -O 0 -t READARR <$GPU_SYSTEM_DATA
-# Aus den MinerName:BenchmarkSpeed Paaren das assoziative Array bENCH erstellen
+# Aus den GPU-Index:Name:Bus:UUID:Auslastung Paaren ein paar Grunddaten 
+#     jeder Grafikkarte für den Dispatcher erstellen
 declare -a index
 declare -a name
 #declare -a bus
@@ -75,7 +83,7 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
             echo "-------------------------------------------"
             echo "---           FATAL ERROR               ---"
             echo "-------------------------------------------"
-            echo "No file 'best_algo_${GRID[$grid]}.out' availlable"
+            echo "No file 'best_algo_${GRID[$grid]}.out' available"
             echo "for GPU ${name[${index[$j]}]}"
             echo "Please run '${uuid[${index[$j]}]}/gpu_gv-algo.sh'"
             echo "-------------------------------------------"
@@ -91,7 +99,7 @@ for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
         cat ${tmpSort[$grid]}.in                         \
             | sort -rn                                   \
             | tee ${tmpSort[$grid]}.out                  \
-            | gawk -e '{print $4 " " $1 " " $2 " " $3 }' \
+            | gawk -e '{print $NF " " $1 " " $2 " " $3 }' \
             | sed -n '1p' \
             >${best[$grid]}
         if [ 1 == 1 ]; then
@@ -99,11 +107,12 @@ for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
             echo "--------------------------------------"
             echo "           ${txt^^}"
             echo "--------------------------------------"
-            gawk -e '{print "GPU " $4 ": " $1 " " $2 " " $3 }' ${tmpSort[$grid]}.out
+            gawk -e '{print "GPU " $NF ": " $1 " " $2 " " $3 }' ${tmpSort[$grid]}.out
         fi
     fi
 done
 
+# Diese Überlegungen gelten für den Fall, dass pro Miner MEHRERE GPUs betrieben werden.
 # GPU-Index-Datei für miner (==algo ?) erstellen.
 # Hier: Komma-getrennt
 

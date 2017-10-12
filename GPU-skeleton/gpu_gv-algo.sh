@@ -229,6 +229,10 @@ _read_KURSE_in()
 #     ENDLOSSCHLEIFE START
 #
 
+GRID[0]="netz"
+GRID[1]="solar"
+GRID[2]="solar_akku"
+
 while [ 1 -eq 1 ] ; do
     
     # If there is a newer version of this script, update it before the next run
@@ -272,10 +276,6 @@ while [ 1 -eq 1 ] ; do
     #
     #                                                Berechnung der Stromkosten
     ######################################
-    GRID[0]="netz"
-    GRID[1]="solar"
-    GRID[2]="solar_akku"
-
     unset kwh_EUR; declare -A kwh_EUR
     unset kwh_BTC; declare -A kwh_BTC
     # Damit diese Datei auf gar keinen Fall schon da ist beim Eintritt in die Schleife
@@ -300,14 +300,24 @@ while [ 1 -eq 1 ] ; do
             algorithm=${ALGOs[$algo]}
             if [[ ${#bENCH[$algorithm]}>0 && ${#kMGTP[$algorithm]}>0 && ${#KURSE[$algorithm]}>0 ]]; then
                 # 1. Werte berechnen
-                actual_gv=$(echo "scale=8; ${bENCH[$algorithm]} \
-                                         / ${kMGTP[$algorithm]} \
-                                         * ${KURSE[$algorithm]} \
-                                         - ${WATTS[$algorithm]}*24*${kwh_BTC[${GRID[$grid]}]}/1000" | bc )
-                                   
+                calc_vals=$(echo "scale=8; mines=${bENCH[$algorithm]} \
+                                                 / ${kMGTP[$algorithm]} \
+                                                 * ${KURSE[$algorithm]}; \
+                                           costs=${WATTS[$algorithm]}*24*${kwh_BTC[${GRID[$grid]}]}/1000; \
+                                           print mines-costs, /* Ursprünglich einziger Wert */ \
+                                           \" \", mines,      /* Diese BTC berechnet die Karte brutto */ \
+                                           \" \", costs;      /* Maximale Kosten */ \
+                                           " | bc )
+                #echo ${calc_vals}
+                first_spc=$(expr index "${calc_vals}" " ")
+                #echo ${first_spc}
+                actual_gv=${calc_vals:0:${first_spc}-1}
+                #echo $actual_gv
+                add_paras=${calc_vals:${first_spc}}
+                #echo $add_paras
                 echo $algorithm : BTC/D Gewinn/Verlust : $actual_gv
                 # Ausgabe in Datei zum sortieren mit externen prog (vielleicht im RAM sortieren ohne datei schreiben)
-                echo $actual_gv $algorithm ${WATTS[$algorithm]} >> gv_GRID.out
+                echo $actual_gv $algorithm ${WATTS[$algorithm]} ${add_paras} >> gv_GRID.out
             else
                 echo KEIN Hash WERT bei $algorithm bei GPU-xyz fehlt !!! \<------------------------
                 # abfrage wegen watt wert ... dann wenn keiner da ist einfach keinen wert eintragen
