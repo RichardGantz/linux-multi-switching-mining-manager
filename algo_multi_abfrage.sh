@@ -1,48 +1,30 @@
 #!/bin/bash
 ###############################################################################
 #
-# Multi Abfrage der algos nicehash und bitcoin und starten der Solar"schleife"
-# starten der Solar-AKKU-"schleife"
+# Diese Datei ist der eigentliche Herzschlag des gesamten Organismus, nach dem
+# jeweils neue Entscheidungen zu berechnen und zu treffen sind.
 # 
-#
-#
-#
-#
+# Alle 31s werden aktuellste Daten aus dem Netz bezogen und so aufbereitet, dass
+# alle Beteiligten neue Berechnungen anstellen können, ja MÜSSEN!
+# Nachdem SYNCFILE=you_can_read_now.sync touched wurde steht fest:
+# Diese Daten sind für die nächsten 30s FIXIERT und UNVERÄNDERBAR:
+#    ALGO_NAMES.in    (ändert sich nicht so oft und wird daher nur beim Start und
+#                      danach etwa jede Stunde erstellt.
+#                      Allerdings wäre zu überlegen, ob man nicht doch auch jedes mal
+#                      diese Daten einliest, um neue Algorithmen NICHT ZU VERPASSEN ??)
+#    KURSE.in
+#    BTC_EUR_kurs.in
 #
 ###############################################################################
 
 # Aktuelle PID der 'algo_multi_abfrage.sh' ENDLOSSCHLEIFE
 echo $$ >algo_multi_abfrage.pid
-###############################################################################
-#
-# START SOLAR SCHLEIFE
-#
-# solarschleife abgekoppelt da sie alle 10 sec abfragt ggf. auch 5 sekunden 
-# abfrage möglich ggf. hier per eigener schleife einbauen mit counter und 
-# sleep command ... oder halt extern
-#
-#
-
-# solarschleife.sh
-
-###############################################################################
-#
-# START SOLAR AKKU SCHLEIFE
-#
-# solarschleife abgekoppelt da sie alle 10 sec abfragt ggf. auch 5 sekunden 
-# abfrage möglich ggf. hier per eigener schleife einbauen mit counter und 
-# sleep command ... oder halt extern
-#
-#
-
-# solar-akku-schleife.sh
-
 
 ###############################################################################
 #
 # WELCHE ALGOS DA
 #
-# Abfrag ewelche Algorithmen gibt es  ... muss nur selten abgefragt werden ggf. 
+# Abfrage welche Algorithmen gibt es  ... muss nur selten abgefragt werden ggf. 
 # einmal die stunde vielleicht
 #
 # Wir brauchen: "name", "speed_text" und "algo"
@@ -51,13 +33,18 @@ echo $$ >algo_multi_abfrage.pid
 #
 SYNCFILE=you_can_read_now.sync
 
-ALGO_NAMES="ALGO_NAMES.json"
-if [ ! -f $ALGO_NAMES ]; then
-    curl https://api.nicehash.com/api?method=buy.info -o $ALGO_NAMES
-fi
+ALGO_NAMES_WEB="ALGO_NAMES.json"
+ALGO_NAMES_ARR="ALGO_NAMES.in"
 
-# KURSe extrahieren in ALGO_NAMES.in
-gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
+_create_ALGOS_in()
+{
+    # Neue Algos aus dem Netz
+    curl https://api.nicehash.com/api?method=buy.info -o $ALGO_NAMES_WEB
+        # | tee $ALGO_NAMES_WEB \
+        # | grep -i "Web frontend is currently down for maintenance."
+
+    # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach ALGO_NAMES.in
+    num_algos_with_name=$(expr $(gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
                f["k"]=1; f["M"]=2; f["G"]=3; f["T"]=4; f["P"]=5 } \
          match( $0, /"name":"[[:alnum:]]*/ )\
               { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
@@ -65,7 +52,45 @@ gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
               { M=substr($0, RSTART, RLENGTH); print 1024 ** f[substr(M, index(M,":")+2, 1 )] }  \
          match( $0, /"algo":[0-9]*/ )\
               { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
-                 $ALGO_NAMES 2>/dev/null >ALGO_NAMES.in
+         $ALGO_NAMES_WEB 2>/dev/null \
+        | tee $ALGO_NAMES_ARR \
+        | wc -l ) / 3 )
+    algo_names_arr_modified=$(date --utc --reference=$ALGO_NAMES_ARR +%s)
+}
+
+if [ ! -f $ALGO_NAMES_ARR ]; then
+    _create_ALGOS_in
+else
+    ### ACHTUNG PROGRAMMIERER: Hier hat $(< statt $(cat NICHT FUNKTIONIERT!!!
+    num_algos_with_name=$(expr $(cat $ALGO_NAMES_ARR | wc -l ) / 3 )
+    algo_names_arr_modified=$(date --utc --reference=$ALGO_NAMES_ARR +%s)
+fi
+
+_notify_about_NO_ALGO_KURSE()
+{
+    # Tja, was machen wir in dem Fall also?
+    # Die Stratum-Server laufen und nehmen offensichtlich generierten Goldstaub entgegen.
+    # Und die Karten, die wir vor 31s eingeschaltet haben, liefen ja mit Gewinn.
+    # Wie lange kann man die Karten also mit den "alten" Preisen weiterlaufen lassen?
+    # "A couple of Minutes..."
+    # Wir setzen eine Desktopmeldung ab... jede Minute... und machen einen Eintrag
+    #     in eine Datei FATAL_ERRORS.log, damit man nicht vergisst,
+    #     sich langfristig um das Problem zu kümmern.
+    if [[ ! "$ERROR_notified" == "1" ]]; then
+        notify-send -t 10000 -u critical "### Es gibt zur Zeit keine neuen Kurse ###" \
+                 "Der Webfrontend ist wegen Wartungsarbeiten down. \
+                 Entscheide bitte, wie lange Du die gerade laufenden Miner \
+                 mit den immer mehr veraltenden Zahlpreisen laufen lassen möchtest!"
+        if [[ ! "$ERROR_recorded" == "1" ]]; then
+            echo $(date "+%F %H:%M:%S") "curl - Kurse-Abfrage hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
+            echo "                    Hier: Down wegen Wartungsarbeiten" >>FATAL_ERRORS.log
+            ERROR_recorded=1
+        fi
+        ERROR_notified=1
+    else
+        ERROR_notified=0
+    fi
+}
 
 ###############################################################################
 # 1. curl "https://api.nicehash.com/api?method=stats.global.current&location=0"
@@ -99,20 +124,59 @@ gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
 #    Der NAME wiederum dient als Index für das Array KURSE[algoname],
 #        der den PREIS aus der nächsten Zeile [$i+1 =1,3,5,7,etc.] aufnimmt.
 
-ALGOFILE="KURSE.json"
+algoID_KURSE_WEB="KURSE.json"
+algoID_KURSE_ARR="KURSE.in"
 while [ 1 -eq 1 ] ; do
+    # Algos nur stündlich prüfen
+    algo_age=$(expr $(date --utc +%s) - $algo_names_arr_modified )
+    if [[ $algo_age -ge 3600 ]]; then
+        echo "###---> Hourly Update of $ALGO_NAMES_ARR"
+        _create_ALGOS_in
+    fi
+    
     # kurs abfrage btc als json datei
-    #curl https://api.nicehash.com/api?method=stats.global.current -o $ALGOFILE
-    echo ---------------------Nicehash-Kurse---------------------------------
-    curl "https://api.nicehash.com/api?method=stats.global.current&location=0" -o $ALGOFILE
-    echo --------------------------------------------------------------------
+    #
+    # ACHTUNG FEHLERQUELLE:
+    #         Wenn VOR Ablauf des nächsten stündlichen Einlesens der ALGO-Namen ein neuer Algo
+    #         hinzukommt, gibt es eine weitere ID und einen weiteren Algonamen,
+    #         DIE IN DEN KURSEN BEREITS AUFTAUCHEN KÖNNTEN!!!
+    #
+    # Strenggenommen müssen wir also nach jedem Einlesen eines Kurses nachsehen, ob sich die IDs
+    # irgendwie verändert haben oder wenigstens ob es mehr geworden sind !!!
+    #
+    # Folgendes ist heute passiert, was in eine Endlosschleife an Einlesevorgängen gemündet ist:
+    # "Web frontend is currently down for maintenance.
+    #  We expect to be back in a couple minutes. Thanks for your patience.
+    #  Stratum servers should be running as usual."
 
-    gawk -e 'BEGIN { RS="},{|:[\[]{" } \
-         match( $0, /"algo":[0-9]*/ )\
-              { M=substr($0, RSTART, RLENGTH);   print substr(M, index(M,":")+1 ) }  \
-         match( $0, /"price":"[0-9.]*"/ )\
-              { M=substr($0, RSTART, RLENGTH-1); print substr(M, index(M,":")+2 ) }'  \
-                 $ALGOFILE 2>/dev/null >KURSE.in
+    echo ---------------------Nicehash-Kurse---------------------------------
+    pageDown=$( curl "https://api.nicehash.com/api?method=stats.global.current&location=0" \
+        | tee $algoID_KURSE_WEB \
+        | grep -i -c -m 1 "Web frontend is currently down for maintenance." )
+
+    if [[ ! "$pageDown" == "0" ]]; then
+        _notify_about_NO_ALGO_KURSE
+    else
+        echo --------------------------------------------------------------------
+        unset ERROR_notified ERROR_recorded # Damit die Fehlermeldungen auf jeden Fall scharf sind
+
+        num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS="},{|:[\[]{" } \
+             /"algo":[0-9]*/ && /"price":"[0-9.]*"/ { \
+                 if (match( $0, /"algo":[0-9]*/     )) \
+                    { M=substr($0, RSTART, RLENGTH);   print substr(M, index(M,":")+1 ) }  \
+                 if (match( $0, /"price":"[0-9.]*"/ )) \
+                    { M=substr($0, RSTART, RLENGTH-1); print substr(M, index(M,":")+2 ) } }'  \
+              $algoID_KURSE_WEB 2>/dev/null \
+            | tee $algoID_KURSE_ARR \
+            | wc -l ) / 2 )
+        if [[ ! $num_algos_with_price == $num_algos_with_name ]]; then
+            notify-send "###---> MAYBE A NEW ALGORITHM DETECTED !!! <---###"
+            echo "###---> MAYBE A NEW ALGORITHM DETECTED !!! <---###"
+            echo "###---> FORCED Update of $ALGO_NAMES_ARR   <---###"
+            _create_ALGOS_in
+            continue
+        fi
+    fi
     
 ##############################################
 ##############################################
@@ -122,24 +186,31 @@ while [ 1 -eq 1 ] ; do
     #Aktueller Bitcoin Kurs: <img alt="EUR" class="ticker_arrow mbm3 g90" src="/images/s.gif" /> <strong \
     #  id="ticker_price">3.163,11 €</strong>
 
-    ALGOFILE_btcEUR="BTCEURkurs"
+    BTC_EUR_KURS_WEB="BTCEURkurs"
     #http abfrage
     echo -------------------------BTC-EUR-KURS-Abfrage-----------------------
-    curl "https://www.bitcoin.de/de" -o $ALGOFILE_btcEUR
+    curl "https://www.bitcoin.de/de" -o $BTC_EUR_KURS_WEB
     echo --------------------------------------------------------------------        
         
     # BTC Kurs extrahieren und umwandeln, das dieser dann als Variable verwendbar und zum Rechnen geeignet ist
     gawk -e '/id="ticker_price">[0-9.,]* €</ \
-        { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' $ALGOFILE_btcEUR \
+        { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' $BTC_EUR_KURS_WEB \
     | grep -E -m 1 -o -e '[0-9.]*' \
-	   > BTC_EUR_kurs.in
+           > BTC_EUR_kurs.in
+
+    # Alle Daten stabil in den Dateien. Startschuss für die anderen Prozesse
     touch $SYNCFILE
 
 ##############################################
 ##############################################
 
-    sleep 10
-    ./multi_mining_sort.sh
+    # Das ist ein zu grosser Sicherheitspuffer.
+    # Die Berechnungen müssen losgehen, nachdem alle GPUs ihre best-Werte ermittelt haben!
+    # - Jede GPU trägt sich dabei in eine Art von "Registratur" ein und prüft vorher vielleicht,
+    #      ob die Letzte auch entgegen genommen wurde.
+    # - Dann legt das multi_mining_calc.sh erst los, wenn <alle> GPUs ihre best-Werte bgegeben haben
+    sleep 5
+    ./multi_mining_calc.sh
 
-    sleep 21
+    sleep 26
 done
