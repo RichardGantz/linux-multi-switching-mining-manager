@@ -184,7 +184,8 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
             | readarray -n 0 -O 0 -t READARR
         echo "GV der GPU #${index[$idx]} bei 100% \"${GRID[$grid]}\": ${READARR[0]}"
 
-        # Algos mit Verlust interessieren uns nicht 
+        # Algos mit Verlust interessieren uns nicht und erzeugen keinen
+        # Eintrag in dem actGPUAlgos Array
         if [[ $(expr index "${READARR[0]}" "-") == 1 ]]; then continue; fi
 
         # Wir brauchen jeden Algorithmus nur EIN mal (keine Doppelten)
@@ -197,7 +198,7 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
     done
 done
 
-if [ 1 == 1 ]; then
+if [ 1 == 0 ]; then
     # Ausgabetest zur Analyse
     for (( idx=0; $idx<${#index[@]}; idx++ )); do
         declare -n actGPUAlgos="GPU${index[$idx]}Algos"
@@ -321,6 +322,60 @@ fi
 # Der Beste Wert ist nun schnell ermittelt und durch den Index ["101"] ist die Kombination der Algos auch bekannt:
 # GPU#0 muss laufen mit Algo#1, GPU#1 mit Algo#0 und GPU#2 mit Algo#1.
 #
+
+# Ermittlung derjenigen GPU-Indexes, die
+# 1. auszuschalten sind in dem Array SwitchOffGPUs[]
+# 2. nur EINEN Algo als Alternative haben und deshalb nicht in die Endberechnung
+#    mit einbezogen werden müssen in dem Array RunGPUwithKnownAlgo[]
+# 3. mit mehr als einem Algo im Gewinn betrieben werden könnten, bei
+#    denen man den optimalen Algo aber erst durch "Ausprobieren" der Kombinationen mit
+#    den Algos der anderen GPUs ermitteln muss in dem Array CalcOptimumAlgos[]
+#
+declare -a SwitchOffGPUs
+declare -a RunGPUwithKnownAlgo
+declare -a CalcOptimumAlgos
+
+for (( idx=0; $idx<${#index[@]}; idx++ )); do
+    declare -n actGPUAlgos="GPU${index[$idx]}Algos"
+    #declare -n actAlgoWatt="GPU${index[$idx]}Watts"
+    #declare -n actAlgoMines="GPU${index[$idx]}Mines"
+
+    case "${#actGPUAlgos[@]}" in
+        "0")
+            # Karte ist auszuschalten. Kein Gewinnbringender Algo im Moment
+            SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${index[$idx]}
+            ;;
+        "1")
+            # Karte kann so oder so mit dem einzigen Algo im Moment laufen
+            RunGPUwithKnownAlgo[${#RunGPUwithKnownAlgo[@]}]=${index[$idx]}
+            ;;
+        *)
+            # GPU kann mit mehr als einem Algo mit Gewinn laufen.
+            # Die optimale Kombination all dieser Algos muss
+            # anschließend ermittelt werden.
+            CalcOptimumAlgos[${#CalcOptimumAlgos[@]}]=${index[$idx]}
+            ;;
+    esac
+done
+
+if [ 1 == 1 ]; then
+    # Auswertung zur Analyse
+    for (( i=0; $i<${#SwitchOffGPUs[@]}; i++ )); do
+        echo "Switch OFF GPU #${SwitchOffGPUs[$i]}"
+    done
+    for (( i=0; $i<${#RunGPUwithKnownAlgo[@]}; i++ )); do
+        declare -n actGPUAlgos="GPU${RunGPUwithKnownAlgo[$i]}Algos"
+        echo "GPU #${RunGPUwithKnownAlgo[$i]} can run with ${actGPUAlgos[0]}"
+    done
+    if [[ "${#CalcOptimumAlgos[@]}" -gt "0" ]]; then
+        unset gpu_string
+        for (( i=0; $i<${#CalcOptimumAlgos[@]}; i++ )); do
+            gpu_string+="#${CalcOptimumAlgos[$i]}, "
+        done
+        echo "Calculate Maximum Earnings between Algo combinations of GPU's ${gpu_string%, }"
+    fi
+fi
+
 
 
 
