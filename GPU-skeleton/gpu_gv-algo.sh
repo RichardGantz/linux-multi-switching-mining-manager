@@ -281,24 +281,17 @@ while [ 1 -eq 1 ] ; do
     done
     _read_KURSE_in
 
-    # BTC - EUR - Kurs Einlesen  
-    btcEUR=$(< ../BTC_EUR_kurs.in)
-    
     ###############################################################################
     #
     #                                                Berechnung der Stromkosten
     ######################################
-    unset kwh_EUR; declare -A kwh_EUR
     unset kwh_BTC; declare -A kwh_BTC
     # Damit diese Datei auf gar keinen Fall schon da ist beim Eintritt in die Schleife
     rm -f gv_GRID.out
-    for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
+    for ((grid=0; $grid<${#GRID[@]}; grid++)) ; do
 
-        # Kosten in EUR
-        kwh_EUR[${GRID[$grid]}]=$(< ../kwh_${GRID[$grid]}_kosten.in)
-    
         # Kosten Umrechnung in BTC
-        kwh_BTC[${GRID[$grid]}]=$(echo "scale=8; ${kwh_EUR[${GRID[$grid]}]}/$btcEUR" | bc)
+        kwh_BTC[${GRID[$grid]}]=$(< ../kWh_${GRID[$grid]}_Kosten_BTC.in)
     
         ###############################################################################
         #

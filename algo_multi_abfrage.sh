@@ -22,6 +22,19 @@ echo $$ >$(basename $0 .sh).pid
 
 ###############################################################################
 #
+# Kandidaten für GLOBALE STATISCHE VARIABLEN, die wir durch eine Installationsroutine
+# in die Login-Shell-Umgebung bringen könnten oder in eine Shell, die diese
+# exportiert und dann alle anderen Skripte aufruft und so sichergestellt ist,
+# dass alle darauf Zugriff haben und sie nicht jedesmal selbst definieren müssen
+#
+###############################################################################
+
+GRID[0]="netz"
+GRID[1]="solar"
+GRID[2]="solar_akku"
+
+###############################################################################
+#
 # WELCHE ALGOS DA
 #
 # Abfrage welche Algorithmen gibt es  ... muss nur selten abgefragt werden ggf. 
@@ -154,7 +167,12 @@ while [ 1 -eq 1 ] ; do
         | tee $algoID_KURSE_WEB \
         | grep -i -c -m 1 "Web frontend is currently down for maintenance." )
 
-    if [[ ! "$pageDown" == "0" ]]; then
+    # echo ${pageDown}; exit
+    # Das hat am 16.10.2017 gegen 10:20 Uhr leider nicht funktioniert!
+    # Muss nochmal ermittelt werden, warum der trotz maintenance nicht hier
+    # abgebogen ist.
+    # changed 'if [[ ! "$pageDown" == "0" ]]; then' to:
+    if [[ ! "${pageDown}" == "0" ]]; then
         _notify_about_NO_ALGO_KURSE
     else
         echo --------------------------------------------------------------------
@@ -193,10 +211,22 @@ while [ 1 -eq 1 ] ; do
     echo --------------------------------------------------------------------        
         
     # BTC Kurs extrahieren und umwandeln, das dieser dann als Variable verwendbar und zum Rechnen geeignet ist
-    gawk -e '/id="ticker_price">[0-9.,]* €</ \
-        { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' $BTC_EUR_KURS_WEB \
-    | grep -E -m 1 -o -e '[0-9.]*' \
-           > BTC_EUR_kurs.in
+    btcEUR=$(gawk -e '/id="ticker_price">[0-9.,]* €</ \
+                  { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' \
+                  $BTC_EUR_KURS_WEB \
+             | grep -E -m 1 -o -e '[0-9.]*' \
+             | tee BTC_EUR_kurs.in )
+
+    # Einmal für alle gleich die fixen kWh-Preise in BTC umwandeln
+    for ((grid=0; $grid<${#GRID[@]}; grid++)) ; do
+
+        # Kosten in EUR
+        kwh_EUR=$(< kwh_${GRID[$grid]}_kosten.in)
+
+        # Kosten Umrechnung in BTC
+        echo $(echo "scale=8; ${kwh_EUR}/${btcEUR}" | bc) >kWh_${GRID[$grid]}_Kosten_BTC.in
+
+    done
 
     # Alle Daten stabil in den Dateien. Startschuss für die anderen Prozesse
     touch $SYNCFILE
