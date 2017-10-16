@@ -18,7 +18,7 @@
 ###############################################################################
 
 # Aktuelle PID der 'algo_multi_abfrage.sh' ENDLOSSCHLEIFE
-echo $$ >algo_multi_abfrage.pid
+echo $$ >$(basename $0 .sh).pid
 
 ###############################################################################
 #
