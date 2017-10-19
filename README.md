@@ -7,6 +7,7 @@ Needed commands:
 ---------------
 curl
 nvidia-smi (nvidia-cuda-drivers)
+su -c "apt_get update ; apt-get install libnotify-bin"
 
 Future Extensions:
 -----------------

@@ -12,6 +12,8 @@ gpu folder kopiert.
       "BenchmarkSpeed": 896513.0,   # Der Benchmark wwert wird in H/s oder Sol/s angegeben (MH,KH,TH,PH umrechungen findet später statt)
       "ExtraLaunchParameters": "",  # wird demnächst verwendet um dem Miner spezielle optionen mitzuteilen
       "WATT": 320,                  # WATT/h das ist der Watt wert welche die GPU pro stunde brauch
+                                    # DIESE ZAHL MUSS EIN INTEGER SEIN!!!
+                                    # Also NOTFALLS AUFRUNDEN, bevor sie eingetragen wird.
       "LessThreads": 0              # wird "noch" nicht benutzt ggf kann gelöscht werden
 }
 

@@ -7,6 +7,7 @@ Nötige System Programme
 - Debian Jessie (oder gleichwertig)
 - Curl
 - Nvidia Cuda Treiber
+- su -c "apt_get update ; apt-get install libnotify-bin"
 
 
 Handhabung der Sripte und Dateien
@@ -19,22 +20,22 @@ Dataien:
 
 Scripte:
 - 1# algo_multi_abfrage.sh
-	> ausgabe Dateien:
-		BTC_EUR.in | KURSE.in | ALGO_NAMES.in | "you_can_read_now"
+        > ausgabe Dateien:
+                BTC_EUR.in | KURSE.in | ALGO_NAMES.in | "you_can_read_now"
 - 2# gpu-abfrage.sh
-	> ausgabe Daten
-		GPU Verzeichnisse | gpu_index.in
+        > ausgabe Daten
+                GPU Verzeichnisse | gpu_index.in
 - 3# GPU*/gpu_gv-algo.sh
-	< zu lesende Dateien
-		von 1# BTC_EUR.in | KURSE.in | ALGO_NAMES.in | "you_can_read_now"
-		von 1$,2$,3$
-	> ausgabe Daten
-		best_algo_netz.out | best_algo_solar.out | best_algo_solar_akku.out
+        < zu lesende Dateien
+                von 1# BTC_EUR.in | KURSE.in | ALGO_NAMES.in | "you_can_read_now"
+                von 1$,2$,3$
+        > ausgabe Daten
+                best_algo_netz.out | best_algo_solar.out | best_algo_solar_akku.out
 - 4# multi_mining_sort.sh
-	< liest Dateien aus GPU Verzeichnissen
-		best_algo_netz.out | best_algo_solar.out | best_algo_solar_akku.out
-	> ausgebende Dateien
-		cfg_Netz_*(algo).txt | cfg_SOLAR_*(algo).txt | cfg_AKKU_*(algo).txt
+        < liest Dateien aus GPU Verzeichnissen
+                best_algo_netz.out | best_algo_solar.out | best_algo_solar_akku.out
+        > ausgebende Dateien
+                cfg_Netz_*(algo).txt | cfg_SOLAR_*(algo).txt | cfg_AKKU_*(algo).txt
 
 Handhabung:
 
