@@ -89,9 +89,9 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     # "GPU${idx}Algos" für die bis zu 3 (GRID) best-Algos,
     # "GPU${idx}Watts" deren Watt-Verbrauch und
     # "GPU${idx}Mines" deren Brutto-Verdienst
-    declare -a "GPU${index[$j]}Algos"
-    declare -a "GPU${index[$j]}Watts"
-    declare -a "GPU${index[$j]}Mines"
+    declare -ag "GPU${index[$j]}Algos"
+    declare -ag "GPU${index[$j]}Watts"
+    declare -ag "GPU${index[$j]}Mines"
 
     # Quelldateien für Sortierung erstellen
     # sort-key(GV)  algo    WATT   MINES    COST(100%GRID)       + GPU-Index
@@ -155,8 +155,48 @@ done
 
 ########################################################################
 #
+#               _push_onto_array
+#
+#
+# Um die Berechnungs-Mechaniken besser verstehen zu können, ist es wichtig, den Sinn von Arrays
+# tief zu verstehen.
+# Diese Funktion legt auf ein vorhandenes Indexiertes Array in lückenloser Manier einen Wert
+# oben drauf oder initialisiert es mit einem Wert bei Index 0, wenn es noch nicht vorhanden sein sollte.
+# Nach diesem Push gibt es das Array auf jeden Fall und es hat mindestens 1 Member.
+# Und alle Member können lückenlos von 0 bis zur "Anzahl Member - 1" in einer Schleife angesteuert werden.
+#
+function _push_onto_array () {
+    declare -n arry="$1"
+    arrCnt=${#arry[@]}
+    arry[${arrCnt}]=$2
+}
+
+########################################################################
+#
 #               _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
 #
+#
+# Der Berechnungsmechanismus hält die maximal beste Kombination aus GPUs immer dann in Form eines String fest,
+#     wenn er feststellt, dass ein neuer Maximalwert errechnet wurde.
+#
+# Es handelt sich um durch Kommas getrennte Kombinationen aus GPU-Index und entsprechendem AlgoIndex,
+#     die durch einen Doppelpunkt getrennt sind.
+#
+#    z.B.    "0:1,4:0,6:3,8:1,"   bedeutet:
+#
+#        4 GPUs mit den IndexNummern #0, #4, #6 und #8 wurden mit den angegebenen AlgorithmenIndexen berechnet:
+#
+#        GPU#0 hat (mindestens) 2 gewinnbringende Algorithmen, die über Index 0 und 1 angesteuert werden.
+#              Bei dieser Berechnung ist GPU#0 mit dem Algo und Watt, der hinter Index 1 steckt, berechnet worden.
+#        GPU#4 hat (mindestens) 1 gewinnbringenden Algorithmus, der über Index 0 angesteuert wird.
+#        GPU#6 hat (mindestens) 4 gewinnbringende Algorithmen, die über Index 0 bis 3 angesteuert werden.
+#              Bei dieser Berechnung ist GPU#6 mit dem Algo und Watt, der hinter Index 3 steckt, berechnet worden.
+#        GPU#8 hat (mindestens) 2 gewinnbringende Algorithmen, die über Index 0 und 1 angesteuert werden.
+#              Bei dieser Berechnung ist GPU#8 mit dem Algo und Watt, der hinter Index 1 steckt, berechnet worden.
+#
+# Diese Funktion macht daraus das Array GPUINDEXES, das anschließend ausgewertet werden kann,
+# indem zu jeder GPU der entsprechende AlgoIndex hinter dem Doppelpunkt ausgewertet wird.
+# Ist zugegebenermaßen nicht sehr ästhetisch und kann vielleicht noch besser aufbereitet werden.
 #
 function _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES () {
     # Jetzt haben wir verschiedene Möglichkeiten, von dem String aus auf die GPU und den Algorithmus zu schließen.
@@ -165,9 +205,7 @@ function _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES () {
     unset GPUINDEXES
     shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
-    #    echo ${MAX_PROFIT_GPU_Algo_Combination} | gawk -e 'BEGIN {FS=","} { for (i=1;i<NF;i++) print " " $i }' \
-    echo ${MAX_PROFIT_GPU_Algo_Combination} | sed -e 's/\,/ /g' \
-        | tee bc_NACH_sed.log | read -a GPUINDEXES
+    echo ${MAX_PROFIT_GPU_Algo_Combination} | sed -e 's/\,/ /g' | read -a GPUINDEXES
     ${shopt_cmd_before}
 }
 
@@ -201,9 +239,7 @@ function _calculate_ACTUAL_REAL_PROFIT () {
     #     immer als möglichst letzte Rechenoperation erfolgt,
     #     weil alle Stellen >scale einfach weggeschmissen werden.
     gesamtFormel="$3 - ( ${gesamtKostenBTC} ) * 24 / 1000"
-    ACTUAL_REAL_PROFIT=$(echo "scale=8; ${gesamtFormel} " \
-                                        | bc \
-                              )
+    ACTUAL_REAL_PROFIT=$(echo "scale=8; ${gesamtFormel} " | bc )
 }
 
 ########################################################################
@@ -236,9 +272,7 @@ function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
     echo "scale=8; if ( ${ACTUAL_REAL_PROFIT} > ${MAX_PROFIT} ) \
                         { print ${ACTUAL_REAL_PROFIT}, \" \", ${ACTUAL_REAL_PROFIT} } \
                    else { print ${ACTUAL_REAL_PROFIT}, \" \", ${MAX_PROFIT} }" \
-        | tee bc_DEBUG_STRING.log \
         | bc \
-        | tee bc_ERGEBNIS.log \
         | read ACTUAL_REAL_PROFIT MAX_PROFIT
     ${shopt_cmd_before}
     #   | tee bc_DEBUG_STRING.log \
@@ -390,7 +424,7 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
 #
 #        GPU#0 hat (mindestens) 2 gewinnbringende Algorithmen, die über Index 0 und 1 angesteuert werden.
 #              Bei dieser Berechnung ist GPU#0 mit dem Algo und Watt, der hinter Index 1 steckt, berechnet worden.
-#        GPU#4 hat (mindestens) 1 gewinnbringenden Algorithmus, dre über Index 0 angesteuert wird.
+#        GPU#4 hat (mindestens) 1 gewinnbringenden Algorithmus, der über Index 0 angesteuert wird.
 #        GPU#6 hat (mindestens) 4 gewinnbringende Algorithmen, die über Index 0 bis 3 angesteuert werden.
 #              Bei dieser Berechnung ist GPU#6 mit dem Algo und Watt, der hinter Index 3 steckt, berechnet worden.
 #        GPU#8 hat (mindestens) 2 gewinnbringende Algorithmen, die über Index 0 und 1 angesteuert werden.
@@ -418,14 +452,17 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
         
         for (( iii=${myStart}; $iii<${myDepth}; iii++ )); do
             unset TestCombinationGPUs
-            declare -a TestCombinationGPUs
-            #echo "Übergebene Parameteranzahl: $#"
-            #echo "Übergebene Parameter      : $*"
+            declare -ag TestCombinationGPUs
+            # Jede Ebene vorher hat ihren aktuelen Indexwert an die Parameterliste gehängt.
+            # Das Array TestCombinationGPUs, das die zu untersuchenden GPU-Indexe enthält,
+            # wird jetzt komplett für die Berechnungsroutine aufgebaut.
             while [[ $# -gt 0 ]]; do
-                TestCombinationGPUs[${#TestCombinationGPUs[@]}]=${PossibleCandidateGPUidx[$1]}
+                # Zuerst alle bisherigen GPUs dieser Kombination aus GPUs ...
+                _push_onto_array TestCombinationGPUs ${PossibleCandidateGPUidx[$1]}
                 shift
             done
-            TestCombinationGPUs[${#TestCombinationGPUs[@]}]=${PossibleCandidateGPUidx[${iii}]}
+            # ... und dann die momentan letzte, die eigene, oben drauf.
+            _push_onto_array TestCombinationGPUs ${PossibleCandidateGPUidx[${iii}]}
             #echo "Anzahl Test-Member-Array: ${#TestCombinationGPUs[@]}"
             _CALCULATE_GV_of_all_TestCombinationGPUs_members
         done
@@ -448,7 +485,13 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
 # Ich glaube, dass hier schon entschieden werden muss, ob es überhaupt gerade "solar" Power gibt.
 # Wenn nicht, brauchen wir einfach nur die positiven "netz" Algorithmen laufen zu lassen.
 # ...
+# (21.10.2017)
+# Diese Unterscheidung vom 17.10.2017 hat sich erübrigt.
+# Die Berechnungen stimmen auch für den Fall, dass KEINE SolarPower vorhanden ist (SolarWattAvailable=0)
+# Dann wird automatisch der beste Algorithmus im reinen Netzbetrieb berechnet!
 #
+# ABER DAS IST WICHTIG. Und es sollen auch noch generelle Schalter wie GPU_TEMPORARILY_DISBLED
+#      oder ALGO_TEMPORARILY DISABLED mit einbezogen werden.
 # Welche der System GPUs laufen gerade mit welchem Algorithmus?
 # Wir könnten ebenfalls ein Array benutzen, das durch den GPU-Index indexiert ist und
 # nur den Algorithmus "equihash" oder "" für gestoppt enthält?
@@ -475,26 +518,25 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
 
 
 
-               ###########################################
-               ###########################################
-               ###                                     ###
-               ### FALLS ES ALSO "solar" Power gibt... ###
-               ###                                     ###
-               ###########################################
-               ###########################################
+##################################################################################
+##################################################################################
+###                                                                            ###
+### FALLS ES ALSO "solar" Power gibt, wird die Variable SolarWattAvailable > 0 ###
+### Die Berechnungen stimmen so oder so. Auch für den Fall, dass es keine      ###
+### "solar" Power gibt, was durch SolarWattAvailable=0 ausgedrückt wird.       ###
+###                                                                            ###
+##################################################################################
+##################################################################################
 
 
-declare -i SolarWattAvailable=80   # GPU#1: equihash    - GPU#0: OFF
 declare -i SolarWattAvailable=75   # GPU#1: equihash    - GPU#0: OFF
 # Das Programm hat bei mindestens 74W von cryptonight auf equihash umgeschaltet. GUUUUUT!
 declare -i SolarWattAvailable=73   # GPU#1: cryptonight - GPU#0: OFF
-declare -i SolarWattAvailable=200   # GPU#1: cryptonight - GPU#0: OFF
+declare -i SolarWattAvailable=80   # GPU#1: equihash    - GPU#0: OFF
 
-# AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese "solar" Berechnungen
-#declare -n kWhMax="kwh_BTC[${GRID[0]}]"
-#declare -n kWhMin="kwh_BTC[${GRID[1]}]"
-kWhMax=${kwh_BTC[${GRID[0]}]}
-kWhMin=${kwh_BTC[${GRID[1]}]}
+# AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese beiden Berechnungen
+kWhMax=${kwh_BTC["netz"]}
+kWhMin=${kwh_BTC["solar"]}
 
 ###############################################################################################
 # (etwa 15.10.2017)
@@ -553,7 +595,6 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
         #echo "Grid: ${GRID[$grid]}"
         #unset READARR # read -a ARR unsets ARR anyway befor the read
         read -a READARR <${uuid[${index[$idx]}]}/best_algo_${GRID[$grid]}.out
-        echo "GV der GPU #${index[$idx]} bei 100% \"${GRID[$grid]}\": ${READARR[0]}"
 
         # Algos mit Verlust interessieren uns nicht und erzeugen keinen
         # Eintrag in dem actGPUAlgos Array
@@ -563,9 +604,9 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
         for (( algo=0; $algo<${#actGPUAlgos[@]}; algo++ )); do
             if [[ "${actGPUAlgos[$algo]}" == "${READARR[1]}" ]]; then continue 2; fi
         done
-        actGPUAlgos[${#actGPUAlgos[@]}]="${READARR[1]}"
-        actAlgoWatt[${#actAlgoWatt[@]}]="${READARR[2]}"
-        actAlgoMines[${#actAlgoMines[@]}]="${READARR[3]}"
+        _push_onto_array actGPUAlgos  "${READARR[1]}"
+        _push_onto_array actAlgoWatt  "${READARR[2]}"
+        _push_onto_array actAlgoMines "${READARR[3]}"
     done
 done
 
@@ -582,9 +623,6 @@ done
 # Voraussetzungen, die noch geklärt werden müssen:
 # 1. Wir brauchen jetzt natürlich Informationen aus dem SMARTMETER
 # 2. Und wir brauchen eine Datenstruktur, anhand der wir erkennen, welche GPU's gerade mit welchem Algo laufen.
-
-# Erkennen wir anhand der SMARTMETER Daten unter Abzug der Leistung der gerade laufenden GPUs,
-#    dass gar kein "solar" zur Verfügung steht, brauchen wir diese Berechnungen überhaupt nicht zu machen!
 
 # Im Groben brauchen wir folgendes Datenfeld für angenommene 2 Algos pro GPU, die sinnvoll sind:
 # (Die Routine ist natürlich so ausgelegt, dass beliebig viele Algos pro GPU möglich sind.
@@ -623,57 +661,22 @@ done
 #       BTCs[1]  +        BTCs[1]  +        BTCs[1] ... +       BTCs[1]  =  GesamtBTCs-Kombi-2 hoch 11
 #
 # Bei 11 GPUs und je 2 Algorithmen sind das 2 hoch 11 Kombinationen: 2048
-# Mal sehen, wie lange es dauert, die zu berechnen.
-# Schätzungsweise liegt eine Berechnung weit unter einer ms.
-# Schätzen wir 1 ms pro Durchlauf, dann sind das etwa 2 Sekunden insgesamt.
 #
+
 # Wie könnte man das Ganze realisieren?
-# Wir können einen String aufbauen, den wir dann als Index eines assoziativen Arrays verwenden.
-# Jede Stelle im String repräsentiert eine GPU, so dass der String bei 11 GPU's 11 Stellen lang wäre.
-# Eine GPU, die nicht laufen darf könnte durch ein "-" eingetragen werden.
-# Ansonsten stehen die Ziffern 0-n für den Index des Algo's der GPU
-#
-# Ein Beispiel mit 3 GPUs und nur 2 GPUs mit 2 Algorithmen:
-#
-#                  GPU#1:Algo#0 (kein Algo#1)
-#                  |           
-# GV-Kombi       "000"
-#                 ^ ^
-#                 | |
-# GPU#0:Algo#0 ---   --- und GPU#2:Algo#0
-#
-#                  GPU#1:Algo#0 (kein Algo#1)
-#                  |           
-# GV-Kombi       "001"
-#                 ^ ^
-#                 | |
-# GPU#0:Algo#0 ---   --- und GPU#2:Algo#1
-#
-#                  GPU#1:Algo#0 (kein Algo#1)
-#                  |           
-# GV-Kombi       "100"
-#                 ^ ^
-#                 | |
-# GPU#0:Algo#1 ---   --- und GPU#2:Algo#0
-#
-#                  GPU#1:Algo#0 (kein Algo#1)
-#                  |           
-# GV-Kombi       "101"
-#                 ^ ^
-#                 | |
-# GPU#0:Algo#1 ---   --- und GPU#2:Algo#1
-#
-# Das wars dan hier schon. Mehr Kombinationen gibt es hier nicht.
-# Wir erhalten also das folgende assoziative Array:
-#
-# GV_KOMBI_MINES["000"]=.00123456 (z.B.)
-# GV_KOMBI_MINES["001"]=.00123457 (z.B.)
-# GV_KOMBI_MINES["100"]=.00113457 (z.B.)
-# GV_KOMBI_MINES["101"]=.00133457 (z.B.)
-#
-# Der Beste Wert ist nun schnell ermittelt und durch den Index ["101"] ist die Kombination der Algos auch bekannt:
-# GPU#0 muss laufen mit Algo#1, GPU#1 mit Algo#0 und GPU#2 mit Algo#1.
-#
+# Wir setzen vor dem Beginn der Berechnungsorgie die Variable MAX_PROFIT auf 0.0
+#     und prüfen nach jeder einzelnen Rechnung, ob der gerade errechnete Wert den bisherigen MAX_PROFIT
+#     übertrifft und daher als neuer MAX_PROFIT übernommen wird.
+# Die gerade berechnete Kombination aus GPU's:Algos halten wir in einem String fest:
+#     MAX_PROFIT_GPU_Algo_Combination="{GPU-Index}:{AlgoIndex},"*
+# So wissen wir JEDERZEIT und vor allem natürlich am Ende aller Berechnungen, welche Kombination
+#     die mit dem besten Gewinn ist.
+
+# --> DAS IST FÜR SPÄTERES FEINTUNING: <--
+# Wir können das auch noch weiter verfeinern, wenn wir Kombinationen mit GLEICHEM Gewinn
+#     darauf hin untersuchen, welche "effektiver" ist, welche z.B. bei gleichem Gewinn den minimalsten Strom
+#     verbraucht und diesen dann vorziehen.
+
 
 # Die meisten der folgenden Arrays, die wir erstellen werden, sind nichts weiter als eine Art "View"
 # auf die GPU{realer_gpu_index}Algos/Watts/Mines Arrays, die die Rohdaten halten und
@@ -719,12 +722,12 @@ done
 #        exactNumAlgos[0]=2
 #
 #    Das schöne an den Hilfs-Arrays ist, dass wir sie IMMER in Schleifen von 0 loslaufen lassen können
-#        und bis zur Anzahl ihrer Member -1 komplett durchlaufen können. IMMER!
+#        und bis zur Anzahl ihrer Member -1 komplett durchlaufen können. IMMER und LÜCKENLOS!
 #        for (( lfdIdx=0; $lfdIdx < ${#HilfsArrayName[@]}; lfdIdx++ ))
 #
 
 # Die folgenden beiden Arrays halten nur GPU-Indexnummern als Werte. Nichts weiter!
-# Wir bauen diese Arrays jetzt anhand der Kriterien aus den Rodaten-Arrays in einer
+# Wir bauen diese Arrays jetzt anhand der Kriterien aus den Rohdaten-Arrays in einer
 #     alle im System befindlichen GPUs durchgehenden Schleife auf.
 declare -a SwitchOffGPUs           # GPUs anyway aus, keine gewinnbringenden Algos zur Zeit
 declare -a PossibleCandidateGPUidx # GPUs mit mindestens 1 gewinnbringenden Algo.
@@ -742,7 +745,7 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
 
         "0")
             # Karte ist auszuschalten. Kein gewinnbringender Algo im Moment
-            SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${index[$idx]}
+            _push_onto_array SwitchOffGPUs ${index[$idx]}
             ;;
 
         *)
@@ -757,7 +760,7 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                 # Wenn das NEGATIV ist, muss die Karte übergangen werden. Uns interessieren nur diejenigen,
                 # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
                 if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
-                    profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
+                    _push_onto_array profitableAlgoIndexes ${algoIdx}
                 fi
             done
 
@@ -766,14 +769,14 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                 pushIdx=${#PossibleCandidateGPUidx[@]}
                 PossibleCandidateGPUidx[${pushIdx}]=${index[$idx]}
                 exactNumAlgos[${pushIdx}]=${#profitableAlgoIndexes[@]}
-                declare -a "PossibleCandidate${pushIdx}AlgoIndexes"
+                declare -ag "PossibleCandidate${pushIdx}AlgoIndexes"
                 declare -n actCandidatesAlgoIndexes="PossibleCandidate${pushIdx}AlgoIndexes"
                 for (( algoIdx=0; $algoIdx<${exactNumAlgos[${pushIdx}]}; algoIdx++ )); do
-                    actCandidatesAlgoIndexes[${#actCandidatesAlgoIndexes[@]}]=${profitableAlgoIndexes[${algoIdx}]}
+                    _push_onto_array actCandidatesAlgoIndexes ${profitableAlgoIndexes[${algoIdx}]}
                 done
             else
                 # Wenn kein Algo übrigbleiben sollte, GPU aus.
-                SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${index[$idx]}
+                _push_onto_array SwitchOffGPUs ${index[$idx]}
             fi
             ;;
 
