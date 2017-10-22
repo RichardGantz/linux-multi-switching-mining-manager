@@ -262,10 +262,10 @@ function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
 
     # Da MAX_PROFIT eine Dezimalzahl und kein Integer ist, kann die bash nicht damit rechnen.
     # Wir lassen das also von bc berechnen.
-    # Dazu merken wir uns den alten Wert in ${oldMaxProfit} und geben MAX_PROFIT an bc rein
+    # Dazu merken wir uns den alten Wert in ${OLD_MAX_PROFIT} und geben MAX_PROFIT an bc rein
     # und bekommen es als zweite Zeile wieder raus, wenn der aktuell errechnete Wert größer ist
-    # als oldMaxProfit
-    oldMaxProfit=${MAX_PROFIT}
+    # als OLD_MAX_PROFIT
+    OLD_MAX_PROFIT=${MAX_PROFIT}
 
     shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
@@ -344,7 +344,7 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
         # Wird überhaupt Netzstrom benötigt werden oder steht die Gesamte Leistung in SolarPower bereit?
         _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
             ${SolarWattAvailable} ${CombinationWatts} "( ${CombinationMines}0 )"
-        if [[ ! ${MAX_PROFIT} == ${oldMaxProfit} ]]; then
+        if [[ ! ${MAX_PROFIT} == ${OLD_MAX_PROFIT} ]]; then
             MAX_PROFIT_GPU_Algo_Combination=${algosCombinationKey}
             # Hier könnten wir eigentlich schon ausgeben, welche GPU mit welchem Algo
             echo "New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
@@ -866,29 +866,31 @@ echo "=========       Endergebnis        ========="
 
 _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
 
-echo "Die optimale Konfiguration besteht aus diesen ${#GPUINDEXES[@]} Karten:"
-for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
-    declare -i pos=$(expr index "${GPUINDEXES[$i]}" ":")
-    declare -i len=$(($pos-1))
-    gpu_idx=${GPUINDEXES[$i]:0:$len}
-    algoidx=${GPUINDEXES[$i]:$pos}
+if [[ ${#GPUINDEXES[@]} -gt 0 ]]; then
+    echo "Die optimale Konfiguration besteht aus diesen ${#GPUINDEXES[@]} Karten:"
+    for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
+        declare -i pos=$(expr index "${GPUINDEXES[$i]}" ":")
+        declare -i len=$(($pos-1))
+        gpu_idx=${GPUINDEXES[$i]:0:$len}
+        algoidx=${GPUINDEXES[$i]:$pos}
 
-    echo "GPU-Index        #${gpu_idx}"
-    echo "GPU-Algo-Index   [${algoidx}]"
-    declare -n actCombinedGPU="GPU${gpu_idx}Algos"
-    echo "GPU-AlgoName     ${actCombinedGPU[${algoidx}]}"
-    declare -n actCombinedGPU="GPU${gpu_idx}Watts"
-    algoWatts=${actCombinedGPU[${algoidx}]}
-    echo "GPU-AlgoWatt     ${algoWatts}"
-    declare -n actCombinedGPU="GPU${gpu_idx}Mines"
-    algoMines=${actCombinedGPU[${algoidx}]}
-    echo "GPU-AlgoMines    ${algoMines}"
-    _calculate_ACTUAL_REAL_PROFIT \
-        ${SolarWattAvailable} ${algoWatts} ${algoMines}
-    echo "RealGewinnSelbst ${ACTUAL_REAL_PROFIT} (wenn alleine laufen würde)"
-    
-done
-    
+        echo "GPU-Index        #${gpu_idx}"
+        echo "GPU-Algo-Index   [${algoidx}]"
+        declare -n actCombinedGPU="GPU${gpu_idx}Algos"
+        echo "GPU-AlgoName     ${actCombinedGPU[${algoidx}]}"
+        declare -n actCombinedGPU="GPU${gpu_idx}Watts"
+        algoWatts=${actCombinedGPU[${algoidx}]}
+        echo "GPU-AlgoWatt     ${algoWatts}"
+        declare -n actCombinedGPU="GPU${gpu_idx}Mines"
+        algoMines=${actCombinedGPU[${algoidx}]}
+        echo "GPU-AlgoMines    ${algoMines}"
+        _calculate_ACTUAL_REAL_PROFIT \
+            ${SolarWattAvailable} ${algoWatts} ${algoMines}
+        echo "RealGewinnSelbst ${ACTUAL_REAL_PROFIT} (wenn alleine laufen würde)"
+    done
+else
+    echo "Leider war keine einzige Kombination im Plus. Geht das mit rechten Dingen zu ???"
+fi
 
 
 
