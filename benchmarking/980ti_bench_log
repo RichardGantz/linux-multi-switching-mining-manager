@@ -1,0 +1,264 @@
+*** ccminer 2.2 for nVidia GPUs by tpruvot@github ***
+    Built with the nVidia CUDA Toolkit 8.0 64-bits
+
+  Originally based on Christian Buchner and Christian H. project
+  Include some algos from alexis78, djm34, sp, tsiv and klausT.
+
+BTC donation address: 1AJdfCpLWPNoAMDfHF1wD5y8VgKSSTHxPo (tpruvot)
+
+[2017-10-15 17:54:16] Starting benchmark mode with blakecoin
+[2017-10-15 17:54:18] NVML GPU monitoring enabled.
+[2017-10-15 17:54:18] 1 miner thread started, using 'blakecoin' algorithm.
+[2017-10-15 17:54:18] GPU #0: Intensity set to 30, 1073741824 cuda threads
+[2017-10-15 17:54:19] GPU #0: Zotac GTX 980 Ti, 4622.07 MH/s
+[2017-10-15 17:54:19] GPU #0: blakecoin hashrate = 4654.21 MH/s
+[2017-10-15 17:54:20] Benchmark algo blake...
+[2017-10-15 17:54:20] GPU #0: Intensity set to 30, 1073741824 cuda threads
+[2017-10-15 17:54:23] GPU #0: Zotac GTX 980 Ti, 2639.37 MH/s
+[2017-10-15 17:54:23] GPU #0: blake hashrate = 2639.37 MH/s
+[2017-10-15 17:54:23] GPU #0: 1416 MHz 0.00 H/W 262W 71C FAN 45%
+[2017-10-15 17:54:23] Benchmark algo blake2s...
+[2017-10-15 17:54:23] GPU #0: Intensity set to 28, 268435456 cuda threads
+[2017-10-15 17:54:26] GPU #0: blake2s hashrate = 4088.97 MH/s
+[2017-10-15 17:54:26] Benchmark algo bmw...
+[2017-10-15 17:54:26] GPU #0: Intensity set to 21, 2097152 cuda threads
+[2017-10-15 17:54:27] GPU #0: Zotac GTX 980 Ti, 1703.21 MH/s
+[2017-10-15 17:54:29] GPU #0: bmw hashrate = 1701.98 MH/s
+[2017-10-15 17:54:29] Benchmark algo bastion...
+[2017-10-15 17:54:29] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:54:32] GPU #0: Zotac GTX 980 Ti, 12.32 MH/s
+[2017-10-15 17:54:39] GPU #0: Zotac GTX 980 Ti, 10.61 MH/s
+[2017-10-15 17:54:39] GPU #0: bastion hashrate = 10.61 MH/s
+[2017-10-15 17:54:39] Benchmark algo deep...
+[2017-10-15 17:54:40] GPU #0: Intensity set to 19, 524288 cuda threads
+[2017-10-15 17:54:43] GPU #0: Zotac GTX 980 Ti, 37.95 MH/s
+[2017-10-15 17:54:49] GPU #0: Zotac GTX 980 Ti, 38.34 MH/s
+[2017-10-15 17:54:49] GPU #0: deep hashrate = 38.34 MH/s
+[2017-10-15 17:54:49] Benchmark algo decred...
+[2017-10-15 17:54:49] GPU #0: Intensity set to 29, 536870912 cuda threads
+[2017-10-15 17:54:52] GPU #0: decred hashrate = 2870.03 MH/s
+[2017-10-15 17:54:52] Benchmark algo equihash...
+[2017-10-15 17:54:59] GPU #0: Zotac GTX 980 Ti, 396.18 Sol/s
+[2017-10-15 17:55:09] GPU #0: Zotac GTX 980 Ti, 402.41 Sol/s
+[2017-10-15 17:55:10] GPU #0: equihash hashrate = 402.41 Sol/s
+[2017-10-15 17:55:10] GPU #0: possible 464 MB memory leak in equihash! 4329 MB free
+[2017-10-15 17:55:10] Benchmark algo fresh...
+[2017-10-15 17:55:10] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:55:13] GPU #0: Zotac GTX 980 Ti, 15.46 MH/s
+[2017-10-15 17:55:19] GPU #0: Zotac GTX 980 Ti, 15.54 MH/s
+[2017-10-15 17:55:19] GPU #0: fresh hashrate = 15.54 MH/s
+[2017-10-15 17:55:19] Benchmark algo fugue256...
+[2017-10-15 17:55:19] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:55:24] GPU #0: Zotac GTX 980 Ti, 142.90 MH/s
+[2017-10-15 17:55:24] GPU #0: fugue256 hashrate = 142.90 MH/s
+[2017-10-15 17:55:24] GPU #0: 1358 MHz 1179.86 kH/W 121W 57C FAN 68%
+[2017-10-15 17:55:24] Benchmark algo groestl...
+[2017-10-15 17:55:25] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:55:29] GPU #0: Zotac GTX 980 Ti, 40.66 MH/s
+[2017-10-15 17:55:29] GPU #0: groestl hashrate = 40.66 MH/s
+[2017-10-15 17:55:29] Benchmark algo heavy...
+[2017-10-15 17:55:29] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:55:37] GPU #0: Zotac GTX 980 Ti, 54.72 MH/s
+[2017-10-15 17:55:38] GPU #0: heavy hashrate = 54.72 MH/s
+[2017-10-15 17:55:38] GPU #0: possible 8 MB memory leak in heavy! 4781 MB free
+[2017-10-15 17:55:38] Benchmark algo hmq1725...
+[2017-10-15 17:55:38] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:55:45] GPU #0: Zotac GTX 980 Ti, 4626.04 kH/s
+[2017-10-15 17:55:49] GPU #0: Zotac GTX 980 Ti, 4694.70 kH/s
+[2017-10-15 17:55:49] GPU #0: hmq1725 hashrate = 4694.70 kH/s
+[2017-10-15 17:55:49] Benchmark algo keccak...
+[2017-10-15 17:55:49] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:55:53] GPU #0: Zotac GTX 980 Ti, 104.49 MH/s
+[2017-10-15 17:55:55] GPU #0: keccak hashrate = 314.92 MH/s
+[2017-10-15 17:55:55] Benchmark algo jackpot...
+[2017-10-15 17:55:55] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:55:57] GPU #0: Zotac GTX 980 Ti, 6138.55 kH/s
+[2017-10-15 17:55:58] GPU #0: jackpot hashrate = 6411.67 kH/s
+[2017-10-15 17:55:58] Benchmark algo jha...
+[2017-10-15 17:55:58] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:56:09] GPU #0: Zotac GTX 980 Ti, 15.89 MH/s
+[2017-10-15 17:56:09] GPU #0: jha hashrate = 15.89 MH/s
+[2017-10-15 17:56:09] Benchmark algo lbry...
+[2017-10-15 17:56:09] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:56:14] GPU #0: Zotac GTX 980 Ti, 261.85 MH/s
+[2017-10-15 17:56:14] GPU #0: lbry hashrate = 261.85 MH/s
+[2017-10-15 17:56:14] Benchmark algo luffa...
+[2017-10-15 17:56:14] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:56:28] GPU #0: Zotac GTX 980 Ti, 310.38 MH/s
+[2017-10-15 17:56:28] GPU #0: 1417 MHz 1450.51 kH/W 213W 63C FAN 53%
+[2017-10-15 17:56:30] GPU #0: luffa hashrate = 310.38 MH/s
+[2017-10-15 17:56:30] Benchmark algo lyra2...
+[2017-10-15 17:56:30] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:56:34] GPU #0: Zotac GTX 980 Ti, 5207.79 kH/s
+[2017-10-15 17:56:37] GPU #0: lyra2 hashrate = 5225.14 kH/s
+[2017-10-15 17:56:38] Benchmark algo lyra2v2...
+[2017-10-15 17:56:38] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:56:41] GPU #0: Zotac GTX 980 Ti, 14.95 MH/s
+[2017-10-15 17:56:43] GPU #0: lyra2v2 hashrate = 16.20 MH/s
+[2017-10-15 17:56:43] Benchmark algo lyra2z...
+[2017-10-15 17:56:43] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:56:46] GPU #0: Zotac GTX 980 Ti, 977.23 kH/s
+[2017-10-15 17:56:48] GPU #0: lyra2z hashrate = 1292.79 kH/s
+[2017-10-15 17:56:48] Benchmark algo myr-gr...
+[2017-10-15 17:56:48] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:56:58] GPU #0: Zotac GTX 980 Ti, 74.26 MH/s
+[2017-10-15 17:56:58] GPU #0: myr-gr hashrate = 74.26 MH/s
+[2017-10-15 17:56:58] Benchmark algo neoscrypt...
+[2017-10-15 17:56:58] GPU #0: Intensity set to 15 (+5), 32768 cuda threads
+[2017-10-15 17:57:05] GPU #0: Zotac GTX 980 Ti, 1071.55 kH/s
+[2017-10-15 17:57:08] GPU #0: neoscrypt hashrate = 1063.33 kH/s
+[2017-10-15 17:57:09] Benchmark algo nist5...
+[2017-10-15 17:57:09] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:57:10] GPU #0: Zotac GTX 980 Ti, 48.63 MH/s
+[2017-10-15 17:57:18] GPU #0: Zotac GTX 980 Ti, 48.90 MH/s
+[2017-10-15 17:57:18] GPU #0: nist5 hashrate = 48.90 MH/s
+[2017-10-15 17:57:18] Benchmark algo penta...
+[2017-10-15 17:57:18] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:57:24] GPU #0: Zotac GTX 980 Ti, 4968.90 kH/s
+[2017-10-15 17:57:27] GPU #0: penta hashrate = 5244.04 kH/s
+[2017-10-15 17:57:28] Benchmark algo qubit...
+[2017-10-15 17:57:28] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:57:30] GPU #0: Zotac GTX 980 Ti, 19.72 MH/s
+[2017-10-15 17:57:38] GPU #0: Zotac GTX 980 Ti, 19.98 MH/s
+[2017-10-15 17:57:38] GPU #0: qubit hashrate = 19.98 MH/s
+[2017-10-15 17:57:38] GPU #0: 1415 MHz 0.00 H/W 217W 62C FAN 53%
+[2017-10-15 17:57:38] Benchmark algo sha256d...
+[2017-10-15 17:57:38] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:57:44] GPU #0: Zotac GTX 980 Ti, 875.86 MH/s
+[2017-10-15 17:57:49] GPU #0: Zotac GTX 980 Ti, 877.61 MH/s
+[2017-10-15 17:57:49] GPU #0: sha256d hashrate = 877.61 MH/s
+[2017-10-15 17:57:49] Benchmark algo sha256t...
+[2017-10-15 17:57:49] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:57:59] GPU #0: Zotac GTX 980 Ti, 424.89 MH/s
+[2017-10-15 17:58:09] GPU #0: Zotac GTX 980 Ti, 425.20 MH/s
+[2017-10-15 17:58:09] GPU #0: sha256t hashrate = 425.20 MH/s
+[2017-10-15 17:58:09] Benchmark algo sia...
+[2017-10-15 17:58:09] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:58:15] GPU #0: Zotac GTX 980 Ti, 1549.76 MH/s
+[2017-10-15 17:58:15] GPU #0: sia hashrate = 1549.76 MH/s
+[2017-10-15 17:58:15] Benchmark algo sib...
+[2017-10-15 17:58:15] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:58:25] GPU #0: Zotac GTX 980 Ti, 7146.41 kH/s
+[2017-10-15 17:58:25] GPU #0: sib hashrate = 7146.41 kH/s
+[2017-10-15 17:58:25] Benchmark algo skein...
+[2017-10-15 17:58:25] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:58:27] GPU #0: skein hashrate = 404.39 MH/s
+[2017-10-15 17:58:27] Benchmark algo skein2...
+[2017-10-15 17:58:27] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:58:38] GPU #0: Zotac GTX 980 Ti, 400.38 MH/s
+[2017-10-15 17:58:39] GPU #0: 1417 MHz 1392.56 kH/W 287W 67C FAN 49%
+[2017-10-15 17:58:39] GPU #0: skein2 hashrate = 400.38 MH/s
+[2017-10-15 17:58:40] Benchmark algo skunk...
+[2017-10-15 17:58:40] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:58:43] GPU #0: Zotac GTX 980 Ti, 29.17 MH/s
+[2017-10-15 17:58:48] GPU #0: Zotac GTX 980 Ti, 29.19 MH/s
+[2017-10-15 17:58:48] GPU #0: skunk hashrate = 29.19 MH/s
+[2017-10-15 17:58:49] Benchmark algo s3...
+[2017-10-15 17:58:49] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:59:39] GPU #0: Zotac GTX 980 Ti, 39.80 MH/s
+[2017-10-15 17:59:44] GPU #0: s3 hashrate = 39.80 MH/s
+[2017-10-15 17:59:44] Benchmark algo timetravel...
+[2017-10-15 17:59:44] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:59:44] Timetravel first algo is now cube
+[2017-10-15 17:59:48] GPU #0: Zotac GTX 980 Ti, 11.55 MH/s
+[2017-10-15 17:59:49] GPU #0: timetravel hashrate = 11.42 MH/s
+[2017-10-15 17:59:49] GPU #0: 1417 MHz 0.00 H/W 177W 63C FAN 50%
+[2017-10-15 17:59:49] Benchmark algo tribus...
+[2017-10-15 17:59:49] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 17:59:58] GPU #0: Zotac GTX 980 Ti, 8080.89 kH/s
+[2017-10-15 17:59:59] GPU #0: tribus hashrate = 8725.25 kH/s
+[2017-10-15 17:59:59] Benchmark algo bitcore...
+[2017-10-15 17:59:59] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:00:07] GPU #0: Zotac GTX 980 Ti, 7291.40 kH/s
+[2017-10-15 18:00:08] GPU #0: bitcore hashrate = 7792.33 kH/s
+[2017-10-15 18:00:09] Benchmark algo x11evo...
+[2017-10-15 18:00:09] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:00:17] GPU #0: Zotac GTX 980 Ti, 7493.53 kH/s
+[2017-10-15 18:00:19] GPU #0: x11evo hashrate = 7640.66 kH/s
+[2017-10-15 18:00:19] Benchmark algo x11...
+[2017-10-15 18:00:19] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:00:26] GPU #0: Zotac GTX 980 Ti, 8797.60 kH/s
+[2017-10-15 18:00:29] GPU #0: x11 hashrate = 9250.10 kH/s
+[2017-10-15 18:00:29] Benchmark algo x13...
+[2017-10-15 18:00:29] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:00:36] GPU #0: Zotac GTX 980 Ti, 9157.23 kH/s
+[2017-10-15 18:00:39] GPU #0: x13 hashrate = 9162.22 kH/s
+[2017-10-15 18:00:39] Benchmark algo x14...
+[2017-10-15 18:00:39] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:00:46] GPU #0: Zotac GTX 980 Ti, 8286.23 kH/s
+[2017-10-15 18:00:49] GPU #0: x14 hashrate = 8609.95 kH/s
+[2017-10-15 18:00:49] Benchmark algo x15...
+[2017-10-15 18:00:49] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:00:56] GPU #0: Zotac GTX 980 Ti, 9032.91 kH/s
+[2017-10-15 18:00:59] GPU #0: x15 hashrate = 9348.18 kH/s
+[2017-10-15 18:00:59] GPU #0: 1417 MHz 0.00 H/W 244W 66C FAN 42%
+[2017-10-15 18:00:59] Benchmark algo x17...
+[2017-10-15 18:00:59] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:01:03] GPU #0: Zotac GTX 980 Ti, 9202.67 kH/s
+[2017-10-15 18:01:09] GPU #0: Zotac GTX 980 Ti, 9407.87 kH/s
+[2017-10-15 18:01:09] GPU #0: x17 hashrate = 9407.87 kH/s
+[2017-10-15 18:01:09] Benchmark algo vanilla...
+[2017-10-15 18:01:09] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:01:16] GPU #0: Zotac GTX 980 Ti, 893.92 MH/s
+[2017-10-15 18:01:21] GPU #0: Zotac GTX 980 Ti, 894.93 MH/s
+[2017-10-15 18:01:21] GPU #0: vanilla hashrate = 894.93 MH/s
+[2017-10-15 18:01:21] Benchmark algo veltor...
+[2017-10-15 18:01:21] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:01:25] GPU #0: Zotac GTX 980 Ti, 8536.05 kH/s
+[2017-10-15 18:01:25] GPU #0: veltor hashrate = 8536.05 kH/s
+[2017-10-15 18:01:25] Benchmark algo whirlpool...
+[2017-10-15 18:01:25] GPU #0: Intensity set to 20, 1048576 cuda threads
+[2017-10-15 18:01:31] GPU #0: Zotac GTX 980 Ti, 45.14 MH/s
+[2017-10-15 18:01:31] GPU #0: whirlpool hashrate = 45.14 MH/s
+[2017-10-15 18:01:31] Benchmark algo zr5...
+[2017-10-15 18:01:31] GPU #0: Intensity set to 19.998, 1047552 cuda threads
+[2017-10-15 18:01:39] GPU #0: Zotac GTX 980 Ti, 4402.52 kH/s
+[2017-10-15 18:01:41] GPU #0: zr5 hashrate = 4364.85 kH/s
+[2017-10-15 18:01:41] Benchmark results for GPU #0 - Zotac GTX 980 Ti:
+[2017-10-15 18:01:41]    blakecoin :    4545123.9 kH/s,     1 MB, 1073741824 thr.
+[2017-10-15 18:01:41]        blake :    2577506.4 kH/s,     1 MB, 1073741824 thr.
+[2017-10-15 18:01:41]      blake2s :    3993135.2 kH/s,     1 MB, 268435456 thr.
+[2017-10-15 18:01:41]          bmw :    1662094.2 kH/s,    65 MB,  2097152 thr.
+[2017-10-15 18:01:41]      bastion :      10359.0 kH/s,   233 MB,  1048576 thr.
+[2017-10-15 18:01:41]         deep :      37445.7 kH/s,    33 MB,   524288 thr.
+[2017-10-15 18:01:41]       decred :    2802760.6 kH/s,     1 MB, 536870912 thr.
+[2017-10-15 18:01:41]     equihash :          0.4 kH/s,   464 MB,  1048576 thr.
+[2017-10-15 18:01:41]        fresh :      15174.8 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]     fugue256 :     139551.7 kH/s,    33 MB,  1048576 thr.
+[2017-10-15 18:01:41]      groestl :      39708.8 kH/s,     1 MB,  1048576 thr.
+[2017-10-15 18:01:41]        heavy :      53441.7 kH/s,   301 MB,  1048576 thr.
+[2017-10-15 18:01:41]      hmq1725 :       4584.7 kH/s,  1285 MB,  1048576 thr.
+[2017-10-15 18:01:41]       keccak :     307542.1 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]      jackpot :       6261.4 kH/s,   106 MB,  1048576 thr.
+[2017-10-15 18:01:41]          jha :      15516.4 kH/s,   133 MB,  1048576 thr.
+[2017-10-15 18:01:41]         lbry :     255708.2 kH/s,     1 MB,  1048576 thr.
+[2017-10-15 18:01:41]        luffa :     303107.2 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]        lyra2 :       5102.7 kH/s,   161 MB,  1048576 thr.
+[2017-10-15 18:01:41]      lyra2v2 :      15824.5 kH/s,  1569 MB,  1048576 thr.
+[2017-10-15 18:01:41]       lyra2z :       1262.5 kH/s,   161 MB,  1048576 thr.
+[2017-10-15 18:01:41]       myr-gr :      72522.1 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]    neoscrypt :       1038.4 kH/s,   281 MB,    32768 thr.
+[2017-10-15 18:01:41]        nist5 :      47751.8 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]        penta :       5121.1 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]        qubit :      19509.4 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]      sha256d :     857039.8 kH/s,     1 MB,  1048576 thr.
+[2017-10-15 18:01:41]      sha256t :     415236.3 kH/s,     1 MB,  1048576 thr.
+[2017-10-15 18:01:41]          sia :    1513441.7 kH/s,     1 MB,  1048576 thr.
+[2017-10-15 18:01:41]          sib :       6978.9 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]        skein :     394910.1 kH/s,     1 MB,  1048576 thr.
+[2017-10-15 18:01:41]       skein2 :     390998.4 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]        skunk :      28502.7 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]           s3 :      38866.0 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]   timetravel :      11152.8 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]       tribus :       8520.7 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]      bitcore :       7609.7 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]       x11evo :       7461.6 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]          x11 :       9033.3 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]          x13 :       8947.5 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]          x14 :       8408.2 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]          x15 :       9129.1 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]          x17 :       9187.4 kH/s,  1217 MB,  1048576 thr.
+[2017-10-15 18:01:41]      vanilla :     873955.7 kH/s,     1 MB,  1048576 thr.
+[2017-10-15 18:01:41]       veltor :       8336.0 kH/s,    65 MB,  1048576 thr.
+[2017-10-15 18:01:41]    whirlpool :      44078.2 kH/s,     1 MB,  1048576 thr.
+[2017-10-15 18:01:41]          zr5 :       4262.6 kH/s,   325 MB,  1048576 thr.
