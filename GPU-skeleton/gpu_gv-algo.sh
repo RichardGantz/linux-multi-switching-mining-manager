@@ -106,7 +106,7 @@ _read_BENCHFILE_in()
     # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
     for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
         bENCH[${READARR[$i]}]=${READARR[$i+1]}
-        WATTS[${READARR[$i]}]=${READARR[$i+2]}
+        declare -ig WATTS[${READARR[$i]}]=${READARR[$i+2]}
         if [[ ${#READARR[$i+1]} -gt 0 && ${#READARR[$i+2]} == 0 ]]; then
            WATTS[${READARR[$i]}]=1000
            notify-send -t 10000 -u critical "### Fehler in Benchmarkdatei ###" \
@@ -286,6 +286,32 @@ while [ 1 -eq 1 ] ; do
     done
     _read_KURSE_in
 
+    ###############################################################################
+    #
+    #    Festhalten ALLER   AlgoNames, Watts und Mines für die Multi_mining_calc.sh
+    #
+    ######################################
+    rm -f ALGO_WATTS_MINES.in
+    for algo in ${!ALGOs[@]}; do
+        algorithm=${ALGOs[$algo]}
+        if [[          ${#bENCH[$algorithm]} -gt 0   \
+                    && ${#kMGTP[$algorithm]} -gt 0   \
+                    && ${#KURSE[$algorithm]} -gt 0   \
+                    && ${WATTS[$algorithm]}  -lt 1000 \
+            ]]; then
+            # "Mines" in BTC berechnen
+            algoMines=$(echo "scale=8;   ${bENCH[$algorithm]}  \
+                                       * ${KURSE[$algorithm]}  \
+                                       / ${kMGTP[$algorithm]}  \
+                             " | bc )
+            printf "$algorithm\n${WATTS[$algorithm]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
+        else
+            # ---> MUSS VIELLEICHT AKTIVIERT WERDEN, WENN UNTEN DER BEST-OF TEIL WEGFÄLLT <---
+            echo KEIN Hash WERT bei $algorithm bei GPU-xyz fehlt !!! \<------------------------ \
+                 >/dev/null
+        fi
+    done
+    
     ###############################################################################
     #
     #                                                Berechnung der Stromkosten
