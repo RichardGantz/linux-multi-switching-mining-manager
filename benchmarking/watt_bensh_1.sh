@@ -29,28 +29,7 @@ while [  $COUNTER -lt $time ]; do
 done
 
 
-sort WATT_bensh_1.out |tail -1 > WATT_bensh_1_max.out
 
-###############################################################################
-#
-#Berechnung der Durchschnittlichen Verbrauches
-#
-
-sort WATT_bensh_1.out |tail -1 > WATT_bensh_1_max.out
-
-WATT=$(cat "WATT_bensh_1.out")
-MWATT=$(cat "WATT_bensh_1_max.out")
-sum=0
-
-for i in $WATT ; do 
-
-	sum=$(echo "$sum + $i" | bc)
-done
-
-avg=$(echo "$sum / $time" | bc)
-echo " Summe: $sum "
-echo " Durchschnitt: $avg "
-echo " Max WATT wert: $MWATT "
 
 ###############################################################################
 #
