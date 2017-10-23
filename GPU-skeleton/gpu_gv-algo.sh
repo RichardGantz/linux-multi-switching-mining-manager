@@ -107,7 +107,7 @@ _read_BENCHFILE_in()
     for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
         bENCH[${READARR[$i]}]=${READARR[$i+1]}
         declare -ig WATTS[${READARR[$i]}]=${READARR[$i+2]}
-        if [[ ${#READARR[$i+1]} -gt 0 && ${#READARR[$i+2]} == 0 ]]; then
+        if [[ ${#READARR[$i+1]} -gt 0 && (${#READARR[$i+2]} == 0 || ${READARR[$i+2]} == 0) ]]; then
            WATTS[${READARR[$i]}]=1000
            notify-send -t 10000 -u critical "### Fehler in Benchmarkdatei ###" \
                  "GPU-Dir: ${GPU_DIR} \n Algoname: ${READARR[$i]} \n KEINE WATT ANGEGEBEN. Verwende 1000"
