@@ -7,36 +7,39 @@
 # 
 # 
 # 
-#FSP AURUM PT SERIES
+#
 #
 #
 #
 ###############################################################################
 
 #löschen einer bestehenden WATT.out datei
-rm WATT.out
+rm WATT_bensh_1.out
 
 COUNTER=0
-id=0        #später indexnummer aus gpu folder einfügen !!!
-time=240    #wieviel mal soll die schleife laufen ein durchlauf 1 sekunde
+id=$(cat "watt_bensh_1.id")       #später indexnummer aus gpu folder einfügen !!!
+time=100000000    #wieviel mal soll die schleife laufen ein durchlauf 1 sekunde
 
 #### für so und so viele Sekunden den Watt wert in eine Datei schreiben
 while [  $COUNTER -lt $time ]; do
-    nvidia-smi --id=$id --query-gpu=power.draw --format=csv,noheader |gawk -e 'BEGIN {FS=" "} {print $1}'  >> WATT.out
+    nvidia-smi --id=$id --query-gpu=power.draw --format=csv,noheader |gawk -e 'BEGIN {FS=" "} {print $1}'  >> WATT_bensh_1.out
     let COUNTER=COUNTER+1
+    echo $COUNTER > COUNTER
     sleep 1
 done
 
-### MAX WATT zur berechnung für Solarstrom  ... muss in die bench hinzugefügt werden
-sort WATT.out |tail -1 > WATT_max.out
+
+sort WATT_bensh_1.out |tail -1 > WATT_bensh_1_max.out
 
 ###############################################################################
 #
 #Berechnung der Durchschnittlichen Verbrauches
 #
 
-WATT=$(cat "WATT.out")
-MWATT=$(cat "WATT_max.out")
+sort WATT_bensh_1.out |tail -1 > WATT_bensh_1_max.out
+
+WATT=$(cat "WATT_bensh_1.out")
+MWATT=$(cat "WATT_bensh_1_max.out")
 sum=0
 
 for i in $WATT ; do 
