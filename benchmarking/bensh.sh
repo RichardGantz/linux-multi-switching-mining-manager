@@ -78,6 +78,7 @@ for i in $WATT ; do
 done
 
 avgWATT=$(echo "$sum / $COUNTER" | bc)
+
 echo " Summe: $sum "
 echo " Durchschnitt: $avgWATT "
 echo " Max WATT wert: $MAXWATT "
