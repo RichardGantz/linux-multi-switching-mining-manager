@@ -134,28 +134,33 @@ ALGO_NAMES_OLD=""; if [ -f "$ALGO_NAMES_OLD" ]; then rm "$ALGO_NAMES_OLD"; fi
 
 _read_ALGOs_in()
 {
-    # Aus den Name:kMGTP:Algo Drillingen
-    #     die assoziativen Arrays ALGOs und kMGTP erstellen
-    # 
-    unset kMGTP; declare -Ag kMGTP
-    unset ALGOs
-    unset READARR
+    # Eigentlich sollte algo_multi_abfrage.sh schon dafür gesorgt haben, dass diese
+    # Datei nicht leer ist.
+    # Nur zur Sicherheit lesen wir sie nur dann ein, wenn sie nicht leer ist.
+    if [ -s ${ALGO_NAMES} ]; then
+        # Aus den Name:kMGTP:Algo Drillingen
+        #     die assoziativen Arrays ALGOs und kMGTP erstellen
+        # 
+        unset kMGTP; declare -Ag kMGTP
+        unset ALGOs
+        unset READARR
 
-    # Die Zeit merken, um aussen entscheiden zu können,
-    # ob das Array durch Aufruf von _read_ALGOs_in neu erstellt werden muss
-    # Wichtig dabei ist, die Zeit VOR dem tatsächlichen Einlesen der Datei festzuhalten !!!
-    #    Ansonsten kann der Fall eintreten, dass bis zum nächsten erforderlichen Update
-    #    - und das kann ein ganzer Tag sein - mit den alten Daten gearbeitet wird.
-    #    Ist SEEEHR unwahrscheinlich, aber möglich
-    ALGO_NAMES_last_age_in_seconds=$(date --utc --reference=$ALGO_NAMES +%s)
+        # Die Zeit merken, um aussen entscheiden zu können,
+        # ob das Array durch Aufruf von _read_ALGOs_in neu erstellt werden muss
+        # Wichtig dabei ist, die Zeit VOR dem tatsächlichen Einlesen der Datei festzuhalten !!!
+        #    Ansonsten kann der Fall eintreten, dass bis zum nächsten erforderlichen Update
+        #    - und das kann ein ganzer Tag sein - mit den alten Daten gearbeitet wird.
+        #    Ist SEEEHR unwahrscheinlich, aber möglich
+        ALGO_NAMES_last_age_in_seconds=$(date --utc --reference=$ALGO_NAMES +%s)
 
-    # $ALGO_NAMES einlesen in das indexed Array READARR
-    readarray -n 0 -O 0 -t READARR <$ALGO_NAMES
-    for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
-        #echo ${READARR[$i]}
-        kMGTP[${READARR[$i]}]=${READARR[$i+1]}
-        ALGOs[${READARR[$i+2]}]=${READARR[$i]}
-    done
+        # $ALGO_NAMES einlesen in das indexed Array READARR
+        readarray -n 0 -O 0 -t READARR <$ALGO_NAMES
+        for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+            #echo ${READARR[$i]}
+            kMGTP[${READARR[$i]}]=${READARR[$i+1]}
+            ALGOs[${READARR[$i+2]}]=${READARR[$i]}
+        done
+    fi
 }
 
 ###############################################################################
@@ -202,7 +207,7 @@ done
 
 # Auf jeden Fall beim Starten die zwei Arrays aufbauen.
 # Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
-while [ ! -f $ALGO_NAMES ]; do
+while [ ! -s $ALGO_NAMES ]; do
     echo "###---> Waiting for $ALGO_NAMES to become available..."; sleep 1
 done
 _read_ALGOs_in
@@ -279,8 +284,8 @@ while [ 1 -eq 1 ] ; do
     #    - und damit die neuen Daten - aktualisiert wurden
     new_Data_available=$(date --utc --reference=$SYNCFILE +%s)
 
-    # Einlesen und verarbeiten der aktuellen Kurse
-    while [ ! -f $KURSE_in ]; do
+    # Einlesen und verarbeiten der aktuellen Kurse, sobald die Datei vorhanden und nicht leer ist
+    while [ ! -s $KURSE_in ]; do
         echo "###---> Waiting for $KURSE_in to become available..."
         sleep 1
     done
@@ -361,6 +366,8 @@ while [ 1 -eq 1 ] ; do
             fi
         done
     
+        # (24.10.2017) Dieser Fall, dass Arrays leer sind, dürfte jetzt wirklich überhaupt nicht mehr vorkommen.
+        #              Trotzdem lassen wir es mal drin, um ganz sicher zu gehen.
         if [ ! -f gv_GRID.out ]; then
             echo "Anzahl Member ALGOs[]: ${#ALGOs[@]}"
             echo "Anzahl Member bENCH[]: ${#bENCH[@]}"

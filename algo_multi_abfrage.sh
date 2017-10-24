@@ -49,35 +49,84 @@ SYNCFILE=you_can_read_now.sync
 ALGO_NAMES_WEB="ALGO_NAMES.json"
 ALGO_NAMES_ARR="ALGO_NAMES.in"
 
+_notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
+{
+    # Tja, was machen wir in dem Fall also?
+    # Die Stratum-Server laufen und nehmen offensichtlich generierten Goldstaub entgegen.
+    # Und die Karten, die wir vor 31s eingeschaltet haben, liefen ja mit Gewinn.
+    # Wie lange kann man die Karten also mit den "alten" Preisen weiterlaufen lassen?
+    # "A couple of Minutes..."
+    # Wir setzen eine Desktopmeldung ab... jede Minute... und machen einen Eintrag
+    #     in eine Datei FATAL_ERRORS.log, damit man nicht vergisst,
+    #     sich langfristig um das Problem zu kümmern.
+    if [[ ! "$NoAlgoNames_notified" == "1" ]]; then
+        notify-send -t 10000 -u critical "### Es gibt zur Zeit keine Datei ${ALGO_NAMES_WEB} aus dem Web ###" \
+                 "Die Datei ${ALGO_NAMES_ARR} bleibt unverändert oder ist nicht vorhanden. \
+                 Entscheide bitte, wie lange Du die gerade laufenden Miner \
+                 mit den immer mehr veraltenden Zahlpreisen laufen lassen möchtest!"
+        if [[ ! "$NoAlgoNames_recorded" == "1" ]]; then
+            echo $(date "+%F %H:%M:%S") "curl - Kurse-Abfrage hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
+            echo "                    Hier: Down wegen Wartungsarbeiten ODER 404 Page not found" >>FATAL_ERRORS.log
+            NoAlgoNames_recorded=1
+        fi
+        NoAlgoNames_notified=1
+    #else
+        # Damit wird nur bei jedem 2. Aufruf der Funktion ein notify-send gemacht
+        # Geplant ist, dass das etwa jede Minute stattfindet (31s-Abfrage-Intervall*2)
+        # Für den Sonderfall, dass noch nie eine Datei da war und beim Versuch des Abrufs
+        #     ausgerechnet keine Daten kommen, weil die Seite spinnt,
+        #     passiert das allerdings alle 2 Sekunden.
+        #     Das ist aber nur beim Programmstart der Fall und sollte so gut wie nie vorkommen.
+        #
+        # Aber es gibt noch einen Falle, den wir bedenken müssen:
+        # Wenn der stündliche Update der Datei fällig wird und es kommt nicht saus dem Web,
+        #     dann ist diese Datei noch viel älter.
+        # Aber halt: So oft wie die Kurse ändert diese Datei ja nicht ihren Inhalt.
+        # Das heisst, dass ein einmaliger Hinweis eigentlich genug sein sollte.
+        # Die Kurse kommen in diesem Fall ja auch nicht und die werden sowieso alle 31s abgerufen.
+        #
+        # ERGO: Wir switchen doch nicht auf 0, wodurch nur 1x eine Meldung abgesetzt wird.
+        # NoAlgoNames_notified=0
+    fi
+}
+
 _create_ALGOS_in()
 {
     # Neue Algos aus dem Netz
-    curl https://api.nicehash.com/api?method=buy.info -o $ALGO_NAMES_WEB
-        # | tee $ALGO_NAMES_WEB \
-        # | grep -i "Web frontend is currently down for maintenance."
+    algoPageDown=$( curl "https://api.nicehash.com/api?method=buy.info" \
+        | tee $ALGO_NAMES_WEB \
+        | grep -i -c -m 1 -e '<title>[^<]\+</title>' )
 
-    # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach ALGO_NAMES.in
-    num_algos_with_name=$(expr $(gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
-               f["k"]=1; f["M"]=2; f["G"]=3; f["T"]=4; f["P"]=5 } \
-         match( $0, /"name":"[[:alnum:]]*/ )\
-              { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
-         match( $0, /"speed_text":"[[:alpha:]]*/ )\
-              { M=substr($0, RSTART, RLENGTH); print 1024 ** f[substr(M, index(M,":")+2, 1 )] }  \
-         match( $0, /"algo":[0-9]*/ )\
-              { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
-         $ALGO_NAMES_WEB 2>/dev/null \
-        | tee $ALGO_NAMES_ARR \
-        | wc -l ) / 3 )
-    algo_names_arr_modified=$(date --utc --reference=$ALGO_NAMES_ARR +%s)
+    if [[ ! "${algoPageDown}" == "0" ]]; then
+        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON
+    else
+        # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach ALGO_NAMES.in
+        num_algos_with_name=$(expr $(gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
+                   f["k"]=1; f["M"]=2; f["G"]=3; f["T"]=4; f["P"]=5 } \
+             match( $0, /"name":"[[:alnum:]]*/ )\
+                  { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
+             match( $0, /"speed_text":"[[:alpha:]]*/ )\
+                  { M=substr($0, RSTART, RLENGTH); print 1024 ** f[substr(M, index(M,":")+2, 1 )] }  \
+             match( $0, /"algo":[0-9]*/ )\
+                  { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
+             $ALGO_NAMES_WEB 2>/dev/null \
+           | tee $ALGO_NAMES_ARR \
+           | wc -l ) / 3 )
+        algo_names_arr_modified=$(date --utc --reference=$ALGO_NAMES_ARR +%s)
+        # Fehler scheint behoben, Benachrichtigung wieder scharf machen
+        unset NoAlgoNames_notified NoAlgoNames_recorded
+    fi
 }
 
-if [ ! -f $ALGO_NAMES_ARR ]; then
+declare -i num_algos_with_name=$(expr $(cat ${ALGO_NAMES_ARR} | wc -l ) / 3 )
+declare -i algo_names_arr_modified=$(date --utc --reference=${ALGO_NAMES_ARR} +%s)
+while [[ ${num_algos_with_name} == 0 ]]; do
     _create_ALGOS_in
-else
-    ### ACHTUNG PROGRAMMIERER: Hier hat $(< statt $(cat NICHT FUNKTIONIERT!!!
-    num_algos_with_name=$(expr $(cat $ALGO_NAMES_ARR | wc -l ) / 3 )
-    algo_names_arr_modified=$(date --utc --reference=$ALGO_NAMES_ARR +%s)
-fi
+    if [[ ${num_algos_with_name} == 0 ]]; then
+        echo "Waiting for a valid File ${ALGO_NAMES_WEB}"
+        sleep 1
+    fi
+done
 
 _notify_about_NO_ALGO_KURSE()
 {
@@ -141,8 +190,8 @@ algoID_KURSE_WEB="KURSE.json"
 algoID_KURSE_ARR="KURSE.in"
 while [ 1 -eq 1 ] ; do
     # Algos nur stündlich prüfen
-    algo_age=$(expr $(date --utc +%s) - $algo_names_arr_modified )
-    if [[ $algo_age -ge 3600 ]]; then
+    declare -i algo_age=$(expr $(date --utc +%s) - $algo_names_arr_modified )
+    if [[ ${algo_age} -ge 3600 ]]; then
         echo "###---> Hourly Update of $ALGO_NAMES_ARR"
         _create_ALGOS_in
     fi
@@ -165,7 +214,7 @@ while [ 1 -eq 1 ] ; do
     echo ---------------------Nicehash-Kurse---------------------------------
     pageDown=$( curl "https://api.nicehash.com/api?method=stats.global.current&location=0" \
         | tee $algoID_KURSE_WEB \
-        | grep -i -c -m 1 "Web frontend is currently down for maintenance." )
+        | grep -i -c -m 1 -e '<title>[^<]\+</title>' )
 
     # echo ${pageDown}; exit
     # Das hat am 16.10.2017 gegen 10:20 Uhr leider nicht funktioniert!
@@ -176,7 +225,7 @@ while [ 1 -eq 1 ] ; do
         _notify_about_NO_ALGO_KURSE
     else
         echo --------------------------------------------------------------------
-        unset ERROR_notified ERROR_recorded # Damit die Fehlermeldungen auf jeden Fall scharf sind
+        unset ERROR_notified ERROR_recorded # Damit die Fehlermeldungen auf jeden Fall wieder scharf sind
 
         num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS="},{|:[\[]{" } \
              /"algo":[0-9]*/ && /"price":"[0-9.]*"/ { \
