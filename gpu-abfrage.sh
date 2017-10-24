@@ -66,10 +66,13 @@
 if [ $HOME == "/home/richard" ]; then NoCards=true; fi
 
 ### ERSTER Start und Erstellung der Grundkonfig 
+SYSTEM_FILE="gpu_system.out"
+SYSTEM_STATE="gpu_system_state.in"
 
 unset READARR
+unset ENABLED_UUIDs
 if [ 1 == 0 ]; then
-    FIFO1=.gpu_system.out
+    FIFO1=.${SYSTEM_FILE}
     if [ ! -p $FIFO1 ]; then mkfifo $FIFO1; fi
     if [ $NoCards ]; then
         gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >$FIFO1 &
@@ -80,12 +83,12 @@ if [ 1 == 0 ]; then
     readarray -n 0 -O 0 -t READARR <$FIFO1
 else
     if [ $NoCards ]; then
-        gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >gpu_system.out
+        gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >${SYSTEM_FILE}
     else
         nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
-            gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >gpu_system.out
+            gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >${SYSTEM_FILE}
     fi
-    readarray -n 0 -O 0 -t READARR <gpu_system.out
+    readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 fi
 
 # Die Daten der GPUs in Arrays einlesen, die durch den GPU-Grafikkarten-Index indexiert werden können
@@ -103,10 +106,53 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     auslastung[${index[$j]}]=${READARR[$i+4]}
 done
 
+# Die folgende Datei gpu_system_state.in (${SYSTEM_STATE}) bearbeiten wir manuell.
+# Sie wird, wenn nicht vorhanden vom Skript erstellt, damit wir die UUID's und Namen haben.
+# Und wenn sie vorhanden ist, merken wir uns die manuell gesetzten Enabled-Zustände,
+#     BEVOR wir die Datei neu schreiben.
+# Warum muss sie neu geschrieben werden?
+#     Weil möglicherweise in der Zwischenzeit Karten ein- oder ausgebaut wurden,
+#     die dazugenommen werden müssen mit einem Default-Wert ENABLED
+#     oder ganz rausfliegen können, weil sie eh nicht mehr im System sind
+# Eventuell können wir hier auch die temporär disableten Algos (automatisch?) eintragen lassen
+#     und durchschleifen. DARUM KÜMMERN WIR UNS ABER, WENN ES SOWEIT IST.
+#     (Hier ist erst mal nur das Einlesen mitgemacht, weil der Code schon im multi_mining_calc.sh so drin war.)
+declare -A uuidEnabled
+declare -A AlgoDisabled
+if [ -f ${SYSTEM_STATE} ]; then
+    cp -f ${SYSTEM_STATE} ${SYSTEM_STATE}.BAK
+    shopt -s lastpipe
+    cat ${SYSTEM_STATE} \
+        | grep -e "^GPU-\|^AlgoDisabled" \
+        | readarray -n 0 -O 0 -t ENABLED_UUIDs
 
-######
+    for (( i=0; $i<${#ENABLED_UUIDs[@]}; i++ )); do
+        if [[ "${ENABLED_UUIDs[$i]:0:4}" == "GPU-" ]]; then
+            echo ${ENABLED_UUIDs[$i]} \
+                 | cut -d':' --output-delimiter=' ' -f1,3 \
+                 | read UUID GenerallyEnabled
+            uuidEnabled[${UUID}]=${GenerallyEnabled}
+        else
+            read muck AlgoName <<<"${ENABLED_UUIDs[$i]//:/ }"
+            AlgoDisabled[${AlgoName}]=1
+        fi
+    done
+fi
+    
+
+printf 'UUID : GrakaName : Enabled (1/0)\n'  >${SYSTEM_STATE}
+printf '================================\n' >>${SYSTEM_STATE}
+
 for ((i=0; $i<${#index[@]}; i+=1)) ; do
     echo "Diese GPU's gibt es: GPU ${index[$i]} ist ${name[${index[$i]}]} auf port ${bus[${index[$i]}]} und hat die ${uuid[${index[$i]}]} und ist zu ${auslastung[${index[$i]}]} % ausgelastet"
+
+    # Mehr GPUs muss es auch in der ${SYSTEM_STATE} Datei nicht geben.
+    # Wir geben sie hier mit eingelesenem oder Default-Status aus...
+    enabledState=1
+    if [ -n "${uuidEnabled[${uuid[${index[$i]}]}]}" ]; then
+        enabledState=${uuidEnabled[${uuid[${index[$i]}]}]}
+    fi
+    printf "${uuid[${index[$i]}]}:${name[${index[$i]}]}:${enabledState}\n" >>${SYSTEM_STATE}
 done
 
 ######################################
