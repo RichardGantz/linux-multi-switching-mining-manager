@@ -16,24 +16,26 @@ echo $$ >$(basename $0 .sh).pid
 
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
-verbose=1
+verbose=0
 
-GPU_SYSTEM_DATA="gpu_system.out"
-GPU_ENABLED_STATE="gpu_system_state.in"
+SYSTEM_FILE="gpu_system.out"
+# ACHTUNG: Hier muss das .in in der Variable SYSTEM_STATE enthalten sein.
+#          In dem Skript gpu-abfrage.sh ist die Variable ohne ".in" !!!
+SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE.in"
 
 # Diese Abfrage erzeugt die beiden o.g. Dateien.
 ./gpu-abfrage.sh
 
-# In der Datei "gpu_system_state.in" können die Enabled-Flags am Ende jeder Zeile
+# In der Datei "GLOBAL_GPU_SYSTEM_STATE.in" können die Enabled-Flags am Ende jeder Zeile
 #    manuell auf 0 geändert werden für DISABLED oder wieder auf 1 für ENABLED.
 #    Wir merken uns den globalen Enabled SOLL-Status gleich
 #    in dem Assoziativen Array IsItEnabled[$uuid] der entsprechenden UUID
 unset ENABLED_UUIDs
 declare -A uuidEnabledSOLL
-if [ -f ${GPU_ENABLED_STATE} ]; then
+if [ -f ${SYSTEM_STATE} ]; then
     shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
-    cat ${GPU_ENABLED_STATE} \
+    cat ${SYSTEM_STATE} \
         | grep -e "^GPU-" \
         | readarray -n 0 -O 0 -t ENABLED_UUIDs
 
@@ -46,43 +48,8 @@ if [ -f ${GPU_ENABLED_STATE} ]; then
     ${shopt_cmd_before}
 fi
     
-
-###############################################################################
-#
-# Wie die abbfolge dieses Programm ist und wie es es abfragt
-# 1. finde GPU folder
-# 1.1. lade 3 arrays mit folgenden Daten "best_algo_netz.out","best_algo_solar","best_algo_solar_akku.out",
-#      "gpu_index.in" alle 10 sekunden oder direkt nach "lausche auf" aktualisierung der GPU best* daten
-# 1.2. Sortiere jeweils jedes array nach dem besten "profitabelsten" algorytmus
-#      Nee. Das macht zu wenig Sinn.
-#      Erstens hat gpu_gv-algo.sh bereits den "profitabelsten" Algorithmus ermittelt.
-#      Die Punkte 1.1. und 1.2. ENTFALLEN!!!
-# 1.3. Gebe jede dieser arrays aus "best_all_netz.out","best_all_solar.out","best_all_solar_akku.out"
-#      in diesen outs sind "index(GPU), algo, watt" pro NETZ, SOLAR, AKKU
-#
-# --->12.Oct.2017<---
-# DA IST ZU VIEL UNKLARHEIT DARÜBER, WAS DIESES SCRIPT EIGENTLIVH MACHEN SOLL.
-# ES LÄUFT MOMENTAN UND GIBT DIE BESTEN ALGORITHMEN SORTIERT AUS.
-# FÜR DEN TATSACHLICHEN SWITCHER ARBEITEN WIR AN EINER DATEI MIT DEM NAMEN multi_mining_switcher.sh WEITER
-
-###############################################################################
-# Zu 1. Finde GPU Folder
-###############################################################################
-
-# Sortierungsquelldateien
-GRID[0]="netz"
-GRID[1]="solar"
-GRID[2]="solar_akku"
-for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-    best[$grid]=best_all_${GRID[$grid]}.out
-    rm -f ${best[$grid]}
-    tmpSort[$grid]=.0${GRID[$grid]}_sort
-    rm -f ${tmpSort[$grid]}.in
-done
-unset kwh_BTC; declare -A kwh_BTC
-
 unset READARR
-readarray -n 0 -O 0 -t READARR <$GPU_SYSTEM_DATA
+readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 # Aus den GPU-Index:Name:Bus:UUID:Auslastung Paaren ein paar Grunddaten 
 #     jeder Grafikkarte für den Dispatcher erstellen
 declare -a index
@@ -123,65 +90,24 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     # (23.10.2017) Wir nehmen der Bequemlichkeit halber noch ein Array mit der UUID auf
     declare -ag "GPU${index[$j]}UUID"
 
-    # Quelldateien für Sortierung erstellen
-    # sort-key(GV)  algo    WATT   MINES    COST(100%GRID)       + GPU-Index
-    #-.00007377 cryptonight 270 .00017384 .00006598        (hier + ${index[$j]})
-    for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-        if [ ! -f ${uuid[${index[$j]}]}/best_algo_${GRID[$grid]}.out ]; then
-            echo "-------------------------------------------"
-            echo "---           FATAL ERROR               ---"
-            echo "-------------------------------------------"
-            echo "No file 'best_algo_${GRID[$grid]}.out' available"
-            echo "for GPU ${name[${index[$j]}]}"
-            echo "Please run '${uuid[${index[$j]}]}/gpu_gv-algo.sh'"
-            echo "-------------------------------------------"
-        else
-            echo $(< ${uuid[${index[$j]}]}/best_algo_${GRID[$grid]}.out ) ${index[$j]} >>${tmpSort[$grid]}.in
-        fi
-    done
 done
 
-# Sortiert ausgeben:
+GRID[0]="netz"
+GRID[1]="solar"
+GRID[2]="solar_akku"
+
+unset kwh_BTC; declare -A kwh_BTC
 for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-    if [ -f ${tmpSort[$grid]}.in ]; then
-        cat ${tmpSort[$grid]}.in                         \
-            | sort -rn                                   \
-            | tee ${tmpSort[$grid]}.out                  \
-            | gawk -e '{print $NF " " $1 " " $2 " " $3 }' \
-            | sed -n '1p' \
-            >${best[$grid]}
-        if [ ${verbose} == 1 ]; then
-            txt=`echo ${tmpSort[$grid]%%_sort}`; txt=${txt:2}
-            echo "--------------------------------------"
-            echo "           ${txt^^}"
-            echo "--------------------------------------"
-            gawk -e '{print "GPU " $NF ": " $1 " " $2 " " $3 }' ${tmpSort[$grid]}.out
-        fi
-    fi
     # ACHTUNG. DAS MUSS AUF JEDEN FALL EIN MAL PRO Preiseermittlungslauf LAUF GEMACHT WERDEN!!!
     # IST NUR DER BEQUEMLICHKEIT HALBER IN DIESE <GRID> SCHLEIFE GEPACKT,
     # WEIL SIE NUR 1x DURCHLÄUFT
     # Die in BTC umgerechneten Strompreise für die Vorausberechnungen später
     kwh_BTC[${GRID[$grid]}]=$(< kWh_${GRID[$grid]}_Kosten_BTC.in)
 done
-echo "--------------------------------------"
+# AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese beiden Berechnungen
+kWhMax=${kwh_BTC["netz"]}
+kWhMin=${kwh_BTC["solar"]}
 
-# Diese Überlegungen gelten für den Fall, dass pro Miner MEHRERE GPUs betrieben werden.
-# GPU-Index-Datei für miner (==algo ?) erstellen.
-# Hier: Komma-getrennt
-
-# Alle GPU-Index-Dateien löschen ?
-rm -f cfg_*
-for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-    if [ -f ${best[$grid]} ]; then
-        txt=`echo ${tmpSort[$grid]%%_sort}`       # "_sort" vom Namenende entfernen
-        gawk -v grid=${txt:2} -e ' \
-             $2 > 0 { ALGO[$3]=ALGO[$3] $1 "," } \
-             END { for (algo in ALGO) \
-                   print substr( ALGO[algo], 1, length(ALGO[algo])-1 ) > "cfg_" grid "_" algo }' \
-             ${best[$grid]}
-    fi
-done
 
 ########################################################################
 #
@@ -576,10 +502,6 @@ declare -i SolarWattAvailable=75   # GPU#1: equihash    - GPU#0: OFF
 declare -i SolarWattAvailable=73   # GPU#1: cryptonight - GPU#0: OFF
 declare -i SolarWattAvailable=350   # GPU#1: equihash    - GPU#0: OFF
 
-# AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese beiden Berechnungen
-kWhMax=${kwh_BTC["netz"]}
-kWhMin=${kwh_BTC["solar"]}
-
 ###############################################################################################
 # (etwa 15.10.2017)
 # Jetzt wollen wir die Arrays zur Berechnung des optimalen Algo pro Karte mit den Daten füllen,
@@ -644,33 +566,9 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
     declare -n actGPU_UUID="GPU${index[$idx]}UUID"
     actGPU_UUID="${uuid[${index[$idx]}]}"
 
-    if [ ! -f ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in ]; then
-        # DAS IST DER UNSCHLÜSSIGE FALL, DASS WIR NUR 2 ODER 3 BESTE ALGOS BETRACHTEN,
-        # DIE UNTER DER ANNAHME DREI FIXER PREISKONSTELLATIONEN ZUSTANDE KAM
-
-        # sort-key(GV)   algo    WATT  MINES   COST(100%GRID)
-        # -.00007377 cryptonight 270 .00017384 .00006598
-        for (( grid=0; $grid<${#GRID[@]}-1; grid++ )); do    # Bis zur Klärung von oben (1.) ohne "solar_akku"
-            #for (( grid=0; $grid<${#GRID[@]}; grid++ )); do     # Diser Schleifenkopf behandelt alle 3 Powerarten
-            #echo "Grid: ${GRID[$grid]}"
-            #unset READARR # read -a ARR unsets ARR anyway befor the read
-            read -a READARR <${uuid[${index[$idx]}]}/best_algo_${GRID[$grid]}.out
-
-            # Algos mit Verlust interessieren uns nicht und erzeugen keinen
-            # Eintrag in dem actGPUAlgos Array
-            if [[ $(expr index "${READARR[0]}" "-") == 1 ]]; then continue; fi
-
-            # Wir brauchen jeden Algorithmus nur EIN mal (keine Doppelten)
-            for (( algo=0; $algo<${#actGPUAlgos[@]}; algo++ )); do
-                if [[ "${actGPUAlgos[$algo]}" == "${READARR[1]}" ]]; then continue 2; fi
-            done
-            _push_onto_array actGPUAlgos  "${READARR[1]}"
-            _push_onto_array actAlgoWatt  "${READARR[2]}"
-            _push_onto_array actAlgoMines "${READARR[3]}"
-        done
-    else
+    if [ -s ${actGPU_UUID}/ALGO_WATTS_MINES.in ]; then
         unset READARR
-        readarray -n 0 -O 0 -t READARR <${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in
+        readarray -n 0 -O 0 -t READARR <${actGPU_UUID}/ALGO_WATTS_MINES.in
         for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
             _push_onto_array actGPUAlgos  "${READARR[$i]}"
             _push_onto_array actAlgoWatt  "${READARR[$i+1]}"
@@ -965,44 +863,44 @@ printf "=========       Endergebnis        =========\n"
 _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
 
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
-STATUS_FILE="GLOBAL_GPU_ALGO_STATE"
+RUNNING_STATE="GLOBAL_GPU_ALGO_RUNNING_STATE"
 
-# rm -f ${STATUS_FILE}.lock
+# rm -f ${RUNNING_STATE}.lock
 #AlgoDisabled:skunk
 #AlgoDisabled:sha256
 
 # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
-while [ -f ${STATUS_FILE}.lock ]; do
-    echo "Waiting for WRITE access to ${STATUS_FILE}"
+while [ -f ${RUNNING_STATE}.lock ]; do
+    echo "Waiting for WRITE access to ${RUNNING_STATE}"
     sleep 1
 done
 # Zum Schreiben reservieren
-echo $$ >${STATUS_FILE}.lock
+echo $$ >${RUNNING_STATE}.lock
 
 #####################################################
 # Einlesen des bisherigen Status
 ####################################################
-if [ -f ${STATUS_FILE} ]; then
+if [ -f ${RUNNING_STATE} ]; then
     shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
 
-    unset STATUS_FILE_CONTENT
+    unset RUNNING_STATE_CONTENT
     unset AlgoDisabled; declare -A AlgoDisabled
     unset RunningGPUid; declare -A RunningGPUid
     unset WasItEnabled; declare -A WasItEnabled
     unset WhatsRunning; declare -A WhatsRunning
-    cat ${STATUS_FILE} \
+    cat ${RUNNING_STATE} \
         | grep -e "^GPU-\|^AlgoDisabled" \
-        | readarray -n 0 -O 0 -t STATUS_FILE_CONTENT
+        | readarray -n 0 -O 0 -t RUNNING_STATE_CONTENT
 
-    for (( i=0; $i<${#STATUS_FILE_CONTENT[@]}; i++ )); do
-        if [[ "${STATUS_FILE_CONTENT[$i]:0:4}" == "GPU-" ]]; then
-            read RunningUUID RunningGPUidx GenerallyEnabled RunningAlgo <<<"${STATUS_FILE_CONTENT[$i]//:/ }"
+    for (( i=0; $i<${#RUNNING_STATE_CONTENT[@]}; i++ )); do
+        if [[ "${RUNNING_STATE_CONTENT[$i]:0:4}" == "GPU-" ]]; then
+            read RunningUUID RunningGPUidx GenerallyEnabled RunningAlgo <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
             RunningGPUid[${RunningUUID}]=${RunningGPUidx}
             WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
             WhatsRunning[${RunningUUID}]=${RunningAlgo}
         else
-            read muck AlgoName <<<"${STATUS_FILE_CONTENT[$i]//:/ }"
+            read muck AlgoName <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
             AlgoDisabled[${AlgoName}]=1
         fi
     done
@@ -1030,10 +928,10 @@ fi
 ####################################################
 
 # Sichern der alten Datei. Vielleicht brauchen wir sie bei einem Abbruch zur Analyse
-cp -f ${STATUS_FILE} ${STATUS_FILE}.BAK
+cp -f ${RUNNING_STATE} ${RUNNING_STATE}.BAK
 
-printf 'UUID : GPU-Index : Enabled (1/0) : Running with AlgoName or Stopped if \"\"\n' >${STATUS_FILE}
-printf '=========================================================================\n'  >>${STATUS_FILE}
+printf 'UUID : GPU-Index : Enabled (1/0) : Running with AlgoName or Stopped if \"\"\n' >${RUNNING_STATE}
+printf '=========================================================================\n'  >>${RUNNING_STATE}
 
 if [[ ${verbose} == 1 ]]; then
     echo "Die optimale Konfiguration besteht aus diesen ${#GPUINDEXES[@]} Karten:"
@@ -1069,7 +967,7 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
         # Der Soll-Zustand kommt aus der manuell bearbeiteten Systemdatei ganz am Anfang
         # Wir schalten auf jeden Fall den gewünschten Soll-Zustand.
         # Eventuell müssen wir mit dem letzten Run-Zustand vergleichen, um etwas zu stoppen...
-        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:" >>${STATUS_FILE}
+        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:" >>${RUNNING_STATE}
 
         # Ist die GPU generell Enabled oder momentan nicht zu behandeln?
         if ((${WasItEnabled[${gpu_uuid}]} == 1)); then
@@ -1099,7 +997,7 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
                     # Alter und neuer Algo ist gleich, kann weiterlaufen
                     echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin auf \"${actGPUalgoName[${algoidx}]}\""
                 fi
-                printf "${actGPUalgoName[${algoidx}]}\n" >>${STATUS_FILE}
+                printf "${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
             else
                 #
                 # Die Karte ist NUN generell DISABLED!
@@ -1112,7 +1010,7 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
                 # MINER- Behandlung
                 echo "---> SWITCH-OFF: GPU#${gpu_idx} wurde generell DISABLED und ist abzustellen!"
                 echo "---> SWITCH-OFF: Sie läuft noch mit \"${WhatsRunning[${gpu_uuid}]}\""
-                printf "\n" >>${STATUS_FILE}
+                printf "\n" >>${RUNNING_STATE}
             fi
         else
             #
@@ -1128,18 +1026,18 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
                 ########################################################
                 # MINER- Behandlung
                 echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
-                printf "${actGPUalgoName[${algoidx}]}\n" >>${STATUS_FILE}
+                printf "${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
             else
                 #
                 # Die Karte BLEIBT generell DISABLED
                 #
                 # Zeile abschliessen
                 echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin DISABLED"
-                printf "\n" >>${STATUS_FILE}
+                printf "\n" >>${RUNNING_STATE}
             fi
         fi
     else
-        ### IM ${STATUS_FILE} WAREN KEINERLEI EINTRÄGE.
+        ### IM ${RUNNING_STATE} WAREN KEINERLEI EINTRÄGE.
         ### Wahrscheinlich existierte sie noch nie. Jetzt kommen AUF JEDEN FALL Einträge hinein.
         ### Wir wisseen also nichts über den laufenden Zustand und schalten deshalb einfach alles nur ein,
         ###     falls nicht eine GPU Generell DISABLED ist.
@@ -1156,14 +1054,14 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
 
             # MINER- Behandlung
             echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
-            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoName[${algoidx}]}\n" >>${STATUS_FILE}
+            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
         else
             #
             # Die Karte IST generell DISABLED
             #
             # MINER- Behandlung
             echo "---> SWITCH-OFF: GPU#${gpu_idx} wurde generell DISABLED und ist abzustellen!"
-            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${STATUS_FILE}
+            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${RUNNING_STATE}
         fi
     fi
 
@@ -1184,7 +1082,7 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
     fi
 done
 
-# Jetzt gehen wir die auszuschaltenden Karte durch.
+# Jetzt gehen wir die auszuschaltenden Karten durch.
 # Auch hier kann es natürlich vorkommen, dass sich eine Indexnummer geändert hat
 #      und dass dann die CHAOS-BEHANDLUNG durchgeführt werden muss.
 if [ ${#SwitchOffGPUs[@]} -gt 0 ]; then
@@ -1227,7 +1125,7 @@ if [ ${#SwitchOffGPUs[@]} -gt 0 ]; then
                 fi
             fi
         fi
-        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${STATUS_FILE}
+        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${RUNNING_STATE}
     done
 fi
 if [[ ${verbose} == 1 ]]; then
@@ -1235,15 +1133,15 @@ if [[ ${verbose} == 1 ]]; then
 fi
 
 for algoName in ${!AlgoDisabled[@]}; do
-    printf "AlgoDisabled:$algoName\n" >>${STATUS_FILE}
+    printf "AlgoDisabled:$algoName\n" >>${RUNNING_STATE}
 done
 
 echo "Neues globales Switching Sollzustand Kommandofile"
-cat ${STATUS_FILE}
+cat ${RUNNING_STATE}
 
 
 # Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
-rm -f ${STATUS_FILE}.lock
+rm -f ${RUNNING_STATE}.lock
 
 
 
