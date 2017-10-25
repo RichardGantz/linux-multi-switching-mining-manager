@@ -67,29 +67,22 @@ if [ $HOME == "/home/richard" ]; then NoCards=true; fi
 
 ### ERSTER Start und Erstellung der Grundkonfig 
 SYSTEM_FILE="gpu_system.out"
-SYSTEM_STATE="gpu_system_state.in"
+SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE"
+SYSTEM_STATE_OLD="GLOBAL_GPU_GPU_SYSTEM_STATE"
+if [ -f "${SYSTEM_STATE_OLD}.in" ]; then
+    rm -f "${SYSTEM_STATE_OLD}.in"
+    rm -f "${SYSTEM_STATE_OLD}.BAK"
+fi
 
 unset READARR
 unset ENABLED_UUIDs
-if [ 1 == 0 ]; then
-    FIFO1=.${SYSTEM_FILE}
-    if [ ! -p $FIFO1 ]; then mkfifo $FIFO1; fi
-    if [ $NoCards ]; then
-        gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >$FIFO1 &
-    else
-        nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
-            gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >$FIFO1 &
-    fi
-    readarray -n 0 -O 0 -t READARR <$FIFO1
+if [ $NoCards ]; then
+    gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >${SYSTEM_FILE}
 else
-    if [ $NoCards ]; then
-        gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >${SYSTEM_FILE}
-    else
-        nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
-            gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >${SYSTEM_FILE}
-    fi
-    readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
+    nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
+        gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >${SYSTEM_FILE}
 fi
+readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 
 # Die Daten der GPUs in Arrays einlesen, die durch den GPU-Grafikkarten-Index indexiert werden können
 declare -a index
@@ -106,7 +99,7 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     auslastung[${index[$j]}]=${READARR[$i+4]}
 done
 
-# Die folgende Datei gpu_system_state.in (${SYSTEM_STATE}) bearbeiten wir manuell.
+# Die folgende Datei gpu_system_state.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
 # Sie wird, wenn nicht vorhanden vom Skript erstellt, damit wir die UUID's und Namen haben.
 # Und wenn sie vorhanden ist, merken wir uns die manuell gesetzten Enabled-Zustände,
 #     BEVOR wir die Datei neu schreiben.
@@ -114,15 +107,15 @@ done
 #     Weil möglicherweise in der Zwischenzeit Karten ein- oder ausgebaut wurden,
 #     die dazugenommen werden müssen mit einem Default-Wert ENABLED
 #     oder ganz rausfliegen können, weil sie eh nicht mehr im System sind
-# Eventuell können wir hier auch die temporär disableten Algos (automatisch?) eintragen lassen
+# Eventuell können wir hier auch die temporär disabelten Algos (automatisch?) eintragen lassen
 #     und durchschleifen. DARUM KÜMMERN WIR UNS ABER, WENN ES SOWEIT IST.
 #     (Hier ist erst mal nur das Einlesen mitgemacht, weil der Code schon im multi_mining_calc.sh so drin war.)
 declare -A uuidEnabled
 declare -A AlgoDisabled
-if [ -f ${SYSTEM_STATE} ]; then
-    cp -f ${SYSTEM_STATE} ${SYSTEM_STATE}.BAK
+if [ -s ${SYSTEM_STATE}.in ]; then
+    cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
     shopt -s lastpipe
-    cat ${SYSTEM_STATE} \
+    cat ${SYSTEM_STATE}.in \
         | grep -e "^GPU-\|^AlgoDisabled" \
         | readarray -n 0 -O 0 -t ENABLED_UUIDs
 
@@ -138,22 +131,49 @@ if [ -f ${SYSTEM_STATE} ]; then
         fi
     done
 fi
-    
 
-printf 'UUID : GrakaName : Enabled (1/0)\n'  >${SYSTEM_STATE}
-printf '================================\n' >>${SYSTEM_STATE}
+printf 'Über diese Datei schalten wir GPUs MANUELL gezielt ein oder aus.\n'                   >${SYSTEM_STATE}.out
+printf '1 (== EIN == ENABLED)  ist der Default für jede GPU, die noch nicht erfasst war.\n'  >>${SYSTEM_STATE}.out
+printf '0 (== AUS == DISABLED) können wir manuell editieren und nach dem Abspeichern wird\n' >>${SYSTEM_STATE}.out
+printf '                       diese Karte dann abgestellt, falls sie noch laufen sollte,\n' >>${SYSTEM_STATE}.out
+printf '                       wird nicht mehr in den Berechnungen berücksichtigt\n'         >>${SYSTEM_STATE}.out
+printf '                       und wird als GloballyDisabled geführt...\n'                   >>${SYSTEM_STATE}.out
+printf '... bis sie MANUELL wieder auf 1 (== EIN == ENABLED) gesetzt wird.\n\n'              >>${SYSTEM_STATE}.out
+printf 'UUID : GrakaName : 1/0 (Enabled/Disabled)\n'                                         >>${SYSTEM_STATE}.out
+printf '=========================================\n'                                         >>${SYSTEM_STATE}.out
 
+echo "Diese GPU's gibt es:"
 for ((i=0; $i<${#index[@]}; i+=1)) ; do
-    echo "Diese GPU's gibt es: GPU ${index[$i]} ist ${name[${index[$i]}]} auf port ${bus[${index[$i]}]} und hat die ${uuid[${index[$i]}]} und ist zu ${auslastung[${index[$i]}]} % ausgelastet"
+    echo "GPU #${index[$i]} ist ${name[${index[$i]}]} auf port ${bus[${index[$i]}]}"
+    echo "       und hat die UUID ${uuid[${index[$i]}]} und ist zu ${auslastung[${index[$i]}]} % ausgelastet"
 
-    # Mehr GPUs muss es auch in der ${SYSTEM_STATE} Datei nicht geben.
+    # Mehr GPUs muss es auch in der ${SYSTEM_STATE}.out Datei nicht geben.
     # Wir geben sie hier mit eingelesenem oder Default-Status aus...
     enabledState=1
     if [ -n "${uuidEnabled[${uuid[${index[$i]}]}]}" ]; then
         enabledState=${uuidEnabled[${uuid[${index[$i]}]}]}
     fi
-    printf "${uuid[${index[$i]}]}:${name[${index[$i]}]}:${enabledState}\n" >>${SYSTEM_STATE}
+    printf "${uuid[${index[$i]}]}:${name[${index[$i]}]}:${enabledState}\n"                   >>${SYSTEM_STATE}.out
 done
+
+# Falls wir tatsächlich die AlgoDisabled hier drin (AUTOMATISCH) pflegen sollten,
+# müssen wir diejenigen auch wieder mit ausgeben, die wir eingelesen haben.
+for algoName in ${!AlgoDisabled[@]}; do
+    printf "AlgoDisabled:$algoName\n"                                                        >>${SYSTEM_STATE}.out
+done
+
+# Sollten die Dateien ${SYSTEM_STATE}.out und ${SYSTEM_STATE}.in sich jetzt unterscheiden,
+# DANN HAT ES TATSÄCHLICH EINE ÄNDERUNG IM SYSTEM GEGEBEN.
+# Entweder durch Einbau, Ausbau, oder Wechsel von Karten nach einem Shutdown oder durch Abschmieren
+# einer GPU und Ausfall während der Runtime.
+# Nur dann ist .out tatsächlich die aktuellere Datei und muss .in überschreiben.
+# Ansonsten unterscheiden sie sich ja nicht und wir können uns das Schreiben sparen.
+# Zu Diagnose-Zwecken haben wir eine .BAK Kopie von der .in gemacht.
+
+diff -q ${SYSTEM_STATE}.out ${SYSTEM_STATE}.in &>/dev/null \
+    || cp -f ${SYSTEM_STATE}.out ${SYSTEM_STATE}.in
+rm -f ${SYSTEM_STATE}.out
+
 
 ######################################
 # überprüfung ob folder da ist wenn nicht erstellen und lehre vorbereitete benchmark datei kopieren

@@ -16,10 +16,12 @@ echo $$ >$(basename $0 .sh).pid
 
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
-verbose=1
+verbose=0
 
-GPU_SYSTEM_DATA="gpu_system.out"
-GPU_ENABLED_STATE="gpu_system_state.in"
+SYSTEM_FILE="gpu_system.out"
+# ACHTUNG: Hier muss das .in in der Variable SYSTEM_STATE enthalten sein.
+#          In dem Skript gpu-abfrage.sh ist die Variable ohne ".in" !!!
+SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE.in"
 
 # Diese Abfrage erzeugt die beiden o.g. Dateien.
 ./gpu-abfrage.sh
@@ -30,10 +32,10 @@ GPU_ENABLED_STATE="gpu_system_state.in"
 #    in dem Assoziativen Array IsItEnabled[$uuid] der entsprechenden UUID
 unset ENABLED_UUIDs
 declare -A uuidEnabledSOLL
-if [ -f ${GPU_ENABLED_STATE} ]; then
+if [ -f ${SYSTEM_STATE} ]; then
     shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
-    cat ${GPU_ENABLED_STATE} \
+    cat ${SYSTEM_STATE} \
         | grep -e "^GPU-" \
         | readarray -n 0 -O 0 -t ENABLED_UUIDs
 
@@ -82,7 +84,7 @@ done
 unset kwh_BTC; declare -A kwh_BTC
 
 unset READARR
-readarray -n 0 -O 0 -t READARR <$GPU_SYSTEM_DATA
+readarray -n 0 -O 0 -t READARR <$SYSTEM_FILE
 # Aus den GPU-Index:Name:Bus:UUID:Auslastung Paaren ein paar Grunddaten 
 #     jeder Grafikkarte für den Dispatcher erstellen
 declare -a index
@@ -965,44 +967,44 @@ printf "=========       Endergebnis        =========\n"
 _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
 
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
-STATUS_FILE="GLOBAL_GPU_ALGO_STATE"
+RUNNING_STATE="GLOBAL_GPU_ALGO_RUNNING_STATE"
 
-# rm -f ${STATUS_FILE}.lock
+# rm -f ${RUNNING_STATE}.lock
 #AlgoDisabled:skunk
 #AlgoDisabled:sha256
 
 # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
-while [ -f ${STATUS_FILE}.lock ]; do
-    echo "Waiting for WRITE access to ${STATUS_FILE}"
+while [ -f ${RUNNING_STATE}.lock ]; do
+    echo "Waiting for WRITE access to ${RUNNING_STATE}"
     sleep 1
 done
 # Zum Schreiben reservieren
-echo $$ >${STATUS_FILE}.lock
+echo $$ >${RUNNING_STATE}.lock
 
 #####################################################
 # Einlesen des bisherigen Status
 ####################################################
-if [ -f ${STATUS_FILE} ]; then
+if [ -f ${RUNNING_STATE} ]; then
     shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
 
-    unset STATUS_FILE_CONTENT
+    unset RUNNING_STATE_CONTENT
     unset AlgoDisabled; declare -A AlgoDisabled
     unset RunningGPUid; declare -A RunningGPUid
     unset WasItEnabled; declare -A WasItEnabled
     unset WhatsRunning; declare -A WhatsRunning
-    cat ${STATUS_FILE} \
+    cat ${RUNNING_STATE} \
         | grep -e "^GPU-\|^AlgoDisabled" \
-        | readarray -n 0 -O 0 -t STATUS_FILE_CONTENT
+        | readarray -n 0 -O 0 -t RUNNING_STATE_CONTENT
 
-    for (( i=0; $i<${#STATUS_FILE_CONTENT[@]}; i++ )); do
-        if [[ "${STATUS_FILE_CONTENT[$i]:0:4}" == "GPU-" ]]; then
-            read RunningUUID RunningGPUidx GenerallyEnabled RunningAlgo <<<"${STATUS_FILE_CONTENT[$i]//:/ }"
+    for (( i=0; $i<${#RUNNING_STATE_CONTENT[@]}; i++ )); do
+        if [[ "${RUNNING_STATE_CONTENT[$i]:0:4}" == "GPU-" ]]; then
+            read RunningUUID RunningGPUidx GenerallyEnabled RunningAlgo <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
             RunningGPUid[${RunningUUID}]=${RunningGPUidx}
             WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
             WhatsRunning[${RunningUUID}]=${RunningAlgo}
         else
-            read muck AlgoName <<<"${STATUS_FILE_CONTENT[$i]//:/ }"
+            read muck AlgoName <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
             AlgoDisabled[${AlgoName}]=1
         fi
     done
@@ -1030,10 +1032,10 @@ fi
 ####################################################
 
 # Sichern der alten Datei. Vielleicht brauchen wir sie bei einem Abbruch zur Analyse
-cp -f ${STATUS_FILE} ${STATUS_FILE}.BAK
+cp -f ${RUNNING_STATE} ${RUNNING_STATE}.BAK
 
-printf 'UUID : GPU-Index : Enabled (1/0) : Running with AlgoName or Stopped if \"\"\n' >${STATUS_FILE}
-printf '=========================================================================\n'  >>${STATUS_FILE}
+printf 'UUID : GPU-Index : Enabled (1/0) : Running with AlgoName or Stopped if \"\"\n' >${RUNNING_STATE}
+printf '=========================================================================\n'  >>${RUNNING_STATE}
 
 if [[ ${verbose} == 1 ]]; then
     echo "Die optimale Konfiguration besteht aus diesen ${#GPUINDEXES[@]} Karten:"
@@ -1069,7 +1071,7 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
         # Der Soll-Zustand kommt aus der manuell bearbeiteten Systemdatei ganz am Anfang
         # Wir schalten auf jeden Fall den gewünschten Soll-Zustand.
         # Eventuell müssen wir mit dem letzten Run-Zustand vergleichen, um etwas zu stoppen...
-        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:" >>${STATUS_FILE}
+        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:" >>${RUNNING_STATE}
 
         # Ist die GPU generell Enabled oder momentan nicht zu behandeln?
         if ((${WasItEnabled[${gpu_uuid}]} == 1)); then
@@ -1099,7 +1101,7 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
                     # Alter und neuer Algo ist gleich, kann weiterlaufen
                     echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin auf \"${actGPUalgoName[${algoidx}]}\""
                 fi
-                printf "${actGPUalgoName[${algoidx}]}\n" >>${STATUS_FILE}
+                printf "${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
             else
                 #
                 # Die Karte ist NUN generell DISABLED!
@@ -1112,7 +1114,7 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
                 # MINER- Behandlung
                 echo "---> SWITCH-OFF: GPU#${gpu_idx} wurde generell DISABLED und ist abzustellen!"
                 echo "---> SWITCH-OFF: Sie läuft noch mit \"${WhatsRunning[${gpu_uuid}]}\""
-                printf "\n" >>${STATUS_FILE}
+                printf "\n" >>${RUNNING_STATE}
             fi
         else
             #
@@ -1128,18 +1130,18 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
                 ########################################################
                 # MINER- Behandlung
                 echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
-                printf "${actGPUalgoName[${algoidx}]}\n" >>${STATUS_FILE}
+                printf "${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
             else
                 #
                 # Die Karte BLEIBT generell DISABLED
                 #
                 # Zeile abschliessen
                 echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin DISABLED"
-                printf "\n" >>${STATUS_FILE}
+                printf "\n" >>${RUNNING_STATE}
             fi
         fi
     else
-        ### IM ${STATUS_FILE} WAREN KEINERLEI EINTRÄGE.
+        ### IM ${RUNNING_STATE} WAREN KEINERLEI EINTRÄGE.
         ### Wahrscheinlich existierte sie noch nie. Jetzt kommen AUF JEDEN FALL Einträge hinein.
         ### Wir wisseen also nichts über den laufenden Zustand und schalten deshalb einfach alles nur ein,
         ###     falls nicht eine GPU Generell DISABLED ist.
@@ -1156,14 +1158,14 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
 
             # MINER- Behandlung
             echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
-            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoName[${algoidx}]}\n" >>${STATUS_FILE}
+            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
         else
             #
             # Die Karte IST generell DISABLED
             #
             # MINER- Behandlung
             echo "---> SWITCH-OFF: GPU#${gpu_idx} wurde generell DISABLED und ist abzustellen!"
-            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${STATUS_FILE}
+            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${RUNNING_STATE}
         fi
     fi
 
@@ -1227,7 +1229,7 @@ if [ ${#SwitchOffGPUs[@]} -gt 0 ]; then
                 fi
             fi
         fi
-        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${STATUS_FILE}
+        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${RUNNING_STATE}
     done
 fi
 if [[ ${verbose} == 1 ]]; then
@@ -1235,15 +1237,15 @@ if [[ ${verbose} == 1 ]]; then
 fi
 
 for algoName in ${!AlgoDisabled[@]}; do
-    printf "AlgoDisabled:$algoName\n" >>${STATUS_FILE}
+    printf "AlgoDisabled:$algoName\n" >>${RUNNING_STATE}
 done
 
 echo "Neues globales Switching Sollzustand Kommandofile"
-cat ${STATUS_FILE}
+cat ${RUNNING_STATE}
 
 
 # Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
-rm -f ${STATUS_FILE}.lock
+rm -f ${RUNNING_STATE}.lock
 
 
 
