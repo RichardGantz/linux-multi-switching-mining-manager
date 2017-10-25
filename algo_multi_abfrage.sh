@@ -303,11 +303,11 @@ while [ 1 -eq 1 ] ; do
 
     # Das ist ein zu grosser Sicherheitspuffer.
     # Die Berechnungen müssen losgehen, nachdem alle GPUs ihre best-Werte ermittelt haben!
-    # - Jede GPU trägt sich dabei in eine Art von "Registratur" ein und prüft vorher vielleicht,
-    #      ob die Letzte auch entgegen genommen wurde.
-    # - Dann legt das multi_mining_calc.sh erst los, wenn <alle> GPUs ihre best-Werte bgegeben haben
-    sleep 5
-    ./multi_mining_calc.sh
+    # multi_mining_calc.sh wartet nach der Berechnung des aktuellen SolarWattAvailable darauf,
+    # dass alle ENABLED GPUs ihre Dateien ALGO_WATTS_MINES.in geschrieben haben.
+    # Erstaunlicherweise kommt es oft vor, dass das manche noch in der selben Sekunde machen,
+    # in der auch $SYNCFILE getouched wurde.
+    ./multi_mining_calc.sh &
 
-    sleep 26
+    sleep 31
 done

@@ -25,6 +25,8 @@ SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE.in"
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
 RUNNING_STATE="GLOBAL_GPU_ALGO_RUNNING_STATE"
 
+SYNCFILE=you_can_read_now.sync
+
 GRID[0]="netz"
 GRID[1]="solar"
 GRID[2]="solar_akku"
@@ -34,7 +36,8 @@ source ./multi_mining_calc.inc
 
 
 
-# Diese Abfrage erzeugt die beiden o.g. Dateien.
+
+# Diese Abfrage erzeugt die beiden o.g. Dateien SYSTEM_FILE="gpu_system.out" und SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE.in"
 ./gpu-abfrage.sh
 
 # In der Datei "GLOBAL_GPU_SYSTEM_STATE.in" können die Enabled-Flags am Ende jeder Zeile
@@ -43,6 +46,7 @@ source ./multi_mining_calc.inc
 #    in dem Assoziativen Array IsItEnabled[$uuid] der entsprechenden UUID
 unset ENABLED_UUIDs
 declare -A uuidEnabledSOLL
+declare -i NumEnabledGPUs
 if [ -f ${SYSTEM_STATE} ]; then
     shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
@@ -54,7 +58,8 @@ if [ -f ${SYSTEM_STATE} ]; then
         echo ${ENABLED_UUIDs[$i]} \
             | cut -d':' --output-delimiter=' ' -f1,3 \
             | read UUID GenerallyEnabled
-        uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
+        declare -i uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
+        NumEnabledGPUs+=${GenerallyEnabled}
     done
     ${shopt_cmd_before}
 fi
@@ -140,6 +145,31 @@ declare -i SolarWattAvailable=75   # GPU#1: equihash    - GPU#0: OFF
 # Das Programm hat bei mindestens 74W von cryptonight auf equihash umgeschaltet. GUUUUUT!
 declare -i SolarWattAvailable=73   # GPU#1: cryptonight - GPU#0: OFF
 declare -i SolarWattAvailable=350   # GPU#1: equihash    - GPU#0: OFF
+
+###############################################################################################
+# (25.10.2017)
+# Nach dem Einlesen der SolarWattAvailable warten wir erst mal, bis alle ENABLED GPUs
+# ihre Dateien ALGO_WATTS_MINES.in geschrieben haben.
+# Wir erkennen das daran, dass das Moddate der ALGO_WATTS_MINES.in größer ist als die des SYNCFILE
+# Wir haben auch die Anzahl ENABLED GPUs und die UUIDs in dem Array uuidEnabledSOLL
+#
+
+declare -i minTime=$(stat -c %Y ${SYNCFILE})
+while [ 1 == 1 ]; do
+    declare -i AWMTime=minTime+3600
+    for UUID in ${!uuidEnabledSOLL[@]}; do
+        if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
+            declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in)
+            if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
+        fi
+    done
+    if [ $AWMTime -lt $minTime ]; then
+        echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
+        sleep 1
+    else
+        break
+    fi
+done
 
 ###############################################################################################
 # (etwa 15.10.2017)
