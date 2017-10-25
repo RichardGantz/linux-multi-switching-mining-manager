@@ -312,92 +312,17 @@ while [ 1 -eq 1 ] ; do
             printf "$algorithm\n${WATTS[$algorithm]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
         else
             # ---> MUSS VIELLEICHT AKTIVIERT WERDEN, WENN UNTEN DER BEST-OF TEIL WEGFÄLLT <---
-            echo KEIN Hash WERT bei $algorithm bei GPU-xyz fehlt !!! \<------------------------ \
-                 >/dev/null
+            echo "KEIN Hash WERT bei $algorithm bei GPU #$(< gpu_index.in) fehlt !!! \<------------------------"
         fi
     done
     
-    ###############################################################################
-    #
-    #                                                Berechnung der Stromkosten
-    ######################################
-    unset kwh_BTC; declare -A kwh_BTC
-    # Damit diese Datei auf gar keinen Fall schon da ist beim Eintritt in die Schleife
-    rm -f gv_GRID.out
-    for ((grid=0; $grid<${#GRID[@]}; grid++)) ; do
-
-        # Kosten Umrechnung in BTC
-        kwh_BTC[${GRID[$grid]}]=$(< ../kWh_${GRID[$grid]}_Kosten_BTC.in)
-    
-        ###############################################################################
-        #
-        # Schleife der verschieden Strom Bezugsarten Netz ; Solar ; Solar-Akku 
-        #
-        # gv_GRID.out <-- ist dann endprodukt welches algo berechnet werden soll 
-        #
-        ######################################
-    
-        for algo in ${!ALGOs[@]}; do
-            algorithm=${ALGOs[$algo]}
-            if [[ ${#bENCH[$algorithm]}>0 && ${#kMGTP[$algorithm]}>0 && ${#KURSE[$algorithm]}>0 ]]; then
-                # 1. Werte berechnen
-                calc_vals=$(echo "scale=8; mines=(${bENCH[$algorithm]}   \
-                                                 * ${KURSE[$algorithm]}) \
-                                                 / ${kMGTP[$algorithm]}; \
-                                           costs=(${WATTS[$algorithm]}*24*${kwh_BTC[${GRID[$grid]}]})/1000; \
-                                           print mines-costs, /* Ursprünglich einziger Wert */ \
-                                           \" \", mines,      /* Diese BTC berechnet die Karte brutto */ \
-                                           \" \", costs;      /* Maximale Kosten */ \
-                                           " | bc )
-                #echo ${calc_vals}
-                first_spc=$(expr index "${calc_vals}" " ")
-                #echo ${first_spc}
-                actual_gv=${calc_vals:0:${first_spc}-1}
-                #echo $actual_gv
-                add_paras=${calc_vals:${first_spc}}
-                #echo $add_paras
-                echo $algorithm : BTC/D Gewinn/Verlust : $actual_gv
-                # Ausgabe in Datei zum sortieren mit externen prog (vielleicht im RAM sortieren ohne datei schreiben)
-                echo $actual_gv $algorithm ${WATTS[$algorithm]} ${add_paras} >> gv_GRID.out
-            else
-                echo KEIN Hash WERT bei $algorithm bei GPU-xyz fehlt !!! \<------------------------
-                # abfrage wegen watt wert ... dann wenn keiner da ist einfach keinen wert eintragen
-                #fehler wie kein HASH oder WATT wert --> log datei der GPU 
-            fi
-        done
-    
-        # (24.10.2017) Dieser Fall, dass Arrays leer sind, dürfte jetzt wirklich überhaupt nicht mehr vorkommen.
-        #              Trotzdem lassen wir es mal drin, um ganz sicher zu gehen.
-        if [ ! -f gv_GRID.out ]; then
-            echo "Anzahl Member ALGOs[]: ${#ALGOs[@]}"
-            echo "Anzahl Member bENCH[]: ${#bENCH[@]}"
-            echo "Anzahl Member kMGTP[]: ${#kMGTP[@]}"
-            echo "Anzahl Member KURSE[]: ${#KURSE[@]}"
-            echo "Anzahl Member WATTS[]: ${#WATTS[@]}"
-            echo "---------> gv_GRID.out IST NICHT VORHANEN. ABBRUCH <---------"
-            exit
-        fi
-        cat gv_GRID.out \
-            | sort -rn \
-            | sed -n '1p' \
-            >best_algo_${GRID[$grid]}.out
-        rm gv_GRID.out
-
-    done # for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
-
     #############################################################################
     #
     #
-    # Ausgabe 
+    # Warten auf neue aktuelle daten aus dem Web.
     #
     #
-    for ((grid=0; $grid<${#GRID[@]}; grid+=1)) ; do
-        echo --------------------------------------------------------------------
-        echo --------Der Beste Algo zur zeit ist mit ${GRID[$grid]^^} Strom ----------------- 
-        cat best_algo_${GRID[$grid]}.out
-        echo --------------------------------------------------------------------
-    done
-
+    echo "Waiting for new actual Pricing Data from the Web..."
     while [ $new_Data_available == $(date --utc --reference=$SYNCFILE +%s) ] ; do
         sleep 1
     done

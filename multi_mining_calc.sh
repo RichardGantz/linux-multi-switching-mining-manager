@@ -26,7 +26,7 @@ SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE.in"
 # Diese Abfrage erzeugt die beiden o.g. Dateien.
 ./gpu-abfrage.sh
 
-# In der Datei "gpu_system_state.in" können die Enabled-Flags am Ende jeder Zeile
+# In der Datei "GLOBAL_GPU_SYSTEM_STATE.in" können die Enabled-Flags am Ende jeder Zeile
 #    manuell auf 0 geändert werden für DISABLED oder wieder auf 1 für ENABLED.
 #    Wir merken uns den globalen Enabled SOLL-Status gleich
 #    in dem Assoziativen Array IsItEnabled[$uuid] der entsprechenden UUID
@@ -48,43 +48,8 @@ if [ -f ${SYSTEM_STATE} ]; then
     ${shopt_cmd_before}
 fi
     
-
-###############################################################################
-#
-# Wie die abbfolge dieses Programm ist und wie es es abfragt
-# 1. finde GPU folder
-# 1.1. lade 3 arrays mit folgenden Daten "best_algo_netz.out","best_algo_solar","best_algo_solar_akku.out",
-#      "gpu_index.in" alle 10 sekunden oder direkt nach "lausche auf" aktualisierung der GPU best* daten
-# 1.2. Sortiere jeweils jedes array nach dem besten "profitabelsten" algorytmus
-#      Nee. Das macht zu wenig Sinn.
-#      Erstens hat gpu_gv-algo.sh bereits den "profitabelsten" Algorithmus ermittelt.
-#      Die Punkte 1.1. und 1.2. ENTFALLEN!!!
-# 1.3. Gebe jede dieser arrays aus "best_all_netz.out","best_all_solar.out","best_all_solar_akku.out"
-#      in diesen outs sind "index(GPU), algo, watt" pro NETZ, SOLAR, AKKU
-#
-# --->12.Oct.2017<---
-# DA IST ZU VIEL UNKLARHEIT DARÜBER, WAS DIESES SCRIPT EIGENTLIVH MACHEN SOLL.
-# ES LÄUFT MOMENTAN UND GIBT DIE BESTEN ALGORITHMEN SORTIERT AUS.
-# FÜR DEN TATSACHLICHEN SWITCHER ARBEITEN WIR AN EINER DATEI MIT DEM NAMEN multi_mining_switcher.sh WEITER
-
-###############################################################################
-# Zu 1. Finde GPU Folder
-###############################################################################
-
-# Sortierungsquelldateien
-GRID[0]="netz"
-GRID[1]="solar"
-GRID[2]="solar_akku"
-for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-    best[$grid]=best_all_${GRID[$grid]}.out
-    rm -f ${best[$grid]}
-    tmpSort[$grid]=.0${GRID[$grid]}_sort
-    rm -f ${tmpSort[$grid]}.in
-done
-unset kwh_BTC; declare -A kwh_BTC
-
 unset READARR
-readarray -n 0 -O 0 -t READARR <$SYSTEM_FILE
+readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 # Aus den GPU-Index:Name:Bus:UUID:Auslastung Paaren ein paar Grunddaten 
 #     jeder Grafikkarte für den Dispatcher erstellen
 declare -a index
@@ -125,65 +90,24 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     # (23.10.2017) Wir nehmen der Bequemlichkeit halber noch ein Array mit der UUID auf
     declare -ag "GPU${index[$j]}UUID"
 
-    # Quelldateien für Sortierung erstellen
-    # sort-key(GV)  algo    WATT   MINES    COST(100%GRID)       + GPU-Index
-    #-.00007377 cryptonight 270 .00017384 .00006598        (hier + ${index[$j]})
-    for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-        if [ ! -f ${uuid[${index[$j]}]}/best_algo_${GRID[$grid]}.out ]; then
-            echo "-------------------------------------------"
-            echo "---           FATAL ERROR               ---"
-            echo "-------------------------------------------"
-            echo "No file 'best_algo_${GRID[$grid]}.out' available"
-            echo "for GPU ${name[${index[$j]}]}"
-            echo "Please run '${uuid[${index[$j]}]}/gpu_gv-algo.sh'"
-            echo "-------------------------------------------"
-        else
-            echo $(< ${uuid[${index[$j]}]}/best_algo_${GRID[$grid]}.out ) ${index[$j]} >>${tmpSort[$grid]}.in
-        fi
-    done
 done
 
-# Sortiert ausgeben:
+GRID[0]="netz"
+GRID[1]="solar"
+GRID[2]="solar_akku"
+
+unset kwh_BTC; declare -A kwh_BTC
 for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-    if [ -f ${tmpSort[$grid]}.in ]; then
-        cat ${tmpSort[$grid]}.in                         \
-            | sort -rn                                   \
-            | tee ${tmpSort[$grid]}.out                  \
-            | gawk -e '{print $NF " " $1 " " $2 " " $3 }' \
-            | sed -n '1p' \
-            >${best[$grid]}
-        if [ ${verbose} == 1 ]; then
-            txt=`echo ${tmpSort[$grid]%%_sort}`; txt=${txt:2}
-            echo "--------------------------------------"
-            echo "           ${txt^^}"
-            echo "--------------------------------------"
-            gawk -e '{print "GPU " $NF ": " $1 " " $2 " " $3 }' ${tmpSort[$grid]}.out
-        fi
-    fi
     # ACHTUNG. DAS MUSS AUF JEDEN FALL EIN MAL PRO Preiseermittlungslauf LAUF GEMACHT WERDEN!!!
     # IST NUR DER BEQUEMLICHKEIT HALBER IN DIESE <GRID> SCHLEIFE GEPACKT,
     # WEIL SIE NUR 1x DURCHLÄUFT
     # Die in BTC umgerechneten Strompreise für die Vorausberechnungen später
     kwh_BTC[${GRID[$grid]}]=$(< kWh_${GRID[$grid]}_Kosten_BTC.in)
 done
-echo "--------------------------------------"
+# AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese beiden Berechnungen
+kWhMax=${kwh_BTC["netz"]}
+kWhMin=${kwh_BTC["solar"]}
 
-# Diese Überlegungen gelten für den Fall, dass pro Miner MEHRERE GPUs betrieben werden.
-# GPU-Index-Datei für miner (==algo ?) erstellen.
-# Hier: Komma-getrennt
-
-# Alle GPU-Index-Dateien löschen ?
-rm -f cfg_*
-for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-    if [ -f ${best[$grid]} ]; then
-        txt=`echo ${tmpSort[$grid]%%_sort}`       # "_sort" vom Namenende entfernen
-        gawk -v grid=${txt:2} -e ' \
-             $2 > 0 { ALGO[$3]=ALGO[$3] $1 "," } \
-             END { for (algo in ALGO) \
-                   print substr( ALGO[algo], 1, length(ALGO[algo])-1 ) > "cfg_" grid "_" algo }' \
-             ${best[$grid]}
-    fi
-done
 
 ########################################################################
 #
@@ -578,10 +502,6 @@ declare -i SolarWattAvailable=75   # GPU#1: equihash    - GPU#0: OFF
 declare -i SolarWattAvailable=73   # GPU#1: cryptonight - GPU#0: OFF
 declare -i SolarWattAvailable=350   # GPU#1: equihash    - GPU#0: OFF
 
-# AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese beiden Berechnungen
-kWhMax=${kwh_BTC["netz"]}
-kWhMin=${kwh_BTC["solar"]}
-
 ###############################################################################################
 # (etwa 15.10.2017)
 # Jetzt wollen wir die Arrays zur Berechnung des optimalen Algo pro Karte mit den Daten füllen,
@@ -646,33 +566,9 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
     declare -n actGPU_UUID="GPU${index[$idx]}UUID"
     actGPU_UUID="${uuid[${index[$idx]}]}"
 
-    if [ ! -f ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in ]; then
-        # DAS IST DER UNSCHLÜSSIGE FALL, DASS WIR NUR 2 ODER 3 BESTE ALGOS BETRACHTEN,
-        # DIE UNTER DER ANNAHME DREI FIXER PREISKONSTELLATIONEN ZUSTANDE KAM
-
-        # sort-key(GV)   algo    WATT  MINES   COST(100%GRID)
-        # -.00007377 cryptonight 270 .00017384 .00006598
-        for (( grid=0; $grid<${#GRID[@]}-1; grid++ )); do    # Bis zur Klärung von oben (1.) ohne "solar_akku"
-            #for (( grid=0; $grid<${#GRID[@]}; grid++ )); do     # Diser Schleifenkopf behandelt alle 3 Powerarten
-            #echo "Grid: ${GRID[$grid]}"
-            #unset READARR # read -a ARR unsets ARR anyway befor the read
-            read -a READARR <${uuid[${index[$idx]}]}/best_algo_${GRID[$grid]}.out
-
-            # Algos mit Verlust interessieren uns nicht und erzeugen keinen
-            # Eintrag in dem actGPUAlgos Array
-            if [[ $(expr index "${READARR[0]}" "-") == 1 ]]; then continue; fi
-
-            # Wir brauchen jeden Algorithmus nur EIN mal (keine Doppelten)
-            for (( algo=0; $algo<${#actGPUAlgos[@]}; algo++ )); do
-                if [[ "${actGPUAlgos[$algo]}" == "${READARR[1]}" ]]; then continue 2; fi
-            done
-            _push_onto_array actGPUAlgos  "${READARR[1]}"
-            _push_onto_array actAlgoWatt  "${READARR[2]}"
-            _push_onto_array actAlgoMines "${READARR[3]}"
-        done
-    else
+    if [ -s ${actGPU_UUID}/ALGO_WATTS_MINES.in ]; then
         unset READARR
-        readarray -n 0 -O 0 -t READARR <${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in
+        readarray -n 0 -O 0 -t READARR <${actGPU_UUID}/ALGO_WATTS_MINES.in
         for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
             _push_onto_array actGPUAlgos  "${READARR[$i]}"
             _push_onto_array actAlgoWatt  "${READARR[$i+1]}"
@@ -1186,7 +1082,7 @@ for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
     fi
 done
 
-# Jetzt gehen wir die auszuschaltenden Karte durch.
+# Jetzt gehen wir die auszuschaltenden Karten durch.
 # Auch hier kann es natürlich vorkommen, dass sich eine Indexnummer geändert hat
 #      und dass dann die CHAOS-BEHANDLUNG durchgeführt werden muss.
 if [ ${#SwitchOffGPUs[@]} -gt 0 ]; then

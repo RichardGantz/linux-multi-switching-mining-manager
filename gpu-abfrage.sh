@@ -68,11 +68,6 @@ if [ $HOME == "/home/richard" ]; then NoCards=true; fi
 ### ERSTER Start und Erstellung der Grundkonfig 
 SYSTEM_FILE="gpu_system.out"
 SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE"
-SYSTEM_STATE_OLD="GLOBAL_GPU_GPU_SYSTEM_STATE"
-if [ -f "${SYSTEM_STATE_OLD}.in" ]; then
-    rm -f "${SYSTEM_STATE_OLD}.in"
-    rm -f "${SYSTEM_STATE_OLD}.BAK"
-fi
 
 unset READARR
 unset ENABLED_UUIDs
