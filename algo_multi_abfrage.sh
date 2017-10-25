@@ -51,6 +51,8 @@ ALGO_NAMES_ARR="ALGO_NAMES.in"
 
 _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
 {
+    # $1 = Webdateiname, z.B. ${ALGO_NAMES_WEB}, ${algoID_KURSE_WEB}
+    # $2 = Einlesedatei, z.B. ${ALGO_NAMES_ARR}, ${algoID_KURSE_ARR}
     # Tja, was machen wir in dem Fall also?
     # Die Stratum-Server laufen und nehmen offensichtlich generierten Goldstaub entgegen.
     # Und die Karten, die wir vor 31s eingeschaltet haben, liefen ja mit Gewinn.
@@ -60,8 +62,8 @@ _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
     #     in eine Datei FATAL_ERRORS.log, damit man nicht vergisst,
     #     sich langfristig um das Problem zu kümmern.
     if [[ ! "$NoAlgoNames_notified" == "1" ]]; then
-        notify-send -t 10000 -u critical "### Es gibt zur Zeit keine Datei ${ALGO_NAMES_WEB} aus dem Web ###" \
-                 "Die Datei ${ALGO_NAMES_ARR} bleibt unverändert oder ist nicht vorhanden. \
+        notify-send -t 10000 -u critical "### Es gibt zur Zeit keine Datei $1 aus dem Web ###" \
+                 "Die Datei $2 bleibt unverändert oder ist nicht vorhanden. \
                  Entscheide bitte, wie lange Du die gerade laufenden Miner \
                  mit den immer mehr veraltenden Zahlpreisen laufen lassen möchtest!"
         if [[ ! "$NoAlgoNames_recorded" == "1" ]]; then
@@ -98,8 +100,10 @@ _create_ALGOS_in()
         | grep -i -c -m 1 -e '<title>[^<]\+</title>' )
 
     if [[ ! "${algoPageDown}" == "0" ]]; then
-        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON
+        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${ALGO_NAMES_WEB}" "${ALGO_NAMES_ARR}"
     else
+        # Fehler scheint behoben, Benachrichtigung wieder scharf machen
+        unset NoAlgoNames_notified NoAlgoNames_recorded
         # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach ALGO_NAMES.in
         num_algos_with_name=$(expr $(gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
                    f["k"]=1; f["M"]=2; f["G"]=3; f["T"]=4; f["P"]=5 } \
@@ -113,8 +117,6 @@ _create_ALGOS_in()
            | tee $ALGO_NAMES_ARR \
            | wc -l ) / 3 )
         algo_names_arr_modified=$(date --utc --reference=$ALGO_NAMES_ARR +%s)
-        # Fehler scheint behoben, Benachrichtigung wieder scharf machen
-        unset NoAlgoNames_notified NoAlgoNames_recorded
     fi
 }
 
@@ -128,7 +130,7 @@ while [[ ${num_algos_with_name} == 0 ]]; do
     fi
 done
 
-_notify_about_NO_ALGO_KURSE()
+_notify_about_NO_BTC_KURS()
 {
     # Tja, was machen wir in dem Fall also?
     # Die Stratum-Server laufen und nehmen offensichtlich generierten Goldstaub entgegen.
@@ -139,12 +141,12 @@ _notify_about_NO_ALGO_KURSE()
     #     in eine Datei FATAL_ERRORS.log, damit man nicht vergisst,
     #     sich langfristig um das Problem zu kümmern.
     if [[ ! "$ERROR_notified" == "1" ]]; then
-        notify-send -t 10000 -u critical "### Es gibt zur Zeit keine neuen Kurse ###" \
-                 "Der Webfrontend ist wegen Wartungsarbeiten down. \
+        notify-send -t 10000 -u critical "### Es gibt zur Zeit keine Datei $1 aus dem Web ###" \
+                 "Die Datei $2 bleibt unverändert oder ist nicht vorhanden. \
                  Entscheide bitte, wie lange Du die gerade laufenden Miner \
                  mit den immer mehr veraltenden Zahlpreisen laufen lassen möchtest!"
         if [[ ! "$ERROR_recorded" == "1" ]]; then
-            echo $(date "+%F %H:%M:%S") "curl - Kurse-Abfrage hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
+            echo $(date "+%F %H:%M:%S") "curl - BTC Kurs-Abfrage hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
             echo "                    Hier: Down wegen Wartungsarbeiten" >>FATAL_ERRORS.log
             ERROR_recorded=1
         fi
@@ -211,7 +213,7 @@ while [ 1 -eq 1 ] ; do
     #  We expect to be back in a couple minutes. Thanks for your patience.
     #  Stratum servers should be running as usual."
 
-    echo ---------------------Nicehash-Kurse---------------------------------
+    echo "---------------------Nicehash-Kurse---------------------------------"
     pageDown=$( curl "https://api.nicehash.com/api?method=stats.global.current&location=0" \
         | tee $algoID_KURSE_WEB \
         | grep -i -c -m 1 -e '<title>[^<]\+</title>' )
@@ -222,10 +224,10 @@ while [ 1 -eq 1 ] ; do
     # abgebogen ist.
     # changed 'if [[ ! "$pageDown" == "0" ]]; then' to:
     if [[ ! "${pageDown}" == "0" ]]; then
-        _notify_about_NO_ALGO_KURSE
+        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${algoID_KURSE_WEB}" "${algoID_KURSE_ARR}"
     else
-        echo --------------------------------------------------------------------
-        unset ERROR_notified ERROR_recorded # Damit die Fehlermeldungen auf jeden Fall wieder scharf sind
+        echo "--------------------------------------------------------------------"
+        unset NoAlgoNames_notified NoAlgoNames_recorded
 
         num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS="},{|:[\[]{" } \
              /"algo":[0-9]*/ && /"price":"[0-9.]*"/ { \
@@ -249,33 +251,49 @@ while [ 1 -eq 1 ] ; do
 ##############################################
 
     # abfrage des BTC-EUR Kurs von bitcoin.de (html)
-    #aussehen der html zeile -->
-    #Aktueller Bitcoin Kurs: <img alt="EUR" class="ticker_arrow mbm3 g90" src="/images/s.gif" /> <strong \
-    #  id="ticker_price">3.163,11 €</strong>
 
     BTC_EUR_KURS_WEB="BTCEURkurs"
-    #http abfrage
-    echo -------------------------BTC-EUR-KURS-Abfrage-----------------------
+
+    echo "-------------------------BTC-EUR-KURS-Abfrage-----------------------"
     curl "https://www.bitcoin.de/de" -o $BTC_EUR_KURS_WEB
-    echo --------------------------------------------------------------------        
+    #
+    # Folgende <title> der Webseite kennen wir bisher:
+    #
+    # <title>bitcoin.de - Wartungsarbeiten/Maintenance</title>
+    # <title>Bitcoins kaufen, Bitcoin Kurs bei Bitcoin.de!</title>
+    #
+    btcPageValid=$(cat ${BTC_EUR_KURS_WEB} \
+        | grep -i -c -m 1 -e '<title>Bitcoins kaufen, Bitcoin Kurs bei Bitcoin.de!</title>' )
+    echo "--------------------------------------------------------------------"      
         
-    # BTC Kurs extrahieren und umwandeln, das dieser dann als Variable verwendbar und zum Rechnen geeignet ist
-    btcEUR=$(gawk -e '/id="ticker_price">[0-9.,]* €</ \
-                  { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' \
-                  $BTC_EUR_KURS_WEB \
-             | grep -E -m 1 -o -e '[0-9.]*' \
-             | tee BTC_EUR_kurs.in )
+    if [[ ! "${btcPageValid}" == "1" ]]; then
+        _notify_about_NO_BTC_KURS "${BTC_EUR_KURS_WEB}" "BTC_EUR_kurs.in"
+        echo "###########################################################################"
+        echo "------------> ACHTUNG: Nicht aktualisierter BTC Kurs: $(<BTC_EUR_kurs.in) <------------"
+        echo "###########################################################################"
+    else
+        # Fehler scheint behoben, Benachrichtigung wieder scharf machen
+        unset ERROR_notified ERROR_recorded
 
-    # Einmal für alle gleich die fixen kWh-Preise in BTC umwandeln
-    for ((grid=0; $grid<${#GRID[@]}; grid++)) ; do
+        #aussehen der html zeile -->
+        #Aktueller Bitcoin Kurs: <img alt="EUR" class="ticker_arrow mbm3 g90" src="/images/s.gif" /> <strong \
+        #  id="ticker_price">3.163,11 €</strong>
 
-        # Kosten in EUR
-        kwh_EUR=$(< kwh_${GRID[$grid]}_kosten.in)
+        # BTC Kurs extrahieren und umwandeln, dass dieser dann als Variable verwendbar und zum Rechnen geeignet ist
+        btcEUR=$(gawk -e '/id="ticker_price">[0-9.,]* €</ \
+                      { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' \
+                      $BTC_EUR_KURS_WEB \
+               | grep -E -m 1 -o -e '[0-9.]*' \
+               | tee BTC_EUR_kurs.in )
 
-        # Kosten Umrechnung in BTC
-        echo $(echo "scale=8; ${kwh_EUR}/${btcEUR}" | bc) >kWh_${GRID[$grid]}_Kosten_BTC.in
-
-    done
+        # Einmal für alle gleich die fixen kWh-Preise in BTC umwandeln
+        for ((grid=0; $grid<${#GRID[@]}; grid++)) ; do
+            # Kosten in EUR
+            kwh_EUR=$(< kwh_${GRID[$grid]}_kosten.in)
+            # Kosten Umrechnung in BTC
+            echo $(echo "scale=8; ${kwh_EUR}/${btcEUR}" | bc) >kWh_${GRID[$grid]}_Kosten_BTC.in
+        done
+    fi  ### if [[ ! "${btcPageValid}" == "1" ]]; then
 
     # Alle Daten stabil in den Dateien. Startschuss für die anderen Prozesse
     touch $SYNCFILE
