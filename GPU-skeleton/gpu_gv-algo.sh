@@ -296,6 +296,10 @@ while [ 1 -eq 1 ] ; do
     #    Festhalten ALLER   AlgoNames, Watts und Mines für die Multi_mining_calc.sh
     #
     ######################################
+    # Zur sichereren Synchronisation, dass der multi_mining_calc.sh erst dann die Datei ALGO_WATTS_MINES
+    # einliest, wenn sie auch komplett ist und geschlossen wurde.
+    # -----------------> IST NOCH ZU IMPLEMENTIEREN IN multi_mining_calc.sh <-----------------
+    date --utc +%s >ALGO_WATTS_MINES.lock
     rm -f ALGO_WATTS_MINES.in
     for algo in ${!ALGOs[@]}; do
         algorithm=${ALGOs[$algo]}
@@ -315,6 +319,7 @@ while [ 1 -eq 1 ] ; do
             echo "KEIN Hash WERT bei $algorithm bei GPU #$(< gpu_index.in) fehlt !!! \<------------------------"
         fi
     done
+    rm -f ALGO_WATTS_MINES.lock
     
     #############################################################################
     #

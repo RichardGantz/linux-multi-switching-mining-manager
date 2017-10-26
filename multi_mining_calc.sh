@@ -14,6 +14,10 @@
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
 
+# Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
+# und müssen sich auf den Inhalt fixer Dateien beziehen.
+if [ $HOME == "/home/richard" ]; then NoCards=true; fi
+
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
 verbose=0
@@ -122,6 +126,73 @@ kWhMin=${kwh_BTC["solar"]}
 
 ###############################################################################################
 #
+# Einlesen des bisherigen RUNNING Status
+#
+###############################################################################################
+# Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
+while [ -f ${RUNNING_STATE}.lock ]; do
+    echo "Waiting for READ access to ${RUNNING_STATE}"
+    sleep 1
+done
+# Zum Lesen reservieren
+echo $$ >${RUNNING_STATE}.lock
+
+_read_in_actual_RUNNING_STATE
+
+# Und wieder freigeben
+rm -f ${RUNNING_STATE}.lock
+
+# Folgende Arrays stehen uns jetzt zur Verfügung, die uns sagen, welche GPU seit den
+# vergangenen 31s mit welchem Algorithmus und welchem Watt-Konsum laufen sollte,
+# ob sie ENABLED WAR und mit welchem GPU-Index sie "damals" gestartet wurde.
+# Auf all diese Informationen haben wir über die UUID Zugriff.
+#      RunningGPUid[ $UUID ]=${RunningGPUidx}    GPU-Index
+#      WasItEnabled[ $UUID ]=${GenerallyEnabled} (0/1)
+#      RunningWatts[ $UUID ]=${Watt}             Watt
+#      WhatsRunning[ $UUID ]=${RunningAlgo}      AlgoName
+unset SUM_OF_RUNNING_WATTS; declare -i SUM_OF_RUNNING_WATTS=0
+
+if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
+    for lfdUUID in ${!RunningGPUid[@]}; do
+        if [[ ${WasItEnabled[$lfdUUID]} == 1 ]]; then
+            SUM_OF_RUNNING_WATTS+=${RunningWatts[$lfdUUID]}
+        fi
+    done
+fi
+echo "Sum of actually running WATTS: ${SUM_OF_RUNNING_WATTS}W"
+
+###############################################################################################
+# (26.10.2017)
+# Vor dem Einlesen der Werte aus dem SMARTMETER, um u.a. SolarWattAvailable berechnen zu können,
+# warten wir erst mal, bis alle ENABLED GPUs ihre Dateien ALGO_WATTS_MINES.in geschrieben haben.
+# Darin enthalten sind die Watt-Angaben und die BTC "Mines", die sie produzieren würden,
+# wenn sie laufen würden.
+# Wir warten darauf, dass das Modification Date der Datei ALGO_WATTS_MINES.in größer oder gleich
+# dem des SYNCFILE ist.
+# Wir haben auch die Anzahl ENABLED GPUs und die UUIDs in dem Array uuidEnabledSOLL
+#
+# Erst, wenn alle Kurse bekannt sind und wir die optimale Konfiguration durchrechnen können,
+# bestimmen wir den momentanen "Strompreis" anhand der Daten aus dem SMARTMETER
+
+declare -i minTime=$(stat -c %Y ${SYNCFILE})
+while [ 1 == 1 ]; do
+    declare -i AWMTime=minTime+3600
+    for UUID in ${!uuidEnabledSOLL[@]}; do
+        if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
+            declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in)
+            if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
+        fi
+    done
+    if [ $AWMTime -lt $minTime ]; then
+        echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
+        sleep 1
+    else
+        break
+    fi
+done
+
+###############################################################################################
+#
 # Irgendwann brauchen wir irgendwoher den aktuellen Powerstand aus dem Smartmeter
 # w3m "http://192.168.6.170/solar_api/blabla..." > smartmeter
 #          "PowerReal_P_Sum" : 20.0,
@@ -141,35 +212,28 @@ kWhMin=${kwh_BTC["solar"]}
 ##################################################################################
 ##################################################################################
 
-declare -i SolarWattAvailable=75   # GPU#1: equihash    - GPU#0: OFF
-# Das Programm hat bei mindestens 74W von cryptonight auf equihash umgeschaltet. GUUUUUT!
-declare -i SolarWattAvailable=73   # GPU#1: cryptonight - GPU#0: OFF
-declare -i SolarWattAvailable=350   # GPU#1: equihash    - GPU#0: OFF
+PHASE=PowerReal_P_Phase_1
+PHASE=PowerReal_P_Phase_2
+PHASE=PowerReal_P_Phase_3
+PHASE=PowerReal_P_Sum
 
-###############################################################################################
-# (25.10.2017)
-# Nach dem Einlesen der SolarWattAvailable warten wir erst mal, bis alle ENABLED GPUs
-# ihre Dateien ALGO_WATTS_MINES.in geschrieben haben.
-# Wir erkennen das daran, dass das Moddate der ALGO_WATTS_MINES.in größer ist als die des SYNCFILE
-# Wir haben auch die Anzahl ENABLED GPUs und die UUIDs in dem Array uuidEnabledSOLL
-#
+#SCHWELLE=-260
 
-declare -i minTime=$(stat -c %Y ${SYNCFILE})
-while [ 1 == 1 ]; do
-    declare -i AWMTime=minTime+3600
-    for UUID in ${!uuidEnabledSOLL[@]}; do
-        if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
-            declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in)
-            if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
-        fi
-    done
-    if [ $AWMTime -lt $minTime ]; then
-        echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
-        sleep 1
-    else
-        break
-    fi
-done
+declare -i ACTUAL_SMARTMETER_KW
+declare -i SolarWattAvailable=0
+
+if [ ! $NoCards ]; then
+    # Datei smartmeter holen
+    w3m "http://192.168.6.170/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData" > smartmeter
+fi
+    
+# ABFRAGE PowerReal_P_Sum
+ACTUAL_SMARTMETER_KW=$(grep $PHASE smartmeter | gawk '{print substr($3,0,index($3,".")-1)}')
+echo "Aktueller Verbrauch aus dem Smartmeter: ${ACTUAL_SMARTMETER_KW}W"
+
+if [[ $((${ACTUAL_SMARTMETER_KW} - ${SUM_OF_RUNNING_WATTS})) -lt 0 ]]; then
+    SolarWattAvailable=$(expr ${SUM_OF_RUNNING_WATTS} - ${ACTUAL_SMARTMETER_KW})    
+fi
 
 ###############################################################################################
 # (etwa 15.10.2017)
@@ -427,6 +491,10 @@ if [ ${verbose} == 1 ]; then
         done
         echo "Switch OFF GPU's ${gpu_string%, }"
     fi
+    if [[ ${verbose} == 1 ]]; then
+        echo "Summe SwitchOffGPUs + PossibleCandidateGPUidx = $((${#PossibleCandidateGPUidx[@]}+${#SwitchOffGPUs[@]}))"
+        echo "Anzahl System-GPUs                            = ${#index[@]}"
+    fi
 fi
 
 echo "=========  Gesamtsystemberechnung  ========="
@@ -490,8 +558,6 @@ fi  # if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
 
 printf "=========       Endergebnis        =========\n"
 
-_decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
-
 # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
 while [ -f ${RUNNING_STATE}.lock ]; do
     echo "Waiting for WRITE access to ${RUNNING_STATE}"
@@ -500,61 +566,14 @@ done
 # Zum Schreiben reservieren
 echo $$ >${RUNNING_STATE}.lock
 
-#####################################################
-# Einlesen des bisherigen Status
-####################################################
-if [ -f ${RUNNING_STATE} ]; then
-    shopt_cmd_before=$(shopt -p lastpipe)
-    shopt -s lastpipe
-
-    unset RUNNING_STATE_CONTENT
-    unset AlgoDisabled; declare -A AlgoDisabled
-    unset RunningGPUid; declare -A RunningGPUid
-    unset WasItEnabled; declare -A WasItEnabled
-    unset WhatsRunning; declare -A WhatsRunning
-    cat ${RUNNING_STATE} \
-        | grep -e "^GPU-\|^AlgoDisabled" \
-        | readarray -n 0 -O 0 -t RUNNING_STATE_CONTENT
-
-    for (( i=0; $i<${#RUNNING_STATE_CONTENT[@]}; i++ )); do
-        if [[ "${RUNNING_STATE_CONTENT[$i]:0:4}" == "GPU-" ]]; then
-            read RunningUUID RunningGPUidx GenerallyEnabled RunningAlgo <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
-            RunningGPUid[${RunningUUID}]=${RunningGPUidx}
-            WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
-            WhatsRunning[${RunningUUID}]=${RunningAlgo}
-        else
-            read muck AlgoName <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
-            AlgoDisabled[${AlgoName}]=1
-        fi
-    done
-
-    ${shopt_cmd_before}
-
-    if [[ ${verbose} == 1 ]]; then
-        if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
-            echo "---> Alledgedly Running GPUs/Algos"
-            for uuid in ${!RunningGPUid[@]}; do
-                echo "GPU-Index      : ${RunningGPUid[$uuid]}, UUID=$uuid"
-                echo "War sie Enabled? $((${WasItEnabled[$uuid]} == 1))"
-                echo "Running Algo   : ${WhatsRunning[$uuid]}"
-            done
-        fi
-        if [[ ${#AlgoDisabled[@]} -gt 0 ]]; then
-            echo "---> Temporarily Disabled Algos"
-            for algoName in ${!AlgoDisabled[@]}; do echo $algoName; done
-        fi
-    fi
-
-    # Sichern der alten Datei. Vielleicht brauchen wir sie bei einem Abbruch zur Analyse
-    cp -f ${RUNNING_STATE} ${RUNNING_STATE}.BAK
-fi  ### if [ -f ${RUNNING_STATE} ]; then
+#_read_in_actual_RUNNING_STATE
 
 #####################################################
 # Ausgabe des neuen Status
 ####################################################
 
-printf 'UUID : GPU-Index : Enabled (1/0) : Running with AlgoName or Stopped if \"\"\n' >${RUNNING_STATE}
-printf '=========================================================================\n'  >>${RUNNING_STATE}
+printf 'UUID : GPU-Index : Enabled (1/0) : Watt : Running with AlgoName or Stopped if \"\"\n' >${RUNNING_STATE}
+printf '================================================================================\n'  >>${RUNNING_STATE}
 
 # Man könnte noch gegenchecken, dass die Summe aus laufenden und abgeschalteten
 #     GPU's die Anzahl GPU's ergeben muss, die im System sind.
@@ -563,12 +582,12 @@ printf '========================================================================
 #              und: ${MAX_GOOD_GPUs} >= ${SwitchOnCnt},
 #                   da möglicherweise die beste Kombination aus weniger als ${MAX_GOOD_GPUs} besteht.
 # Dann hätten wir diejenigen ${MAX_GOOD_GPUs} - ${SwitchOnCnt} noch zu überprüfen und zu stoppen !?!?
+
+_decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
+
 declare -i SwitchOnCnt=${#GPUINDEXES[@]}
-declare -i SwitchOffCnt=${#SwitchOffGPUs[@]}
 declare -i GPUsCnt=${#index[@]}
-if [ $((${SwitchOffCnt} + ${SwitchOnCnt})) -ne ${GPUsCnt} ]; then
-    echo "---> ??? Oh je, ich glaube fast, wir haben da ein paar GPU's vergessen abzuschalten ??? <---"
-fi
+declare -i NewLoad=0
 
 if [[ ${verbose} == 1 ]]; then
     echo "Die optimale Konfiguration besteht aus diesen ${SwitchOnCnt} Karten:"
@@ -580,7 +599,16 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
     # Split the "String" at ":" into the 2 variables "gpu_idx" and "algoidx"
     read gpu_idx algoidx <<<"${GPUINDEXES[$i]//:/ }"
 
+    # Ausfiltern der Guten GPUs aus PossibleCandidateGPUidx.
+    # PossibleCandidateGPUidx enthält dann zum Schluss nur noch ebenfalls abzuschaltende GPUs
+    for gpu_candidate in ${!PossibleCandidateGPUidx[@]}; do
+        if [[ "${PossibleCandidateGPUidx[${gpu_candidate}]}" == "${gpu_idx}" ]]; then
+            unset PossibleCandidateGPUidx[${gpu_candidate}]
+        fi
+    done
+
     declare -n actGPUalgoName="GPU${gpu_idx}Algos"
+    declare -n actGPUalgoWatt="GPU${gpu_idx}Watts"
     declare -n actGPU_UUID="GPU${gpu_idx}UUID"
     gpu_uuid=${actGPU_UUID}
 
@@ -588,6 +616,7 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
     if [ ! ${#RunningGPUid[@]} -eq 0 ]; then
         #############################   CHAOS BEHADLUNG Anfang  #############################
         ### Schweres Thema: IST DER GPU-INDEX NOCH DER SELBE ??? <-----------------------
+        #echo "\${gpu_idx}:${gpu_idx} == \${RunningGPUid[\${gpu_uuid}:${gpu_uuid}]}:${RunningGPUid[${gpu_uuid}]}"
         if [[ "${gpu_idx}" != "${RunningGPUid[${gpu_uuid}]}" ]]; then
             echo "#############################   CHAOS BEHADLUNG   #############################"
             echo "Das gesamte System muss möglicherweise gestoppt und neu gestartet werden:"
@@ -637,7 +666,8 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
                     # Alter und neuer Algo ist gleich, kann weiterlaufen
                     echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin auf \"${actGPUalgoName[${algoidx}]}\""
                 fi
-                printf "${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+                printf "${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+                NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
             else
                 #
                 # Die Karte ist NUN generell DISABLED!
@@ -650,7 +680,7 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
                 # MINER- Behandlung
                 echo "---> SWITCH-OFF: GPU#${gpu_idx} wurde generell DISABLED und ist abzustellen!"
                 echo "---> SWITCH-OFF: Sie läuft noch mit \"${WhatsRunning[${gpu_uuid}]}\""
-                printf "\n" >>${RUNNING_STATE}
+                printf "0:\n" >>${RUNNING_STATE}
             fi
         else
             #
@@ -666,14 +696,15 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
                 ########################################################
                 # MINER- Behandlung
                 echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
-                printf "${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+                printf "${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+                NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
             else
                 #
                 # Die Karte BLEIBT generell DISABLED
                 #
                 # Zeile abschliessen
                 echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin DISABLED"
-                printf "\n" >>${RUNNING_STATE}
+                printf "0:\n" >>${RUNNING_STATE}
             fi
         fi
     else
@@ -694,14 +725,15 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
 
             # MINER- Behandlung
             echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
-            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+            NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
         else
             #
             # Die Karte IST generell DISABLED
             #
             # MINER- Behandlung
             echo "---> SWITCH-OFF: GPU#${gpu_idx} wurde generell DISABLED und ist abzustellen!"
-            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${RUNNING_STATE}
+            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:0:\n" >>${RUNNING_STATE}
         fi
     fi
 
@@ -722,9 +754,21 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
     fi
 done
 
+# Die Guten GPUs sind raus aus PossibleCandidateGPUidx.
+# PossibleCandidateGPUidx enthält jetzt nur noch ebenfalls abzuschaltende GPUs,
+# die wir jetzt auf's SwitchOffGPUs Array packen
+for gpu_candidate in "${PossibleCandidateGPUidx[@]}"; do
+    _push_onto_array SwitchOffGPUs ${gpu_candidate}
+done
+
 ###                                                             ###
 #   ... dann die GPU's, die abgeschaltet werden sollen            #
 ###                                                             ###
+
+declare -i SwitchOffCnt=${#SwitchOffGPUs[@]}
+if [ $((${SwitchOffCnt} + ${SwitchOnCnt})) -ne ${GPUsCnt} ]; then
+    echo "---> ??? Oh je, ich glaube fast, wir haben da ein paar GPU's vergessen abzuschalten ??? <---"
+fi
 
 # Auch hier kann es natürlich vorkommen, dass sich eine Indexnummer geändert hat
 #      und dass dann die CHAOS-BEHANDLUNG durchgeführt werden muss.
@@ -768,7 +812,7 @@ if [ ${SwitchOffCnt} -gt 0 ]; then
                 fi
             fi
         fi
-        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:\n" >>${RUNNING_STATE}
+        printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:0:\n" >>${RUNNING_STATE}
     done
 fi
 if [[ ${verbose} == 1 ]]; then
@@ -778,6 +822,13 @@ fi
 for algoName in ${!AlgoDisabled[@]}; do
     printf "AlgoDisabled:$algoName\n" >>${RUNNING_STATE}
 done
+
+if [ $NoCards ]; then
+    if [[ $NewLoad -gt 0 ]]; then
+        echo "         \"PowerReal_P_Sum\" : $((${ACTUAL_SMARTMETER_KW}-${SUM_OF_RUNNING_WATTS}+${NewLoad})).6099354," \
+             >smartmeter
+    fi
+fi
 
 echo "Neues globales Switching Sollzustand Kommandofile"
 cat ${RUNNING_STATE}

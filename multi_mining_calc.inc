@@ -1,3 +1,4 @@
+#!/bin/bash
 ########################################################################
 #
 #               _push_onto_array
@@ -47,7 +48,7 @@ function _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES () {
     # Jetzt haben wir verschiedene Möglichkeiten, von dem String aus auf die GPU und den Algorithmus zu schließen.
     # Die erste Stelle ist der GPU-Index und der Wert ist der Index in die Algorithmenliste dieser GPU
     # echo "${MAX_PROFIT_GPU_Algo_Combination}"
-    unset GPUINDEXES
+    unset GPUINDEXES; declare -ag GPUINDEXES
     shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
     echo ${MAX_PROFIT_GPU_Algo_Combination} | sed -e 's/\,/ /g' | read -a GPUINDEXES
@@ -358,3 +359,56 @@ _notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING ()
     fi
 }
 
+#####################################################
+# Einlesen des bisherigen Status laufender GPUs
+####################################################
+function _read_in_actual_RUNNING_STATE () {
+    if [ -f ${RUNNING_STATE} ]; then
+        shopt_cmd_before=$(shopt -p lastpipe)
+        shopt -s lastpipe
+
+        unset RUNNING_STATE_CONTENT
+        unset AlgoDisabled; declare -Ag AlgoDisabled
+        unset RunningGPUid; declare -Ag RunningGPUid
+        unset WasItEnabled; declare -Ag WasItEnabled
+        unset RunningWatts; declare -Ag RunningWatts
+        unset WhatsRunning; declare -Ag WhatsRunning
+        cat ${RUNNING_STATE} \
+            | grep -e "^GPU-\|^AlgoDisabled" \
+            | readarray -n 0 -O 0 -t RUNNING_STATE_CONTENT
+
+        for (( i=0; $i<${#RUNNING_STATE_CONTENT[@]}; i++ )); do
+            if [[ "${RUNNING_STATE_CONTENT[$i]:0:4}" == "GPU-" ]]; then
+                read RunningUUID RunningGPUidx GenerallyEnabled Watt RunningAlgo <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
+                RunningGPUid[${RunningUUID}]=${RunningGPUidx}
+                WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
+                RunningWatts[${RunningUUID}]=${Watt}
+                WhatsRunning[${RunningUUID}]=${RunningAlgo}
+            else
+                read muck AlgoName <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
+                AlgoDisabled[${AlgoName}]=1
+            fi
+        done
+
+        ${shopt_cmd_before}
+
+        if [[ ${verbose} == 1 ]]; then
+            if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
+                echo "---> Alledgedly Running GPUs/Algos"
+                for lfdUUID in ${!RunningGPUid[@]}; do
+                    echo "GPU-Index      : ${RunningGPUid[$lfdUUID]}, UUID=$lfdUUID"
+                    echo "War sie Enabled? $((${WasItEnabled[$lfdUUID]} == 1))"
+                    echo "Wieviel Watt   : ${RunningWatts[$lfdUUID]}"
+                    echo "Running Algo   : ${WhatsRunning[$lfdUUID]}"
+                done
+            fi
+            if [[ ${#AlgoDisabled[@]} -gt 0 ]]; then
+                echo "---> Temporarily Disabled Algos"
+                for algoName in ${!AlgoDisabled[@]}; do echo $algoName; done
+            fi
+        fi
+
+        # Sichern der alten Datei. Vielleicht brauchen wir sie bei einem Abbruch zur Analyse
+        cp -f ${RUNNING_STATE} ${RUNNING_STATE}.BAK
+    fi  ### if [ -f ${RUNNING_STATE} ]; then
+}

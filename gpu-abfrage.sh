@@ -182,10 +182,9 @@ for ((i=0; $i<${#index[@]}; i+=1)) ; do
         echo "Erstelle den GPU-Folder '${uuid[${index[$i]}]}'"
         mkdir ${uuid[${index[$i]}]}
         cp GPU-skeleton/benchmark_skeleton.json ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json
-        cp GPU-skeleton/gpu_gv-algo.sh ${uuid[${index[$i]}]}/
         echo "---> 1. Die Karte ist neu! Bitte editiere die Datei 'benchmark_${uuid[${index[$i]}]}.json' !!!"
-        echo "---> 2. gpu_gv-algo.sh ist reinkopiert"
     fi
+    if [ ! -f "${uuid[${index[$i]}]}/gpu_gv-algo.sh" ]; then cp GPU-skeleton/gpu_gv-algo.sh ${uuid[${index[$i]}]}/; fi
 
     echo Kartenverzeichnis ${name[${index[$i]}]} existiert
     echo ${index[$i]} > ${uuid[${index[$i]}]}/gpu_index.in
