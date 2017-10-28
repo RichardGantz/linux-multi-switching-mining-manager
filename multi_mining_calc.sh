@@ -535,17 +535,16 @@ if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
     #
     echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
     for (( numGPUs=1; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
-        # Parameter: $1 = numGPUs, die zu berechnen sind
-        #            $2 = maxTiefe
-        #            $3 = Beginn Pointer1 bei Index 0
-        #            $4 = Ende letzter Pointer 5
-        #            $5-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
+        # Parameter: $1 = maxTiefe
+        #            $2 = Beginn Pointer1 bei Index 0
+        #            $3 = Ende letzter Pointer 5
+        #            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
         #                 in der sie sich selbst gerade befindet.
         endStr="GPU von ${MAX_GOOD_GPUs} läuft:"
         if [[ ${numGPUs} -gt 1 ]]; then endStr="GPUs von ${MAX_GOOD_GPUs} laufen:"; fi
         echo "Berechnung aller Kombinationen des Falles, dass nur ${numGPUs} ${endStr}"
         _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES \
-            ${numGPUs} ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))
+            ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))
     done
 
 fi  # if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then

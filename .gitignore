@@ -67,12 +67,16 @@ GLOBAL_GPU_SYSTEM_STATE\.BAK
 
 GLOBAL_GPU_SYSTEM_STATE\.in
 
+*.in~
+
 *.inc~
+
+*.json~
+
+*.sh~
 
 BTCEURkurs~
 
 FATAL_ERRORS\.log
 
 GPU-skeleton/synctest\.sh
-
-GPU-skeleton/synctest\.sh~
