@@ -70,7 +70,6 @@ SYSTEM_FILE="gpu_system.out"
 SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE"
 
 unset READARR
-unset ENABLED_UUIDs
 if [ $NoCards ]; then
     gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >${SYSTEM_FILE}
 else
@@ -80,11 +79,11 @@ fi
 readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 
 # Die Daten der GPUs in Arrays einlesen, die durch den GPU-Grafikkarten-Index indexiert werden können
-declare -a index
-declare -a name
-declare -a bus
-declare -a uuid
-declare -a auslastung
+unset index;      declare -a index
+unset name;       declare -a name
+unset bus;        declare -a bus
+unset uuid;       declare -a uuid
+unset auslastung; declare -a auslastung
 for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     j=$(expr $i / 5)
     index[$j]=${READARR[$i]}        # index[] = Grafikkarten-Index für miner
@@ -92,6 +91,12 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     bus[${index[$j]}]=${READARR[$i+2]}
     uuid[${index[$j]}]=${READARR[$i+3]}
     auslastung[${index[$j]}]=${READARR[$i+4]}
+    # EXTREM WICHTIGE Deklarationen!
+    declare -ag "GPU${index[$j]}Algos"
+    declare -ag "GPU${index[$j]}Watts"
+    declare -ag "GPU${index[$j]}Mines"
+    # (23.10.2017) Wir nehmen der Bequemlichkeit halber noch ein Array mit der UUID auf
+    declare -ag "GPU${index[$j]}UUID"
 done
 
 # Die folgende Datei gpu_system_state.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
@@ -105,10 +110,13 @@ done
 # Eventuell können wir hier auch die temporär disabelten Algos (automatisch?) eintragen lassen
 #     und durchschleifen. DARUM KÜMMERN WIR UNS ABER, WENN ES SOWEIT IST.
 #     (Hier ist erst mal nur das Einlesen mitgemacht, weil der Code schon im multi_mining_calc.sh so drin war.)
-declare -A uuidEnabled
-declare -A AlgoDisabled
+unset ENABLED_UUIDs
+unset uuidEnabledSOLL; declare -A uuidEnabledSOLL
+unset AlgoDisabled;    declare -A AlgoDisabled
+unset NumEnabledGPUs;  declare -i NumEnabledGPUs
 if [ -s ${SYSTEM_STATE}.in ]; then
     cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
+    shopt_cmd_before=$(shopt -p lastpipe)
     shopt -s lastpipe
     cat ${SYSTEM_STATE}.in \
         | grep -e "^GPU-\|^AlgoDisabled" \
@@ -119,12 +127,14 @@ if [ -s ${SYSTEM_STATE}.in ]; then
             echo ${ENABLED_UUIDs[$i]} \
                  | cut -d':' --output-delimiter=' ' -f1,3 \
                  | read UUID GenerallyEnabled
-            uuidEnabled[${UUID}]=${GenerallyEnabled}
+            declare -i uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
+            NumEnabledGPUs+=${GenerallyEnabled}
         else
             read muck AlgoName <<<"${ENABLED_UUIDs[$i]//:/ }"
             AlgoDisabled[${AlgoName}]=1
         fi
     done
+    ${shopt_cmd_before}
 fi
 
 printf 'Über diese Datei schalten wir GPUs MANUELL gezielt ein oder aus.\n'                   >${SYSTEM_STATE}.out
@@ -145,8 +155,8 @@ for ((i=0; $i<${#index[@]}; i+=1)) ; do
     # Mehr GPUs muss es auch in der ${SYSTEM_STATE}.out Datei nicht geben.
     # Wir geben sie hier mit eingelesenem oder Default-Status aus...
     enabledState=1
-    if [ -n "${uuidEnabled[${uuid[${index[$i]}]}]}" ]; then
-        enabledState=${uuidEnabled[${uuid[${index[$i]}]}]}
+    if [ -n "${uuidEnabledSOLL[${uuid[${index[$i]}]}]}" ]; then
+        enabledState=${uuidEnabledSOLL[${uuid[${index[$i]}]}]}
     fi
     printf "${uuid[${index[$i]}]}:${name[${index[$i]}]}:${enabledState}\n"                   >>${SYSTEM_STATE}.out
 done
@@ -190,33 +200,3 @@ for ((i=0; $i<${#index[@]}; i+=1)) ; do
     echo ${index[$i]} > ${uuid[${index[$i]}]}/gpu_index.in
 done
 
-exit
-
-#########################################
-#
-#
-# Wieder aufrufung der abfrage, falls eine karte nach starten der miner nicht mehr aufgteslistet ist,
-# oder keine $auslastung mehr aufweist(prüfung ob mit der karte gemined wird "uuid/mining[1 oder 0]")
-# muss die karte resetet werden, und erneut geprüft werden ob sie wieder funktioniert,
-# ansonsten reboot des gesammten systems
-# nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader
-#
-#
-#
-nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
-gawk -e '{ sub(/\,/,"",$N); print $N}'  \
-> gpu_system_check.out
-
-index_uuid=$($uuid/gpu_index.in)
-index_system= ($gpu_system.out) # <--- steht im array aray per while durchlaufen und kontrolieren
-
-if [ -d $index_uuid nicht gleich "$index=$uuid" ]; then
-    #GPU reset oder neustart des ganzensystems(noch zu prüfen)
-    echo karte muss neu initialisiert werden
-else
-    touch $INDEX > $uuid/gpu_index.in
-fi
-
-# überprüfung der variablen ob diese noch gleich sind "index" == "uuid"
-# wenn nicht neu einrichtung der index zahlen in den uuid foldern und
-# versuch der neueinbindung der GPU bzw "reperatur"
