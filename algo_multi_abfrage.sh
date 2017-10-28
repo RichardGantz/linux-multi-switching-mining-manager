@@ -67,7 +67,7 @@ _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
                  Entscheide bitte, wie lange Du die gerade laufenden Miner \
                  mit den immer mehr veraltenden Zahlpreisen laufen lassen möchtest!"
         if [[ ! "$NoAlgoNames_recorded" == "1" ]]; then
-            echo $(date "+%F %H:%M:%S") "curl - Kurse-Abfrage hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
+            echo $(date "+%F %H:%M:%S") "curl - $1 hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
             echo "                    Hier: Down wegen Wartungsarbeiten ODER 404 Page not found" >>FATAL_ERRORS.log
             NoAlgoNames_recorded=1
         fi
@@ -99,7 +99,9 @@ _create_ALGOS_in()
         | tee $ALGO_NAMES_WEB \
         | grep -i -c -m 1 -e '<title>[^<]\+</title>' )
 
-    if [[ ! "${algoPageDown}" == "0" ]]; then
+    #     [ $algoPageDown != 0 ]     sagt uns, dass <title> enthalten ist, was wir nicht brauchen können.
+    # und [ ! -s $algoID_KURSE_WEB ] sagt uns, dass die Datei nicht vorhanden oder vorhanden aber leer ist.
+    if [[ "${algoPageDown}" != "0" || ! -s $ALGO_NAMES_WEB ]]; then
         _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${ALGO_NAMES_WEB}" "${ALGO_NAMES_ARR}"
     else
         # Fehler scheint behoben, Benachrichtigung wieder scharf machen
@@ -218,12 +220,16 @@ while [ 1 -eq 1 ] ; do
         | tee $algoID_KURSE_WEB \
         | grep -i -c -m 1 -e '<title>[^<]\+</title>' )
 
-    # echo ${pageDown}; exit
-    # Das hat am 16.10.2017 gegen 10:20 Uhr leider nicht funktioniert!
-    # Muss nochmal ermittelt werden, warum der trotz maintenance nicht hier
-    # abgebogen ist.
-    # changed 'if [[ ! "$pageDown" == "0" ]]; then' to:
-    if [[ ! "${pageDown}" == "0" ]]; then
+    # ACHTUNG: Die Suche nach einem <title> und das Finden desselben zeigt an, dass es sich nicht um die .json
+    #          Datei handelt, die wir erwarten.
+    # A B E R: Eine komplett leere Datei (z.B. nach dem Ausfall des Internet) enthält AUCH KEINEN <title>
+    #          und würde daher erst mal als "gültige" .json interpretiert werden,
+    #          WAS WIR VERHINDERN MÜSSEN!
+    #     [ $pageDown != 0 ]         sagt uns, dass <title> enthalten ist, was wir nicht brauchen können.
+    # und [ ! -s $algoID_KURSE_WEB ] sagt uns, dass die Datei nicht vorhanden oder vorhanden aber leer ist.
+    #          In beiden Fällen lassen wir die .in - Datei unberührt und hoffen, dass der Abruf aus dem Web
+    #          bald wieder eine gültige Datei liefert.
+    if [[ "${pageDown}" != "0" || ! -s $algoID_KURSE_WEB ]]; then
         _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${algoID_KURSE_WEB}" "${algoID_KURSE_ARR}"
     else
         echo "--------------------------------------------------------------------"
@@ -266,7 +272,7 @@ while [ 1 -eq 1 ] ; do
         | grep -i -c -m 1 -e '<title>Bitcoins kaufen, Bitcoin Kurs bei Bitcoin.de!</title>' )
     echo "--------------------------------------------------------------------"      
         
-    if [[ ! "${btcPageValid}" == "1" ]]; then
+    if [[ "${btcPageValid}" != "1" || ! -s $BTC_EUR_KURS_WEB ]]; then
         _notify_about_NO_BTC_KURS "${BTC_EUR_KURS_WEB}" "BTC_EUR_kurs.in"
         echo "###########################################################################"
         echo "------------> ACHTUNG: Nicht aktualisierter BTC Kurs: $(<BTC_EUR_kurs.in) <------------"

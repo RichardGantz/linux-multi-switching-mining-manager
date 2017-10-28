@@ -1,19 +1,76 @@
 #!/bin/bash
 ###############################################################################
 #
-#  GPU - Gewinn - Verlust - Alogirthmus - Berechnung - Auswahl
-#  Schleife alle 31 Sekunden, sobald neue Kurse eingelesen wurden
-#  
-# gv_GRID.out ; gv_solar_akku.out ; gv_solar.out
-# 
-# die Outs geben den zu berechnenden Algo aus
+#  GPU - Algorithmus - Berechnung - BTC "Mines" anhand aktueller Kurse
 #
+#  1. Neustart des Skripts bekommt eine PID, die nur in der Prozesstabelle vorhanden ist
+#  2. Merkt sich die eigene UUID in ${GPU_DIR}
+#  3. Definiert _update_SELF_if_necessary()
+#  4. Ruft update_SELF_if_necessary()
+#  5. Schreibt seine PID in eine gleichnamige Datei mit der Endung .pid
+#  6. Prüft, ob die Benchmarkdatei jemals bearbeitet wurde und bricht ab, wenn nicht.
+#     Dann gibt es nämlich keine Benchmark- und Wattangaben zu den einzelnen Algorithmen.
+#  7. Definiert _read_BENCHFILE_in(), welches Benchmark- und Wattangaben pro Algorithmus
+#     aus der Datei benchmark_${GPU_DIR}.json
+#     in die Assoziativen Arrays bENCH["AlgoName"] und WATTS["AlgoName"] aufnimmt
+#  8. Ruft _read_BENCHFILE_in() und hat jetzt die beiden Arrays zur Verfügung und kennt das "Alter"
+#     der Benchmarkdatei zum Zeitpunkt des Einlesens in der Variablen ${BENCHFILE_last_age_in_seconds}
+#  9. Definiert _read_ALGOs_in(), welches nur dann etwas im Arbeitsspeicher ändert, wenn die Datei
+#     ../ALGO_NAMES.in existiert und nicht leer ist:
+#     Dann liest sie die Datei in die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] ein
+#     und merkt sich das "Alter" der eingelesenen Datei in der Variablen ${ALGO_NAMES_last_age_in_seconds}
+# 10. Definiert _read_KURSE_in(), welches die Datei "../KURSE.in" in das Array KURSE["AlgoName"] aufnimmt.
+#     Das Alter dieser Datei ist unwichtig, weil sie IMMER durch algo_multi_abfrage.sh aus dem Web aktualisiert wird.
+#     Andere müssen dafür sorgen, dass die Daten in dieser Datei gültig sind!
+# 11. ###WARTET### jetzt, bis das SYNCFILE="../you_can_read_now.sync" vorhanden ist.
+#                         und merkt sich dessen "Alter" in der Variable ${new_Data_available}
+# 12. ###WARTET### jetzt, bis die Datei ALGO_NAMES="../ALGO_NAMES.in" vorhanden und NICHT LEER ist.
+# 13. Ruft _read_ALGOs_in und hat jetzt die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] zur Verfügung,
+#     FALLS die Datei ../ALGO_NAMES.in existiert und nicht leer ist!
+#     ---> Ansonsten sind die beiden Arrays NICHT DEFINIERT! <--- (was kein guter Zustand ist und wir nochmal
+#                                                                  die Konsequenzen untersuchen müssen!!!)
+#          Wenn diese Arrays nicht da sind, kann nichts berechnet werde.
+#          Alle weiteren Schritte sind SINNLOS und das Skript sollte NICHTS WEITER UNTERNEHMEN!
+#          Wir müssen also später zu dieser Stelle zurückkehren und WISSEN, ob algo_multi_abfrage.sh
+#          WIRKLICH SICHERSTELLT, DASS DIESE DATEI DA IST UND GÜLTIGEN INHALT HAT, WENN "this" an dieser
+#          Stelle vorbeikommt und die Datei einlesen will.
 #
+# 14. EINTRITT IN DIE ENDLOSSCHLEIFE. Die folgenden Aktionen werden immer und immer wieder durchgeführt,
+#                                     solange dieser Prozess läuft.
+#  1. Ruft _update_SELF_if_necessary
+#  2. Ruft _read_BENCHFILE_in falls die Quelldatei upgedated wurde.
+#                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
+#  3. Ruft _read_ALGOs_in     falls die Quelldatei upgedated wurde.
+#                             => Aktuelle Arrays kMGTP["AlgoName"] und ALGOs["algoID"]
+#  4. ###WARTET### jetzt, bis die Datei "../KURSE.in" vorhanden und NICHT LEER ist.
+#  5. Ruft _read_KURSE_in     => Array KURSE["AlgoName"] verfügbar
+#  6. Berechnet jetzt die "Mines" in BTC und schreibt die folgenden Angaben in die Datei ALGO_WATTS_MINES.in :
+#               AlgoName
+#               Watt
+#               BTC "Mines"
+#     sofern diese Daten tatsächlich vorhanden sind.
+#     Algorithmen mit fehlenden Benchmark- oder Wattangaben, etc. werden NICHT beachtet.
 #
+#     Das "Alter" der Datei ALGO_WATTS_MINES.in Sekunden ist Hinweis für multi_mining_calc.sh,
+#     ob mit der Gesamtsystem-Gewinn-Verlust-Berechnung begonnen werden kann.
+#
+#  7. Die Daten für multi_mining_calc.sh sind nun vollständig verfügbar.
+#     Es ist jetzt erst mal die Berechnung durch multi_mining_calc.sh abzuwarten, um wissen zu können,
+#     ob diese GPU ein- oder ausgeschaltet werden soll.
+#     Vielleicht können wir das sogar hier drin tun, nachdem das Ergebnis für diese GPU feststeht ???
+#
+#     ###WARTET### jetzt, bis das "Alter" der Datei ${SYNCFILE} aktueller ist als ${new_Data_available}
+#                         mit der Meldung "Waiting for new actual Pricing Data from the Web..."
+#  8. Merkt sich das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available}
+#
+# 15. VORLÄUFIGES ENDE DER ENDLOSSCHLEIFE
 #
 ###############################################################################
+#  1. Neustart des Skripts bekommt eine PID, die nur in der Prozesstabelle vorhanden ist
+#  2. Merkt sich die eigene UUID in ${GPU_DIR}
 SRC_DIR=GPU-skeleton
 GPU_DIR=$(pwd | gawk -e 'BEGIN { FS="/" }{print $NF}')
+#  3. Definiert _update_SELF_if_necessary()
 _update_SELF_if_necessary()
 {
     ###
@@ -42,11 +99,19 @@ _update_SELF_if_necessary()
 }
 # Beim Neustart des Skripts gleich schauen, ob es eine aktuellere Version gibt
 # und mit der neuen Version neu starten.
+#  4. Ruft update_SELF_if_necessary()
 _update_SELF_if_necessary
 
+# Diese Prozess-ID ändert sich durch den Selbst-Update NICHT!!!
+# Sie ist auch nach dem Selbst-Update noch die Selbe.
+# Es ist immer noch der selbe Prozess.
+# Diese Datei sollte aber auch immer zusammen mit dem Prozess verschwinden, was wir noch konstruieren müssen.
+#  5. Schreibt seine PID in eine gleichnamige Datei mit der Endung .pid
 echo $$ >$(basename $0 .sh).pid
 
 # Die Quelldaten Miner- bzw. AlgoName, BenchmarkSpeed und WATT für diese GraKa
+#  6. Prüft, ob die Benchmarkdatei jemals bearbeitet wurde und bricht ab, wenn nicht.
+#     Dann gibt es nämlich keine Benchmark- und Wattangaben zu den einzelnen Algorithmen.
 BENCHFILE_SRC=../${SRC_DIR}/benchmark_skeleton.json
 BENCHFILE="benchmark_${GPU_DIR}.json"
 diff -q $BENCHFILE $BENCHFILE_SRC &>/dev/null
@@ -67,9 +132,9 @@ fi
 #
 ######################################
 
-# Zwischendatei für Diagnosezwecke.
-# Das ist das, was der readarray über Standard Input bekommt
-#    nach Auswertung der Datei $BENCHFILE
+#  7. Definiert _read_BENCHFILE_in(), welches Benchmark- und Wattangaben pro Algorithmus
+#     aus der Datei benchmark_${GPU_DIR}.json
+#     in die Assoziativen Arrays bENCH["AlgoName"] und WATTS["AlgoName"] aufnimmt
 bENCH_SRC="bENCH.in"
 # Ein bisschen Hygiene bei Änderung von Dateinamen
 bENCH_SRC_OLD=""; if [ -f "$bENCH_SRC_OLD" ]; then rm "$bENCH_SRC_OLD"; fi
@@ -118,6 +183,8 @@ _read_BENCHFILE_in()
 }
 # Auf jeden Fall beim Starten das Array bENCH[] und WATTS[] aufbauen
 # Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
+#  8. Ruft _read_BENCHFILE_in() und hat jetzt die beiden Arrays zur Verfügung und kennt das "Alter"
+#     der Benchmarkdatei zum Zeitpunkt des Einlesens in der Variablen ${BENCHFILE_last_age_in_seconds}
 _read_BENCHFILE_in
 
 ###############################################################################
@@ -128,6 +195,10 @@ _read_BENCHFILE_in
 #
 ######################################
 
+#  9. Definiert _read_ALGOs_in(), welches nur dann etwas im Arbeitsspeicher ändert, wenn die Datei
+#     ../ALGO_NAMES.in existiert und nicht leer ist:
+#     Dann liest sie die Datei in die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] ein
+#     und merkt sich das "Alter" der eingelesenen Datei in der Variablen ${ALGO_NAMES_last_age_in_seconds}
 ALGO_NAMES="../ALGO_NAMES.in"
 # Ein bisschen Hygiene bei Änderung von Dateinamen
 ALGO_NAMES_OLD=""; if [ -f "$ALGO_NAMES_OLD" ]; then rm "$ALGO_NAMES_OLD"; fi
@@ -171,6 +242,9 @@ _read_ALGOs_in()
 #
 ######################################
 
+# 10. Definiert _read_KURSE_in(), welches die Datei "../KURSE.in" in das Array KURSE["AlgoName"] aufnimmt.
+#     Das Alter dieser Datei ist unwichtig, weil sie IMMER durch algo_multi_abfrage.sh aus dem Web aktualisiert wird.
+#     Andere müssen dafür sorgen, dass die Daten in dieser Datei gültig sind!
 KURSE_in="../KURSE.in"
 # Ein bisschen Hygiene bei Änderung von Dateinamen
 KURSE_in_OLD=""; if [ -f "$KURSE_in_OLD" ]; then rm "$KURSE_in_OLD"; fi
@@ -200,16 +274,29 @@ _read_KURSE_in()
 # noch nicht gelaufen ist, warten wir das einfach ab und sehen sekündlich nach,
 # ob die Datei nun da ist und die Daten zur Verfügung stehen.
 
-SYNCFILE=../you_can_read_now.sync
-while [ ! -f $SYNCFILE ]; do
-    echo "###---> Waiting for $SYNCFILE to become available..."; sleep 1
+# 11. ###WARTET### jetzt, bis das SYNCFILE="../you_can_read_now.sync" vorhanden ist.
+#                         und merkt sich dessen "Alter" in der Variable ${new_Data_available}
+SYNCFILE="../you_can_read_now.sync"
+while [ ! -f ${SYNCFILE} ]; do
+    echo "###---> Waiting for ${SYNCFILE} to become available..."; sleep 1
 done
+new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
 
 # Auf jeden Fall beim Starten die zwei Arrays aufbauen.
 # Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
+# 12. ###WARTET### jetzt, bis die Datei ALGO_NAMES="../ALGO_NAMES.in" vorhanden und NICHT LEER ist.
 while [ ! -s $ALGO_NAMES ]; do
     echo "###---> Waiting for $ALGO_NAMES to become available..."; sleep 1
 done
+# 13. Ruft _read_ALGOs_in und hat jetzt die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] zur Verfügung,
+#     FALLS die Datei ../ALGO_NAMES.in existiert und nicht leer ist!
+#     ---> Ansonsten sind die beiden Arrays NICHT DEFINIERT! <--- (was kein guter Zustand ist und wir nochmal
+#                                                                  die Konsequenzen untersuchen müssen!!!)
+#          Wenn diese Arrays nicht da sind, kann nichts berechnet werde.
+#          Alle weiteren Schritte sind SINNLOS und das Skript sollte NICHTS WEITER UNTERNEHMEN!
+#          Wir müssen also später zu dieser Stelle zurückkehren und WISSEN, ob algo_multi_abfrage.sh
+#          WIRKLICH SICHERSTELLT, DASS DIESE DATEI DA IST UND GÜLTIGEN INHALT HAT, WENN "this" an dieser
+#          Stelle vorbeikommt und die Datei einlesen will.
 _read_ALGOs_in
 
 ###############################################################################
@@ -255,40 +342,44 @@ GRID[0]="netz"
 GRID[1]="solar"
 GRID[2]="solar_akku"
 
+#
+# 14. EINTRITT IN DIE ENDLOSSCHLEIFE. Die folgenden Aktionen werden immer und immer wieder durchgeführt,
+#                                     solange dieser Prozess läuft.
 while [ 1 -eq 1 ] ; do
     
     # If there is a newer version of this script, update it before the next run
+    #  1. Ruft _update_SELF_if_necessary
     _update_SELF_if_necessary
 
     # Ist die Benchmarkdatei mit einer aktuellen Version überschrieben worden?
+    #  2. Ruft _read_BENCHFILE_in falls die Quelldatei upgedated wurde.
+    #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
     if [[ $BENCHFILE_last_age_in_seconds < $(date --utc --reference=$BENCHFILE +%s) ]]; then
         echo "###---> Updating Arrays bENCH[] und WATTs[] from $BENCHFILE"
         _read_BENCHFILE_in
     fi
 
-    # Ist die Datei ALGO_NAMES mit einer aktuellen Version überschrieben worden?
-    if [[ $ALGO_NAMES_last_age_in_seconds < $(date --utc --reference=$ALGO_NAMES +%s) ]]; then
-        echo "###---> Updating Arrays ALGOs[] und kMGTP[] from $ALGO_NAMES"
-        _read_ALGOs_in
-    fi
-        
     # Die Reihenfolge der Dateierstellungen durch ../algo_multi_abfrage.sh ist:
     #     1.: $ALGO_NAMES
     #     2.: $KURSE_in
     #     3.: ../BTC_EUR_kurs.in
-    # Letzte: $SYNCFILE
-    # Und die Letzte wurde gerade erst geschrieben, deshalb sind wir unten aus der
-    # Warteschleife gefallen.
-    # Es ist jetzt sehr sicher, die Daten alle einzulesen
-    # Nach der Verarbeitung warten wir unten, bis $SYNCFILE
-    #    - und damit die neuen Daten - aktualisiert wurden
-    new_Data_available=$(date --utc --reference=$SYNCFILE +%s)
+    # Letzte: ${SYNCFILE}
+
+    # Ist die Datei ALGO_NAMES mit einer aktuellen Version überschrieben worden?
+    #  3. Ruft _read_ALGOs_in     falls die Quelldatei upgedated wurde.
+    #                             => Aktuelle Arrays kMGTP["AlgoName"] und ALGOs["algoID"]
+    if [[ $ALGO_NAMES_last_age_in_seconds < $(date --utc --reference=$ALGO_NAMES +%s) ]]; then
+        echo "###---> Updating Arrays ALGOs[] und kMGTP[] from $ALGO_NAMES"
+        _read_ALGOs_in
+    fi
 
     # Einlesen und verarbeiten der aktuellen Kurse, sobald die Datei vorhanden und nicht leer ist
+    #  4. ###WARTET### jetzt, bis die Datei "../KURSE.in" vorhanden und NICHT LEER ist.
     while [ ! -s $KURSE_in ]; do
         echo "###---> Waiting for $KURSE_in to become available..."
         sleep 1
     done
+    #  5. Ruft _read_KURSE_in     => Array KURSE["AlgoName"] verfügbar
     _read_KURSE_in
 
     ###############################################################################
@@ -300,6 +391,15 @@ while [ 1 -eq 1 ] ; do
     # einliest, wenn sie auch komplett ist und geschlossen wurde.
     # -----------------> IST NOCH ZU IMPLEMENTIEREN IN multi_mining_calc.sh <-----------------
     date --utc +%s >ALGO_WATTS_MINES.lock
+    #  6. Berechnet jetzt die "Mines" in BTC und schreibt die folgenden Angaben in die Datei ALGO_WATTS_MINES.in :
+    #               AlgoName
+    #               Watt
+    #               BTC "Mines"
+    #     sofern diese Daten tatsächlich vorhanden sind.
+    #     Algorithmen mit fehlenden Benchmark- oder Wattangaben, etc. werden NICHT beachtet.
+    #
+    #     Das "Alter" der Datei ALGO_WATTS_MINES.in Sekunden ist Hinweis für multi_mining_calc.sh,
+    #     ob mit der Gesamtsystem-Gewinn-Verlust-Berechnung begonnen werden kann.
     rm -f ALGO_WATTS_MINES.in
     for algo in ${!ALGOs[@]}; do
         algorithm=${ALGOs[$algo]}
@@ -324,12 +424,24 @@ while [ 1 -eq 1 ] ; do
     #############################################################################
     #
     #
-    # Warten auf neue aktuelle daten aus dem Web.
+    # Warten auf neue aktuelle Daten aus dem Web, die durch
+    #        algo_multi_abfrage.sh
+    # beschafft werden müssen und deren Gültigkeit sichergestellt werden muss!
     #
     #
+    #
+    #  7. Die Daten für multi_mining_calc.sh sind nun vollständig verfügbar.
+    #     Es ist jetzt erst mal die Berechnung durch multi_mining_calc.sh abzuwarten, um wissen zu können,
+    #     ob diese GPU ein- oder ausgeschaltet werden soll.
+    #     Vielleicht können wir das sogar hier drin tun, nachdem das Ergebnis für diese GPU feststeht ???
+    #
+    #     ###WARTET### jetzt, bis das "Alter" der Datei ${SYNCFILE} aktueller ist als ${new_Data_available}
+    #                         mit der Meldung "Waiting for new actual Pricing Data from the Web..."
     echo "Waiting for new actual Pricing Data from the Web..."
-    while [ $new_Data_available == $(date --utc --reference=$SYNCFILE +%s) ] ; do
+    while [ ${new_Data_available} == $(date --utc --reference=${SYNCFILE} +%s) ] ; do
         sleep 1
     done
+    #  8. Merkt sich das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available}
+    new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
     
 done

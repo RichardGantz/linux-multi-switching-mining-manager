@@ -14,22 +14,21 @@
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
 
-# Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
-# und müssen sich auf den Inhalt fixer Dateien beziehen.
-if [ $HOME == "/home/richard" ]; then NoCards=true; fi
-
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
 verbose=0
 
-SYSTEM_FILE="gpu_system.out"
-# ACHTUNG: Hier muss das .in in der Variable SYSTEM_STATE enthalten sein.
-#          In dem Skript gpu-abfrage.sh ist die Variable ohne ".in" !!!
-SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE.in"
+# Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
+# und müssen sich auf den Inhalt fixer Dateien beziehen.
+# ---> wird in gpu-abfrage.sh gesetzt, das wir bald als "source" hinzunehmen <---
+#NoCards:        if [ $HOME == "/home/richard" ]; then NoCards=true; fi
+#SYSTEM_FILE:    "gpu_system.out"
+#SYSTEM_STATE:   "GLOBAL_GPU_SYSTEM_STATE"
+
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
 RUNNING_STATE="GLOBAL_GPU_ALGO_RUNNING_STATE"
 
-SYNCFILE=you_can_read_now.sync
+SYNCFILE="you_can_read_now.sync"
 
 GRID[0]="netz"
 GRID[1]="solar"
@@ -38,79 +37,13 @@ GRID[2]="solar_akku"
 # Funktionen Definitionen ausgelagert
 source ./multi_mining_calc.inc
 
-
-
-
-# Diese Abfrage erzeugt die beiden o.g. Dateien SYSTEM_FILE="gpu_system.out" und SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE.in"
-./gpu-abfrage.sh
-
-# In der Datei "GLOBAL_GPU_SYSTEM_STATE.in" können die Enabled-Flags am Ende jeder Zeile
-#    manuell auf 0 geändert werden für DISABLED oder wieder auf 1 für ENABLED.
-#    Wir merken uns den globalen Enabled SOLL-Status gleich
-#    in dem Assoziativen Array IsItEnabled[$uuid] der entsprechenden UUID
-unset ENABLED_UUIDs
-declare -A uuidEnabledSOLL
-declare -i NumEnabledGPUs
-if [ -f ${SYSTEM_STATE} ]; then
-    shopt_cmd_before=$(shopt -p lastpipe)
-    shopt -s lastpipe
-    cat ${SYSTEM_STATE} \
-        | grep -e "^GPU-" \
-        | readarray -n 0 -O 0 -t ENABLED_UUIDs
-
-    for (( i=0; $i<${#ENABLED_UUIDs[@]}; i++ )); do
-        echo ${ENABLED_UUIDs[$i]} \
-            | cut -d':' --output-delimiter=' ' -f1,3 \
-            | read UUID GenerallyEnabled
-        declare -i uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
-        NumEnabledGPUs+=${GenerallyEnabled}
-    done
-    ${shopt_cmd_before}
-fi
-    
-unset READARR
-readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
-# Aus den GPU-Index:Name:Bus:UUID:Auslastung Paaren ein paar Grunddaten 
-#     jeder Grafikkarte für den Dispatcher erstellen
-declare -a index
-declare -a name
-#declare -a bus
-declare -a uuid
-#declare -a auslastung
-for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
-    j=$(expr $i / 5)
-    index[$j]=${READARR[$i]}        # index[] = Grafikkarten-Index für miner
-    name[${index[$j]}]=${READARR[$i+1]}
-    #bus[${index[$j]}]=${READARR[$i+2]}
-    uuid[${index[$j]}]=${READARR[$i+3]}
-    #auslastung[${index[$j]}]=${READARR[$i+4]}
-
-    # Was benötigen wir für später noch alles?
-    # (Möglicherweise definieren wir das tatsächlich erst später, um übersichtlich zu bleiben?)
-    # Pro GPU 3 Arrays mit Variablen Namen. Das ist ein extra Thema,
-    # das nicht so leicht zu durchschauen ist.
-    # Diese Deklarationen FUNKTIONIEREN jedenfalls erstaunlicherweise und wir haben dann für jede GPU
-    # 3 Arrays mit folgenden Namen:
-    # GPU#0 Array mit Algonamen heisst GPU0Algos[]
-    # GPU#0 Array mit Wattzahlen heisst GPU0Watts[]
-    # GPU#0 Array mit Brutto-Mining heisst GPU0Mines[]
-    # GPU#1 Array mit Algonamen heisst GPU1Algos[]
-    # GPU#1 Array mit Wattzahlen heisst GPU1Watts[]
-    # GPU#1 Array mit Brutto-Mining heisst GPU1Mines[]
-    # GPU#2 Array mit Algonamen heisst GPU2Algos[]
-    # GPU#2 Array mit Wattzahlen heisst GPU2Watts[]
-    # GPU#2 Array mit Brutto-Mining heisst GPU2Mines[]
-    # usw. ...
-    # "GPU${idx}Algos" für die bis zu 3 (GRID) best-Algos,
-    # "GPU${idx}Watts" deren Watt-Verbrauch und
-    # "GPU${idx}Mines" deren Brutto-Verdienst
-    declare -ag "GPU${index[$j]}Algos"
-    declare -ag "GPU${index[$j]}Watts"
-    declare -ag "GPU${index[$j]}Mines"
-    # (23.10.2017) Wir nehmen der Bequemlichkeit halber noch ein Array mit der UUID auf
-    declare -ag "GPU${index[$j]}UUID"
-
-done
+# Diese Abfrage erzeugt die beiden Dateien "gpu_system.out" und "GLOBAL_GPU_SYSTEM_STATE.in"
+# Daten von "GLOBAL_GPU_SYSTEM_STATE.in", WELCHES MANUELL BEARBEITET WERDEN KANN,
+#       werden berücksichtigt, vor allem sind das die Daten über den generellen Beachtungszustand
+#       von GPUs und Algorithmen.
+#       GPUs könen als ENABLED (1) oder DISABLED (0) gesetzt werden
+#       Algorithmen können ebenfalls als "Disabled" geführt werden mit einem Eintrag "AlgoDisabled:$algoName"
+source ./gpu-abfrage.sh
 
 unset kwh_BTC; declare -A kwh_BTC
 for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
@@ -535,17 +468,16 @@ if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
     #
     echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
     for (( numGPUs=1; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
-        # Parameter: $1 = numGPUs, die zu berechnen sind
-        #            $2 = maxTiefe
-        #            $3 = Beginn Pointer1 bei Index 0
-        #            $4 = Ende letzter Pointer 5
-        #            $5-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
+        # Parameter: $1 = maxTiefe
+        #            $2 = Beginn Pointer1 bei Index 0
+        #            $3 = Ende letzter Pointer 5
+        #            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
         #                 in der sie sich selbst gerade befindet.
         endStr="GPU von ${MAX_GOOD_GPUs} läuft:"
         if [[ ${numGPUs} -gt 1 ]]; then endStr="GPUs von ${MAX_GOOD_GPUs} laufen:"; fi
         echo "Berechnung aller Kombinationen des Falles, dass nur ${numGPUs} ${endStr}"
         _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES \
-            ${numGPUs} ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))
+            ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))
     done
 
 fi  # if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
@@ -810,6 +742,8 @@ if [ ${SwitchOffCnt} -gt 0 ]; then
                     echo "---> SWITCH-OFF: GPU#${gpu_idx} ist ABZUSTELLEN!"
                     echo "---> SWITCH-OFF: GPU#${gpu_idx} läuft noch mit \"${WhatsRunning[${gpu_uuid}]}\""
                 fi
+            else
+                echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin DISABLED"
             fi
         fi
         printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:0:\n" >>${RUNNING_STATE}

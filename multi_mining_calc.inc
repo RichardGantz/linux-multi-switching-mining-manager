@@ -288,18 +288,16 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
 #              Bei dieser Berechnung ist GPU#8 mit dem Algo und Watt, der hinter Index 1 steckt, berechnet worden.
 #
 function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
-    # Parameter: $1 = numGPUs, die zu berechnen sind
-    #            $2 = maxTiefe
-    #            $3 = Beginn Pointer1 bei Index 0
-    #            $4 = Ende letzter Pointer 5
-    #            $5-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
+    # Parameter: $1 = maxTiefe
+    #            $2 = Beginn Pointer1 bei Index 0
+    #            $3 = Ende letzter Pointer 5
+    #            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
     #                 in der sie sich selbst gerade befindet.
     #                 Dieser Wert ist ein Index in das Array PossibleCandidateGPUidx
-    local -i numGPUs=$1
-    local -i maxTiefe=$2
-    local -i myStart=$3
-    local -i myDepth=$4
-    shift 4
+    local -i maxTiefe=$1
+    local -i myStart=$2
+    local -i myDepth=$3
+    shift 3
     local -i iii
 
     if [[ ${myDepth} == ${maxTiefe} ]]; then
@@ -330,9 +328,9 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
         # Dies dient dem Initiieren des zweiten bis letzten Zeigers
         #echo "(Weitere) Schleife starten und nächsten \"Pointer\" initiieren"
         for (( iii=${myStart}; $iii<${myDepth}; iii++ )); do
-            #echo "Nächste Ebene übergebene Parameter: ${numGPUs} ${maxTiefe} $((${iii}+1)) $((${myDepth}+1)) $* ${iii}"
+            #echo "Nächste Ebene übergebene Parameter: ${maxTiefe} $((${iii}+1)) $((${myDepth}+1)) $* ${iii}"
             _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES \
-                ${numGPUs} ${maxTiefe} $((${iii}+1)) $((${myDepth}+1)) $* ${iii}
+                ${maxTiefe} $((${iii}+1)) $((${myDepth}+1)) $* ${iii}
         done
     fi
 }
