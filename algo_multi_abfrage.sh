@@ -126,9 +126,9 @@ _create_ALGOS_in()
 
 declare -i num_algos_with_name=$(expr $(cat ${ALGO_NAMES_ARR} | wc -l ) / 3 )
 declare -i algo_names_arr_modified=$(date --utc --reference=${ALGO_NAMES_ARR} +%s)
-while [[ ${num_algos_with_name} == 0 ]]; do
+while [[ ${num_algos_with_name} -eq 0 ]]; do
     _create_ALGOS_in
-    if [[ ${num_algos_with_name} == 0 ]]; then
+    if [[ ${num_algos_with_name} -eq 0 ]]; then
         echo "Waiting for a valid File ${ALGO_NAMES_WEB}"
         sleep 1
     fi
@@ -218,7 +218,11 @@ while [ 1 -eq 1 ] ; do
     #  Stratum servers should be running as usual."
 
     echo "---------------------Nicehash-Kurse---------------------------------"
+<<<<<<< HEAD
     # Neue Algos aus dem Netz
+=======
+    # Neue Kurse aus dem Netz
+>>>>>>> master
     # Gültiges Ergebnis .json File fängt so an:
     # {"result":{"stats":[
     # und muss genau 1 mal gefunden werden
