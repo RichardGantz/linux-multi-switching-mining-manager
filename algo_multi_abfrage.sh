@@ -68,7 +68,7 @@ _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
                  mit den immer mehr veraltenden Zahlpreisen laufen lassen möchtest!"
         if [[ ! "$NoAlgoNames_recorded" == "1" ]]; then
             echo $(date "+%F %H:%M:%S") "curl - $1 hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
-            echo "                    Hier: Down wegen Wartungsarbeiten ODER 404 Page not found" >>FATAL_ERRORS.log
+            echo "                    Suchmuster $3 wurde nicht gefunden." >>FATAL_ERRORS.log
             NoAlgoNames_recorded=1
         fi
         NoAlgoNames_notified=1
@@ -95,14 +95,16 @@ _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
 _create_ALGOS_in()
 {
     # Neue Algos aus dem Netz
+    # Gültiges Ergebnis .json File fängt so an:
+    # {"result":{"algorithms":[
+    # und muss genau 1 mal gefunden werden
+    searchPattern='^[{]"result":[{]"algorithms":\['
     algoPageDown=$( curl "https://api.nicehash.com/api?method=buy.info" \
-        | tee $ALGO_NAMES_WEB \
-        | grep -i -c -m 1 -e '<title>[^<]\+</title>' )
+                          | tee $ALGO_NAMES_WEB \
+                          | grep -c -e "$searchPattern" )
 
-    #     [ $algoPageDown != 0 ]     sagt uns, dass <title> enthalten ist, was wir nicht brauchen können.
-    # und [ ! -s $algoID_KURSE_WEB ] sagt uns, dass die Datei nicht vorhanden oder vorhanden aber leer ist.
-    if [[ "${algoPageDown}" != "0" || ! -s $ALGO_NAMES_WEB ]]; then
-        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${ALGO_NAMES_WEB}" "${ALGO_NAMES_ARR}"
+    if [[ "${algoPageDown}" != "1" ]]; then
+        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${ALGO_NAMES_WEB}" "${ALGO_NAMES_ARR}" "$searchPattern"
     else
         # Fehler scheint behoben, Benachrichtigung wieder scharf machen
         unset NoAlgoNames_notified NoAlgoNames_recorded
@@ -124,9 +126,9 @@ _create_ALGOS_in()
 
 declare -i num_algos_with_name=$(expr $(cat ${ALGO_NAMES_ARR} | wc -l ) / 3 )
 declare -i algo_names_arr_modified=$(date --utc --reference=${ALGO_NAMES_ARR} +%s)
-while [[ ${num_algos_with_name} == 0 ]]; do
+while [[ ${num_algos_with_name} -eq 0 ]]; do
     _create_ALGOS_in
-    if [[ ${num_algos_with_name} == 0 ]]; then
+    if [[ ${num_algos_with_name} -eq 0 ]]; then
         echo "Waiting for a valid File ${ALGO_NAMES_WEB}"
         sleep 1
     fi
@@ -216,21 +218,17 @@ while [ 1 -eq 1 ] ; do
     #  Stratum servers should be running as usual."
 
     echo "---------------------Nicehash-Kurse---------------------------------"
+    # Neue Kurse aus dem Netz
+    # Gültiges Ergebnis .json File fängt so an:
+    # {"result":{"stats":[
+    # und muss genau 1 mal gefunden werden
+    searchPattern='^[{]"result":[{]"stats":\['
     pageDown=$( curl "https://api.nicehash.com/api?method=stats.global.current&location=0" \
         | tee $algoID_KURSE_WEB \
-        | grep -i -c -m 1 -e '<title>[^<]\+</title>' )
+        | grep -c -e "$searchPattern" )
 
-    # ACHTUNG: Die Suche nach einem <title> und das Finden desselben zeigt an, dass es sich nicht um die .json
-    #          Datei handelt, die wir erwarten.
-    # A B E R: Eine komplett leere Datei (z.B. nach dem Ausfall des Internet) enthält AUCH KEINEN <title>
-    #          und würde daher erst mal als "gültige" .json interpretiert werden,
-    #          WAS WIR VERHINDERN MÜSSEN!
-    #     [ $pageDown != 0 ]         sagt uns, dass <title> enthalten ist, was wir nicht brauchen können.
-    # und [ ! -s $algoID_KURSE_WEB ] sagt uns, dass die Datei nicht vorhanden oder vorhanden aber leer ist.
-    #          In beiden Fällen lassen wir die .in - Datei unberührt und hoffen, dass der Abruf aus dem Web
-    #          bald wieder eine gültige Datei liefert.
-    if [[ "${pageDown}" != "0" || ! -s $algoID_KURSE_WEB ]]; then
-        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${algoID_KURSE_WEB}" "${algoID_KURSE_ARR}"
+    if [[ "${pageDown}" != "1" ]]; then
+        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${algoID_KURSE_WEB}" "${algoID_KURSE_ARR}" "$searchPattern"
     else
         echo "--------------------------------------------------------------------"
         unset NoAlgoNames_notified NoAlgoNames_recorded
