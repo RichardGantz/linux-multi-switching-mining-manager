@@ -44,7 +44,17 @@ GRID[2]="solar_akku"
 #"down_step":"-0.0001","min_diff_working":"0.1","min_limit":"0.2","speed_text":"GH","min_diff_initial":"0.04","name":"Skunk","algo":29,"multi":"1"
 #
 #
-SYNCFILE=you_can_read_now.sync
+SYNCFILE="you_can_read_now.sync"
+
+function _On_Exit () {
+    # Wir könnten auch alle GPUs stoppen...
+    rm -f ${ALGO_NAMES_ARR}
+    rm -f ${algoID_KURSE_ARR}
+    rm -f BTC_EUR_kurs.in
+    rm -f ${SYNCFILE}
+    rm -f $(basename $0 .sh).pid
+}
+trap _On_Exit EXIT
 
 ALGO_NAMES_WEB="ALGO_NAMES.json"
 ALGO_NAMES_ARR="ALGO_NAMES.in"
@@ -124,8 +134,12 @@ _create_ALGOS_in()
     fi
 }
 
-declare -i num_algos_with_name=$(expr $(cat ${ALGO_NAMES_ARR} | wc -l ) / 3 )
-declare -i algo_names_arr_modified=$(date --utc --reference=${ALGO_NAMES_ARR} +%s)
+declare -i num_algos_with_name=0
+declare -i algo_names_arr_modified=0
+if [ -s ${ALGO_NAMES_ARR} ]; then
+    num_algos_with_name=$(expr $(cat ${ALGO_NAMES_ARR} | wc -l ) / 3 )
+    algo_names_arr_modified=$(date --utc --reference=${ALGO_NAMES_ARR} +%s)
+fi
 while [[ ${num_algos_with_name} -eq 0 ]]; do
     _create_ALGOS_in
     if [[ ${num_algos_with_name} -eq 0 ]]; then
@@ -259,7 +273,7 @@ while [ 1 -eq 1 ] ; do
     BTC_EUR_KURS_WEB="BTCEURkurs"
 
     echo "-------------------------BTC-EUR-KURS-Abfrage-----------------------"
-    curl "https://www.bitcoin.de/de" -o $BTC_EUR_KURS_WEB
+    curl "https://www.bitcoin.de/de" -o ${BTC_EUR_KURS_WEB}
     #
     # Folgende <title> der Webseite kennen wir bisher:
     #
@@ -270,7 +284,7 @@ while [ 1 -eq 1 ] ; do
         | grep -i -c -m 1 -e '<title>Bitcoins kaufen, Bitcoin Kurs bei Bitcoin.de!</title>' )
     echo "--------------------------------------------------------------------"      
         
-    if [[ "${btcPageValid}" != "1" || ! -s $BTC_EUR_KURS_WEB ]]; then
+    if [[ "${btcPageValid}" != "1" || ! -s ${BTC_EUR_KURS_WEB} ]]; then
         _notify_about_NO_BTC_KURS "${BTC_EUR_KURS_WEB}" "BTC_EUR_kurs.in"
         echo "###########################################################################"
         echo "------------> ACHTUNG: Nicht aktualisierter BTC Kurs: $(<BTC_EUR_kurs.in) <------------"
@@ -286,7 +300,7 @@ while [ 1 -eq 1 ] ; do
         # BTC Kurs extrahieren und umwandeln, dass dieser dann als Variable verwendbar und zum Rechnen geeignet ist
         btcEUR=$(gawk -e '/id="ticker_price">[0-9.,]* €</ \
                       { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' \
-                      $BTC_EUR_KURS_WEB \
+                      ${BTC_EUR_KURS_WEB} \
                | grep -E -m 1 -o -e '[0-9.]*' \
                | tee BTC_EUR_kurs.in )
 
@@ -311,7 +325,11 @@ while [ 1 -eq 1 ] ; do
     # dass alle ENABLED GPUs ihre Dateien ALGO_WATTS_MINES.in geschrieben haben.
     # Erstaunlicherweise kommt es oft vor, dass das manche noch in der selben Sekunde machen,
     # in der auch $SYNCFILE getouched wurde.
-    ./multi_mining_calc.sh &
+    # (29.10.2017)
+    # Hier rausgenommen, weil multi_mining_calc.sh so umgeschrieben wurde,
+    #      dass sie die ganze Kontrolle übernimmt und alles ordnungsgemäß
+    #      startet und beendet.
+    #./multi_mining_calc.sh &
 
     sleep 31
 done

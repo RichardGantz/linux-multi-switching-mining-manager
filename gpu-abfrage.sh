@@ -95,8 +95,16 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     declare -ag "GPU${index[$j]}Algos"
     declare -ag "GPU${index[$j]}Watts"
     declare -ag "GPU${index[$j]}Mines"
-    # (23.10.2017) Wir nehmen der Bequemlichkeit halber noch ein Array mit der UUID auf
-    declare -ag "GPU${index[$j]}UUID"
+    declare -n deleteIt="GPU${index[$j]}Algos"
+    #unset -n deleteIt
+    unset deleteIt
+    declare -n deleteIt="GPU${index[$j]}Watts"
+    unset deleteIt
+    declare -n deleteIt="GPU${index[$j]}Mines"
+    unset deleteIt
+    declare -ag "GPU${index[$j]}Algos"
+    declare -ag "GPU${index[$j]}Watts"
+    declare -ag "GPU${index[$j]}Mines"
 done
 
 # Die folgende Datei gpu_system_state.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
@@ -111,9 +119,9 @@ done
 #     und durchschleifen. DARUM KÜMMERN WIR UNS ABER, WENN ES SOWEIT IST.
 #     (Hier ist erst mal nur das Einlesen mitgemacht, weil der Code schon im multi_mining_calc.sh so drin war.)
 unset ENABLED_UUIDs
-unset uuidEnabledSOLL; declare -A uuidEnabledSOLL
-unset AlgoDisabled;    declare -A AlgoDisabled
-unset NumEnabledGPUs;  declare -i NumEnabledGPUs
+unset uuidEnabledSOLL;  declare -A uuidEnabledSOLL
+unset AlgoDisabled;     declare -A AlgoDisabled
+unset NumEnabledGPUs;   declare -i NumEnabledGPUs
 if [ -s ${SYSTEM_STATE}.in ]; then
     cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
     shopt_cmd_before=$(shopt -p lastpipe)

@@ -88,7 +88,7 @@ _update_SELF_if_necessary()
                   exec ./${SRC_FILE}" \
                  >$UPD_FILE
             chmod +x $UPD_FILE
-            echo "###---> Updating the GPU-UUID-directory from $SRC_DIR"
+            echo "GPU #$(< gpu_index.in): ###---> Updating the GPU-UUID-directory from $SRC_DIR"
             exec ./$UPD_FILE
         fi
     else
@@ -109,6 +109,14 @@ _update_SELF_if_necessary
 #  5. Schreibt seine PID in eine gleichnamige Datei mit der Endung .pid
 echo $$ >$(basename $0 .sh).pid
 
+#
+# Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
+#
+function _On_Exit () {
+    rm -f $(basename $0 .sh).pid
+}
+trap _On_Exit EXIT
+
 # Die Quelldaten Miner- bzw. AlgoName, BenchmarkSpeed und WATT für diese GraKa
 #  6. Prüft, ob die Benchmarkdatei jemals bearbeitet wurde und bricht ab, wenn nicht.
 #     Dann gibt es nämlich keine Benchmark- und Wattangaben zu den einzelnen Algorithmen.
@@ -117,7 +125,7 @@ BENCHFILE="benchmark_${GPU_DIR}.json"
 diff -q $BENCHFILE $BENCHFILE_SRC &>/dev/null
 if [ $? == 0 ]; then
     echo "-------------------------------------------"
-    echo "---           FATAL ERROR               ---"
+    echo "---        FATAL ERROR GPU #$(< gpu_index.in)           ---"
     echo "-------------------------------------------"
     echo "File '$BENCHFILE' not yet edited!!!"
     echo "Please edit and fill in valid data!"
@@ -278,7 +286,7 @@ _read_KURSE_in()
 #                         und merkt sich dessen "Alter" in der Variable ${new_Data_available}
 SYNCFILE="../you_can_read_now.sync"
 while [ ! -f ${SYNCFILE} ]; do
-    echo "###---> Waiting for ${SYNCFILE} to become available..."; sleep 1
+    echo "GPU #$(< gpu_index.in): ###---> Waiting for ${SYNCFILE} to become available..."; sleep 1
 done
 new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
 
@@ -286,7 +294,7 @@ new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
 # Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
 # 12. ###WARTET### jetzt, bis die Datei ALGO_NAMES="../ALGO_NAMES.in" vorhanden und NICHT LEER ist.
 while [ ! -s $ALGO_NAMES ]; do
-    echo "###---> Waiting for $ALGO_NAMES to become available..."; sleep 1
+    echo "GPU #$(< gpu_index.in): ###---> Waiting for $ALGO_NAMES to become available..."; sleep 1
 done
 # 13. Ruft _read_ALGOs_in und hat jetzt die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] zur Verfügung,
 #     FALLS die Datei ../ALGO_NAMES.in existiert und nicht leer ist!
@@ -355,7 +363,7 @@ while [ 1 -eq 1 ] ; do
     #  2. Ruft _read_BENCHFILE_in falls die Quelldatei upgedated wurde.
     #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
     if [[ $BENCHFILE_last_age_in_seconds < $(date --utc --reference=$BENCHFILE +%s) ]]; then
-        echo "###---> Updating Arrays bENCH[] und WATTs[] from $BENCHFILE"
+        echo "GPU #$(< gpu_index.in): ###---> Updating Arrays bENCH[] und WATTs[] from $BENCHFILE"
         _read_BENCHFILE_in
     fi
 
@@ -369,14 +377,14 @@ while [ 1 -eq 1 ] ; do
     #  3. Ruft _read_ALGOs_in     falls die Quelldatei upgedated wurde.
     #                             => Aktuelle Arrays kMGTP["AlgoName"] und ALGOs["algoID"]
     if [[ $ALGO_NAMES_last_age_in_seconds < $(date --utc --reference=$ALGO_NAMES +%s) ]]; then
-        echo "###---> Updating Arrays ALGOs[] und kMGTP[] from $ALGO_NAMES"
+        echo "GPU #$(< gpu_index.in): ###---> Updating Arrays ALGOs[] und kMGTP[] from $ALGO_NAMES"
         _read_ALGOs_in
     fi
 
     # Einlesen und verarbeiten der aktuellen Kurse, sobald die Datei vorhanden und nicht leer ist
     #  4. ###WARTET### jetzt, bis die Datei "../KURSE.in" vorhanden und NICHT LEER ist.
     while [ ! -s $KURSE_in ]; do
-        echo "###---> Waiting for $KURSE_in to become available..."
+        echo "GPU #$(< gpu_index.in): ###---> Waiting for $KURSE_in to become available..."
         sleep 1
     done
     #  5. Ruft _read_KURSE_in     => Array KURSE["AlgoName"] verfügbar
@@ -416,7 +424,7 @@ while [ 1 -eq 1 ] ; do
             printf "$algorithm\n${WATTS[$algorithm]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
         else
             # ---> MUSS VIELLEICHT AKTIVIERT WERDEN, WENN UNTEN DER BEST-OF TEIL WEGFÄLLT <---
-            echo "KEIN Hash WERT bei $algorithm bei GPU #$(< gpu_index.in) fehlt !!! \<------------------------"
+            echo "GPU #$(< gpu_index.in): KEIN Hash WERT bei $algorithm !!! \<------------------------"
         fi
     done
     rm -f ALGO_WATTS_MINES.lock
@@ -437,8 +445,12 @@ while [ 1 -eq 1 ] ; do
     #
     #     ###WARTET### jetzt, bis das "Alter" der Datei ${SYNCFILE} aktueller ist als ${new_Data_available}
     #                         mit der Meldung "Waiting for new actual Pricing Data from the Web..."
-    echo "Waiting for new actual Pricing Data from the Web..."
-    while [ ${new_Data_available} == $(date --utc --reference=${SYNCFILE} +%s) ] ; do
+    while [ ! -f ${SYNCFILE} ]; do
+        echo "GPU #$(< gpu_index.in): ###---> Waiting for ${SYNCFILE} to become available..."
+        sleep 1
+    done
+    echo "GPU #$(< gpu_index.in): Waiting for new actual Pricing Data from the Web..."
+    while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
         sleep 1
     done
     #  8. Merkt sich das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available}

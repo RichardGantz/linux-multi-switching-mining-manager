@@ -14,6 +14,40 @@
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
 
+#
+# Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
+#
+function _kill_all_gpu_gv_algos () {
+    kill_pids=$(ps -ef \
+       | grep -e '/bin/bash.*gpu_gv-algo.sh' \
+       | grep -v 'grep -e ' \
+       | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
+    if [ ! "$kill_pids" == "" ]; then
+        printf "Killing all gpu_gv-algo.sh processes... "
+        kill $kill_pids
+        printf "done.\n"
+    fi
+}
+
+function _kill_algo_multi_abfrage () {
+    kill_pids=$(ps -ef \
+       | grep -e '/bin/bash.*algo_multi_abfrage.sh' \
+       | grep -v 'grep -e ' \
+       | gawk -e '{print $2}')
+    if [ ! "$kill_pids" == "" ]; then
+        printf "Killing algo_multi_abfrage.sh process... "
+        kill $kill_pids
+        printf "done.\n"
+    fi
+}
+
+function _On_Exit () {
+    _kill_all_gpu_gv_algos
+    _kill_algo_multi_abfrage
+    rm -f $(basename $0 .sh).pid
+}
+trap _On_Exit EXIT
+
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
 verbose=0
@@ -37,6 +71,34 @@ GRID[2]="solar_akku"
 # Funktionen Definitionen ausgelagert
 source ./multi_mining_calc.inc
 
+# Hier nun einige Vorarbeiten und dann der Einstig in die Endlosschleife
+# Um die algo_multi_abfrage.sh zu stoppen, müssen wir in der Prozesstabelle nach
+#        '/bin/bash.*algo_multi_abfrage.sh'
+#        suchen und die Prozess-ID vielleicht mit der Datei vergleichen,
+#        die algo_multi_abfrage.sh selbst geschrieben hat?
+#
+# Die gpu_gv-algo.sh können selbst die Miner stoppen und weitere Aufräumarbeiten durch führen
+# kill $(ps -ef \
+#      | grep gpu_gv-algo.sh \
+#      | grep -v grep \
+#      | grep -e '/bin/bash.*gpu_gv-algo.sh' \
+#      | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
+
+# Jetzt erst mal der einfachste Fall:
+# Wenn multi_mining_calc.sh gestoppt wird, soll alles gestoppt werden.
+# ALLE LAUFENDEN gpu_gv-algo.sh killen.
+# ---> DAS MUSS NATÜRLICH AUCH DEN MINERN NOCH MITGETEILT WERDEN! <---
+# ---> WIR BEFINDEN UNS HIER NOCH IN DER TROCKENÜBUNG             <---
+_kill_all_gpu_gv_algos
+_kill_algo_multi_abfrage
+# ---> WIR MÜSSEN AUCH ÜBERLEGEN, WAS WIR MIT DEM RUNNING_STATE MACHEN !!! <---
+# ---> WIE SINNVOLL IST ES, DEN AUFZUHEBEN?                                <---
+# Danach ist alles saubergeputzt, soweit wir das im Moment überblicken und es kann losgehen, die
+# gpu_gv-algos's zu starten, die erst mal auf SYNCFILE warten
+# und dann algo_multi_abfrage.sh
+
+while : ; do
+
 # Diese Abfrage erzeugt die beiden Dateien "gpu_system.out" und "GLOBAL_GPU_SYSTEM_STATE.in"
 # Daten von "GLOBAL_GPU_SYSTEM_STATE.in", WELCHES MANUELL BEARBEITET WERDEN KANN,
 #       werden berücksichtigt, vor allem sind das die Daten über den generellen Beachtungszustand
@@ -45,17 +107,27 @@ source ./multi_mining_calc.inc
 #       Algorithmen können ebenfalls als "Disabled" geführt werden mit einem Eintrag "AlgoDisabled:$algoName"
 source ./gpu-abfrage.sh
 
-unset kwh_BTC; declare -A kwh_BTC
-for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
-    # ACHTUNG. DAS MUSS AUF JEDEN FALL EIN MAL PRO Preiseermittlungslauf LAUF GEMACHT WERDEN!!!
-    # IST NUR DER BEQUEMLICHKEIT HALBER IN DIESE <GRID> SCHLEIFE GEPACKT,
-    # WEIL SIE NUR 1x DURCHLÄUFT
-    # Die in BTC umgerechneten Strompreise für die Vorausberechnungen später
-    kwh_BTC[${GRID[$grid]}]=$(< kWh_${GRID[$grid]}_Kosten_BTC.in)
+#
+# Wir schalten jetzt die GPU-Abfragen ein, wenn sie nicht schon laufen...
+# ---> Müssen auch dara denken, sie zu stoppen, wenn die GPU DISABLED wird <---
+for lfdUuid in "${!uuidEnabledSOLL[@]}"; do
+    if [ ${uuidEnabledSOLL[${lfdUuid}]} -eq 1 ]; then
+        if [ ! -f ${lfdUuid}/gpu_gv-algo.pid ]; then
+            cd ${lfdUuid}
+            echo "GPU #$(< gpu_index.in): Starting process in the background..."
+            ./gpu_gv-algo.sh &
+            cd -
+        fi
+    fi
 done
-# AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese beiden Berechnungen
-kWhMax=${kwh_BTC["netz"]}
-kWhMin=${kwh_BTC["solar"]}
+             
+#
+# Dann starten wir die algo_multi_abfrage.sh, wenn sie nicht schon läuft...
+#
+if [ ! -f algo_multi_abfrage.pid ]; then
+    echo "Starting algo_multi_abfrage.sh in the background..."
+    ./algo_multi_abfrage.sh &
+fi
 
 ###############################################################################################
 #
@@ -85,6 +157,7 @@ rm -f ${RUNNING_STATE}.lock
 #      WhatsRunning[ $UUID ]=${RunningAlgo}      AlgoName
 unset SUM_OF_RUNNING_WATTS; declare -i SUM_OF_RUNNING_WATTS=0
 
+unset lfdUUID
 if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
     for lfdUUID in ${!RunningGPUid[@]}; do
         if [[ ${WasItEnabled[$lfdUUID]} == 1 ]]; then
@@ -107,16 +180,20 @@ echo "Sum of actually running WATTS: ${SUM_OF_RUNNING_WATTS}W"
 # Erst, wenn alle Kurse bekannt sind und wir die optimale Konfiguration durchrechnen können,
 # bestimmen wir den momentanen "Strompreis" anhand der Daten aus dem SMARTMETER
 
-declare -i minTime=$(stat -c %Y ${SYNCFILE})
+while [ ! -f ${SYNCFILE} ]; do
+    echo "$(basename $0): ###---> Waiting for ${SYNCFILE} to become available..."
+    sleep 1
+done
+declare -i new_Data_available=$(stat -c %Y ${SYNCFILE})
 while [ 1 == 1 ]; do
-    declare -i AWMTime=minTime+3600
+    declare -i AWMTime=new_Data_available+3600
     for UUID in ${!uuidEnabledSOLL[@]}; do
         if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
             declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in)
             if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
         fi
     done
-    if [ $AWMTime -lt $minTime ]; then
+    if [ $AWMTime -lt $new_Data_available ]; then
         echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
         sleep 1
     else
@@ -124,54 +201,14 @@ while [ 1 == 1 ]; do
     fi
 done
 
-###############################################################################################
-#
-# Irgendwann brauchen wir irgendwoher den aktuellen Powerstand aus dem Smartmeter
-# w3m "http://192.168.6.170/solar_api/blabla..." > smartmeter
-#          "PowerReal_P_Sum" : 20.0,
-# kW=$( grep PowerReal_P_Sum smartmeter | gawk '{print substr($3,1,index($3,".")-1)}' ) ergibt Integer Wattzahl
-#
-# Jetzt können wir den aktuellen Verbrauch aller Karten von kW abziehen, um zu sehen, ob wir uns
-#     im "Einspeisemodus" befinden.
-#     (${kW} - ${ActuallyRunningWatts}) < 0 ? SolarWatt=$(expr ${ActuallyRunningWatts} - ${kW} )
-#
-##################################################################################
-##################################################################################
-###                                                                            ###
-### FALLS ES ALSO "solar" Power gibt, wird die Variable SolarWattAvailable > 0 ###
-### Die Berechnungen stimmen so oder so. Auch für den Fall, dass es keine      ###
-### "solar" Power gibt, was durch SolarWattAvailable=0 ausgedrückt wird.       ###
-###                                                                            ###
-##################################################################################
-##################################################################################
 
-PHASE=PowerReal_P_Phase_1
-PHASE=PowerReal_P_Phase_2
-PHASE=PowerReal_P_Phase_3
-PHASE=PowerReal_P_Sum
-
-#SCHWELLE=-260
-
-declare -i ACTUAL_SMARTMETER_KW
-declare -i SolarWattAvailable=0
-
-if [ ! $NoCards ]; then
-    # Datei smartmeter holen
-    w3m "http://192.168.6.170/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData" > smartmeter
-fi
-    
-# ABFRAGE PowerReal_P_Sum
-ACTUAL_SMARTMETER_KW=$(grep $PHASE smartmeter | gawk '{print substr($3,0,index($3,".")-1)}')
-echo "Aktueller Verbrauch aus dem Smartmeter: ${ACTUAL_SMARTMETER_KW}W"
-
-if [[ $((${ACTUAL_SMARTMETER_KW} - ${SUM_OF_RUNNING_WATTS})) -lt 0 ]]; then
-    SolarWattAvailable=$(expr ${SUM_OF_RUNNING_WATTS} - ${ACTUAL_SMARTMETER_KW})    
-fi
+#  Das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available} merken für später.
+#  Die GPUs haben schon losgelegt, das heisst, dass SYNCFILE da ist und in etwa 31s neu getouched wird
+# new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
 
 ###############################################################################################
-# (etwa 15.10.2017)
-# Jetzt wollen wir die Arrays zur Berechnung des optimalen Algo pro Karte mit den Daten füllen,
-# die wir für diese Berechnung brauchen.
+#
+#    EINLESEN ALLER ALGORITHMEN, WATTS und MINES, AUF DIE WIR GERADE GEWARTET HABEN
 #
 # In dieser Datei hat die jeweilige GPU jetzt aber ALL ihre Algos,
 #           die dabei verbrauchten Watts
@@ -196,6 +233,89 @@ fi
 #                               [1]=".00017009"                        [1]=".00017009"    
 #                               [2]=".00013999"                        [2]=".00013999"
 #
+for (( idx=0; $idx<${#index[@]}; idx++ )); do
+    declare -n actGPUAlgos="GPU${index[$idx]}Algos"
+    declare -n actAlgoWatt="GPU${index[$idx]}Watts"
+    declare -n actAlgoMines="GPU${index[$idx]}Mines"
+
+    if [ -s ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in ]; then
+        unset READARR
+        readarray -n 0 -O 0 -t READARR <${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in
+        for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+            _push_onto_array actGPUAlgos  "${READARR[$i]}"
+            _push_onto_array actAlgoWatt  "${READARR[$i+1]}"
+            _push_onto_array actAlgoMines "${READARR[$i+2]}"
+        done
+    fi
+done
+
+###############################################################################################
+#
+#     EINLESEN der STROMPREISE in BTC
+#
+# In algo_multi_abfrage.sh, die vor Kurzem gelaufen sein muss,
+# werden die EUR-Strompreise in BTC-Preise umgewandelt.
+# Diese Preise brauchen wir in BTC, um die Kosten von den errechneten "Mines" abziehen zu können.
+#
+unset kwh_BTC; declare -A kwh_BTC
+for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
+    # ACHTUNG. DAS MUSS AUF JEDEN FALL EIN MAL PRO Preiseermittlungslauf LAUF GEMACHT WERDEN!!!
+    # IST NUR DER BEQUEMLICHKEIT HALBER IN DIESE <GRID> SCHLEIFE GEPACKT,
+    # WEIL SIE NUR 1x DURCHLÄUFT
+    # Die in BTC umgerechneten Strompreise für die Vorausberechnungen später
+    kwh_BTC[${GRID[$grid]}]=$(< kWh_${GRID[$grid]}_Kosten_BTC.in)
+done
+# AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese beiden Berechnungen
+kWhMax=${kwh_BTC["netz"]}
+kWhMin=${kwh_BTC["solar"]}
+kWhAkk=${kwh_BTC["solar_akku"]}
+
+##################################################################################
+##################################################################################
+#
+#     EINLESEN SMARTMETER und BERECHNEN VON SolarWattAvaiable
+#
+# Irgendwann brauchen wir irgendwoher den aktuellen Powerstand aus dem Smartmeter
+# w3m "http://192.168.6.170/solar_api/blabla..." > smartmeter
+#          "PowerReal_P_Sum" : 20.0,
+# kW=$( grep PowerReal_P_Sum smartmeter | gawk '{print substr($3,1,index($3,".")-1)}' ) ergibt Integer Wattzahl
+#
+# Jetzt können wir den aktuellen Verbrauch aller Karten von kW abziehen, um zu sehen, ob wir uns
+#     im "Einspeisemodus" befinden.
+#     (${kW} - ${ActuallyRunningWatts}) < 0 ? SolarWatt=$(expr ${ActuallyRunningWatts} - ${kW} )
+#
+###                                                                            ###
+### FALLS ES ALSO "solar" Power gibt, wird die Variable SolarWattAvailable > 0 ###
+### Die Berechnungen stimmen so oder so. Auch für den Fall, dass es keine      ###
+### "solar" Power gibt, was durch SolarWattAvailable=0 ausgedrückt wird.       ###
+###                                                                            ###
+
+PHASE=PowerReal_P_Phase_1
+PHASE=PowerReal_P_Phase_2
+PHASE=PowerReal_P_Phase_3
+PHASE=PowerReal_P_Sum
+
+declare -i ACTUAL_SMARTMETER_KW
+declare -i SolarWattAvailable=0
+
+if [ ! $NoCards ]; then
+    # Datei smartmeter holen
+    w3m "http://192.168.6.170/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData" > smartmeter
+fi
+    
+# ABFRAGE PowerReal_P_Sum
+ACTUAL_SMARTMETER_KW=$(grep $PHASE smartmeter | gawk '{print substr($3,0,index($3,".")-1)}')
+echo "Aktueller Verbrauch aus dem Smartmeter: ${ACTUAL_SMARTMETER_KW}W"
+
+if [[ $((${ACTUAL_SMARTMETER_KW} - ${SUM_OF_RUNNING_WATTS})) -lt 0 ]]; then
+    SolarWattAvailable=$(expr ${SUM_OF_RUNNING_WATTS} - ${ACTUAL_SMARTMETER_KW})    
+fi
+
+###############################################################################################
+#
+# Jetzt wollen wir die Arrays zur Berechnung des optimalen Algo pro Karte mit den Daten füllen,
+# die wir für diese Berechnung brauchen.
+#
 # Folgendes ist noch wichtig:
 #
 # 1. Der Fall "solar_akku" ist überhaupt noch nicht in diese Überlegungen einbezogen worden.
@@ -214,23 +334,13 @@ fi
 #             also z.B.  GPU3Watts[]
 #             also z.B.  GPU3Mines[]
 #
-for (( idx=0; $idx<${#index[@]}; idx++ )); do
-    declare -n actGPUAlgos="GPU${index[$idx]}Algos"
-    declare -n actAlgoWatt="GPU${index[$idx]}Watts"
-    declare -n actAlgoMines="GPU${index[$idx]}Mines"
-    declare -n actGPU_UUID="GPU${index[$idx]}UUID"
-    actGPU_UUID="${uuid[${index[$idx]}]}"
 
-    if [ -s ${actGPU_UUID}/ALGO_WATTS_MINES.in ]; then
-        unset READARR
-        readarray -n 0 -O 0 -t READARR <${actGPU_UUID}/ALGO_WATTS_MINES.in
-        for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
-            _push_onto_array actGPUAlgos  "${READARR[$i]}"
-            _push_onto_array actAlgoWatt  "${READARR[$i+1]}"
-            _push_onto_array actAlgoMines "${READARR[$i+2]}"
-        done
-    fi
-done
+
+
+
+# Voraussetzungen, die noch geklärt werden müssen:
+# 1. Wir brauchen jetzt natürlich Informationen aus dem SMARTMETER
+# 2. Und wir brauchen eine Datenstruktur, anhand der wir erkennen, welche GPU's gerade mit welchem Algo laufen.
 
 # Jetzt geht's los:
 # Jetzt brauchen wir alle möglichen Kombinationen aus GPU-Konstellationen:
@@ -240,10 +350,6 @@ done
 # Anhand des Gesamtwattverbrauchs der Kombination errechnen wir die Gesamtkosten dieser Kombination
 #     unter Berücksichtigung eines entsprechenden "solar" Anteils, wodurch die Kosten sinken.
 # Die Kombination mit dem besten GV-Verhältnis merken wir uns jeweils in MAX_PROFIT und MAX_PROFIT_GPU_Algo_Combination
-
-# Voraussetzungen, die noch geklärt werden müssen:
-# 1. Wir brauchen jetzt natürlich Informationen aus dem SMARTMETER
-# 2. Und wir brauchen eine Datenstruktur, anhand der wir erkennen, welche GPU's gerade mit welchem Algo laufen.
 
 # Im Groben brauchen wir folgendes Datenfeld für angenommene 2 Algos pro GPU, die sinnvoll sind:
 # (Die Routine ist natürlich so ausgelegt, dass beliebig viele Algos pro GPU möglich sind.
@@ -284,20 +390,31 @@ done
 # Bei 11 GPUs und je 2 Algorithmen sind das 2 hoch 11 Kombinationen: 2048
 #
 
-# Wie könnte man das Ganze realisieren?
-# Wir setzen vor dem Beginn der Berechnungsorgie die Variable MAX_PROFIT auf 0.0
-#     und prüfen nach jeder einzelnen Rechnung, ob der gerade errechnete Wert den bisherigen MAX_PROFIT
-#     übertrifft und daher als neuer MAX_PROFIT übernommen wird.
-# Die gerade berechnete Kombination aus GPU's:Algos halten wir in einem String fest:
-#     MAX_PROFIT_GPU_Algo_Combination="{GPU-Index}:{AlgoIndex},"*
-# So wissen wir JEDERZEIT und vor allem natürlich am Ende aller Berechnungen, welche Kombination
-#     die mit dem besten Gewinn ist.
-
+#####################################################################################################
+#
+#     DAS IST EIN EXTREM WICHTIGES VARIABLENPAAR:
+#     MAX_PROFIT und MAX_PROFIT_GPU_Algo_Combination
+#
+# Die Berechnungen schieben gleich den maximalen Gewinn immer höher und merken sich die Kombination.
+#     Bei jeder gültigen Berechnung lassen wir die Variable MAX_PROFIT von ".0" aus hochfahren
+#     und halten jedes mal die Kombination aus GPU's und Algo's fest in MAX_PROFIT_GPU_Algo_Combination
+#     in der Form '${gpu_idx}:${algoIdx},'. Bei mehreren GPUs wird der String länger.
+#
 # --> DAS IST FÜR SPÄTERES FEINTUNING: <--
 # Wir können das auch noch weiter verfeinern, wenn wir Kombinationen mit GLEICHEM Gewinn
 #     darauf hin untersuchen, welche "effektiver" ist, welche z.B. bei gleichem Gewinn den minimalsten Strom
 #     verbraucht und diesen dann vorziehen.
 
+MAX_PROFIT=".0"
+MAX_PROFIT_GPU_Algo_Combination=''
+
+echo "=========  GPU Einzelberechnungen  ========="
+echo "Ermittlung aller gewinnbringenden Algorithmen durch Berechnung:"
+echo "Jede GPU für sich betrachtet, wenn sie als Einzige laufen würde"
+echo "UND Beginn der Ermittlung und des Hochfahrens von MAX_PROFIT !"
+if [ ${verbose} == 1 ]; then
+    echo "Damit sparen wir uns später den Fall '1 GPU aus MAX_GOOD möglichen GPUs' und können gleich mit 2 beginnen!"
+fi
 
 # Die meisten der folgenden Arrays, die wir erstellen werden, sind nichts weiter als eine Art "View"
 # auf die GPU{realer_gpu_index}Algos/Watts/Mines Arrays, die die Rohdaten halten und
@@ -346,40 +463,53 @@ done
 # Die folgenden beiden Arrays halten nur GPU-Indexnummern als Werte. Nichts weiter!
 # Wir bauen diese Arrays jetzt anhand der Kriterien aus den Rohdaten-Arrays in einer
 #     alle im System befindlichen GPUs durchgehenden Schleife auf.
+unset SwitchOffGPUs
 declare -a SwitchOffGPUs           # GPUs anyway aus, keine gewinnbringenden Algos zur Zeit
+unset PossibleCandidateGPUidx
 declare -a PossibleCandidateGPUidx # GPUs mit mindestens 1 gewinnbringenden Algo.
                                    # Welcher es werden soll, muss errechnet werden
            # gefolgt von mind. 1x declare -a "PossibleCandidate${gpu_index}AlgoIndexes" ...
+unset exactNumAlgos
 declare -a exactNumAlgos  # ... und zur Erleichterung die Anzahl Algos der entsprechenden "PossibleCandidate" GPU's
 
 for (( idx=0; $idx<${#index[@]}; idx++ )); do
     declare -n actGPUAlgos="GPU${index[$idx]}Algos"
     declare -n actAlgoWatt="GPU${index[$idx]}Watts"
     declare -n actAlgoMines="GPU${index[$idx]}Mines"
-    declare -n actGPU_UUID="GPU${index[$idx]}UUID"
 
     numAlgos=${#actGPUAlgos[@]}
     # Wenn die GPU seit neuestem generell DISABLED ist, pushen wir sie hier auf den
     # SwitchOffGPUs Stack, indem wir die numAlgos künslich auf 0 setzen:
-    if [[ "${uuidEnabledSOLL[${actGPU_UUID}]}" == "0" ]]; then
+    if [[ "${uuidEnabledSOLL[${uuid[${index[$idx]}]}]}" == "0" ]]; then
         numAlgos=0
     fi
     case "${numAlgos}" in
 
         "0")
-            # Karte ist auszuschalten. Kein gewinnbringender Algo im Moment
+            # Karte ist auszuschalten. Kein (gewinnbringender) Algo im Moment
+            # (Noch haben wir die Gewinne nicht ausgerechnet!)
             _push_onto_array SwitchOffGPUs ${index[$idx]}
             ;;
 
         *)
-            # GPU kann mit mindestens einem Algo mit Gewinn laufen.
-            # Wir filtern jetzt noch diejenigen Algorithmen raus, die wie oben unter den momentanen Realen
-            # Verhältnissen DOCH KEINEN Gewinn machen werden, wenn sie allein, also ohne "Konkrrenz" laufen würden.
+            # GPU kann mit mindestens einem Algo laufen.
+            # Wir filtern jetzt noch diejenigen Algorithmen raus, die unter den momentanen Realen
+            # Verhältnissen KEINEN GEWINN machen werden, wenn sie allein, also ohne "Konkrrenz" laufen würden.
+            # Gleichzeitig halten wir von denen, die Gewinn machen, denjenigen Algo fest,
+            # der den grössten Gewinn macht.
+            # Wir lassen jetzt schon MAX_PROFIT und die entsprechende Kombiantion aus GPU und Algo hochfahren.
+            # Damit sparen wir uns später diesen Lauf mit 1 GPU, weil der auch kein anderes Ergebnis
+            # bringen wird!
             unset profitableAlgoIndexes; declare -a profitableAlgoIndexes
 
             for (( algoIdx=0; $algoIdx<${numAlgos}; algoIdx++ )); do
-                _calculate_ACTUAL_REAL_PROFIT \
+                _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
                     ${SolarWattAvailable} ${actAlgoWatt[$algoIdx]} "${actAlgoMines[$algoIdx]}"
+                if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
+                    MAX_PROFIT_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
+                    echo "New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+                fi
+
                 # Wenn das NEGATIV ist, muss die Karte übergangen werden. Uns interessieren nur diejenigen,
                 # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
                 if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
@@ -394,6 +524,10 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                 pushIdx=${#PossibleCandidateGPUidx[@]}
                 PossibleCandidateGPUidx[${pushIdx}]=${index[$idx]}
                 exactNumAlgos[${index[$idx]}]=${profitableAlgoIndexesCnt}
+                declare -ag "PossibleCandidate${index[$idx]}AlgoIndexes"
+                declare -n deleteIt="PossibleCandidate${index[$idx]}AlgoIndexes"
+                #unset -n deleteIt
+                unset deleteIt
                 declare -ag "PossibleCandidate${index[$idx]}AlgoIndexes"
                 declare -n actCandidatesAlgoIndexes="PossibleCandidate${index[$idx]}AlgoIndexes"
                 for (( algoIdx=0; $algoIdx<${profitableAlgoIndexesCnt}; algoIdx++ )); do
@@ -413,7 +547,7 @@ if [ ${verbose} == 1 ]; then
     if [[ ${#PossibleCandidateGPUidx[@]} -gt 0 ]]; then
         unset gpu_string
         for (( i=0; $i<${#PossibleCandidateGPUidx[@]}; i++ )); do
-            gpu_string+="#${PossibleCandidateGPUidx[$i]} with ${exactNumAlgos[$i]} Algos, "
+            gpu_string+="#${PossibleCandidateGPUidx[$i]} with ${exactNumAlgos[${PossibleCandidateGPUidx[$i]}]} Algos, "
         done
         echo "GPU Kandidaten mit Gewinn bringenden Algos: ${gpu_string%, }"
     fi
@@ -439,19 +573,15 @@ unset MAX_GOOD_GPUs; declare -i MAX_GOOD_GPUs  # Wieviele GPUs haben mindestens 
 # Die folgenden 3 Variablen werden bei jedem Aufruf von _CALCULATE_GV_of_all_TestCombinationGPUs_members
 # neu gesetzt und verwendet. (Vorletzte "Schale")
 unset MAX_GPU_TIEFE; declare -i MAX_GPU_TIEFE  # Wieviele dieser GPUs sollen berechnet werden
-unset lfdGPU; declare -i lfdGPU                # 
-unset testGPUs; declare -A testGPUs
+unset lfdGPU; declare -i lfdGPU                # Laufender Zähler analog dem meist verwendeten $i
+unset testGPUs; declare -A testGPUs            # Test-Zähler-Stellwerk
 
 # Diese Nummer bildet die globale, die äusserste, letzte "Schale", von der aus die anderen gestartet/verwendet werden
 unset numGPUs; declare -i numGPUs
 
 MAX_GOOD_GPUs=${#PossibleCandidateGPUidx[@]}
 
-if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
-
-    # Die Berechnungen schieben gleich den maximalen Gewinn immer höher und merken sich die Kombination
-    MAX_PROFIT=".0"
-    MAX_PROFIT_GPU_Algo_Combination=''
+if [[ ${MAX_GOOD_GPUs} -gt 1 ]]; then      # Den Fall für 1 GPU allein haben wir ja schon ermittelt.
 
     # Bei zu wenig Solarpower könnte das ins Minus rutschen...
     #     [ DAS MÜSSEN WIR NOCH CHECKEN, OB DAS WIRKLICH SICHTBAR WIRD ]
@@ -467,7 +597,7 @@ if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
     # for (( numGPUs=1; $numGPUs<${MAX_GOOD_GPUs}; numGPUs++ )); do
     #
     echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
-    for (( numGPUs=1; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
+    for (( numGPUs=2; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
         # Parameter: $1 = maxTiefe
         #            $2 = Beginn Pointer1 bei Index 0
         #            $3 = Ende letzter Pointer 5
@@ -541,9 +671,7 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
 
     declare -n actGPUalgoName="GPU${gpu_idx}Algos"
     declare -n actGPUalgoWatt="GPU${gpu_idx}Watts"
-    declare -n actGPU_UUID="GPU${gpu_idx}UUID"
-    gpu_uuid=${actGPU_UUID}
-
+    gpu_uuid=${uuid[${gpu_idx}]}
 
     if [ ! ${#RunningGPUid[@]} -eq 0 ]; then
         #############################   CHAOS BEHADLUNG Anfang  #############################
@@ -672,13 +800,11 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
     if [[ ${verbose} == 1 ]]; then
         echo "GPU-Index        #${gpu_idx}"
         echo "GPU-Algo-Index   [${algoidx}]"
-        declare -n actCombinedGPU="GPU${gpu_idx}Algos"
-        echo "GPU-AlgoName     ${actCombinedGPU[${algoidx}]}"
-        declare -n actCombinedGPU="GPU${gpu_idx}Watts"
-        algoWatts=${actCombinedGPU[${algoidx}]}
+        echo "GPU-AlgoName     ${actGPUalgoName[${algoidx}]}"
+        algoWatts=${actGPUalgoWatt[${algoidx}]}
         echo "GPU-AlgoWatt     ${algoWatts}"
-        declare -n actCombinedGPU="GPU${gpu_idx}Mines"
-        algoMines=${actCombinedGPU[${algoidx}]}
+        declare -n actGPUalgoMines="GPU${gpu_idx}Mines"
+        algoMines=${actGPUalgoMines[${algoidx}]}
         echo "GPU-AlgoMines    ${algoMines}"
         _calculate_ACTUAL_REAL_PROFIT \
             ${SolarWattAvailable} ${algoWatts} ${algoMines}
@@ -711,8 +837,7 @@ if [ ${SwitchOffCnt} -gt 0 ]; then
 
     for (( i=0; $i<${SwitchOffCnt}; i++ )); do
         gpu_idx=${SwitchOffGPUs[$i]}
-        declare -n actGPU_UUID="GPU${gpu_idx}UUID"
-        gpu_uuid=${actGPU_UUID}
+        gpu_uuid=${uuid[${gpu_idx}]}
 
         if [ ! ${#RunningGPUid[@]} -eq 0 ]; then
             #############################   CHAOS BEHADLUNG Anfang  #############################
@@ -764,13 +889,17 @@ if [ $NoCards ]; then
     fi
 fi
 
-echo "Neues globales Switching Sollzustand Kommandofile"
-cat ${RUNNING_STATE}
-
-
 # Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
 rm -f ${RUNNING_STATE}.lock
 
+echo "Neues globales Switching Sollzustand Kommandofile"
+cat ${RUNNING_STATE}
+
+    while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
+        sleep 1
+    done
+
+done  ## while : 
 
 
 ################################################################################
