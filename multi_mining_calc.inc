@@ -201,23 +201,25 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
         # Wird überhaupt Netzstrom benötigt werden oder steht die Gesamte Leistung in SolarPower bereit?
         _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
             ${SolarWattAvailable} ${CombinationWatts} "( ${CombinationMines}0 )"
-        if [[ ! ${MAX_PROFIT} == ${OLD_MAX_PROFIT} ]]; then
+        if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
             MAX_PROFIT_GPU_Algo_Combination=${algosCombinationKey}
             # Hier könnten wir eigentlich schon ausgeben, welche GPU mit welchem Algo
             echo "New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-            _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
-            echoString="Exactly: "
-            for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
-                declare -i pos=$(expr index "${GPUINDEXES[$i]}" ":")
-                declare -i len=$(($pos-1))
-                gpu_idx=${GPUINDEXES[$i]:0:$len}
-                algoidx=${GPUINDEXES[$i]:$pos}
-                #echoString+="GPU#${PossibleCandidateGPUidx[${i}]}:Algo#"
-                echoString+="GPU#${gpu_idx}:Algo#"
-                declare -n actCombinedGPU="GPU${gpu_idx}Algos"
-                echoString+="${actCombinedGPU[${algoidx}]},"
-            done
-            #echo "${echoString%%?}"
+            if [ ${verbose} == 1 ]; then
+                _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
+                echoString="Exactly: "
+                for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
+                    declare -i pos=$(expr index "${GPUINDEXES[$i]}" ":")
+                    declare -i len=$(($pos-1))
+                    gpu_idx=${GPUINDEXES[$i]:0:$len}
+                    algoidx=${GPUINDEXES[$i]:$pos}
+                    #echoString+="GPU#${PossibleCandidateGPUidx[${i}]}:Algo#"
+                    echoString+="GPU#${gpu_idx}:Algo#"
+                    declare -n actCombinedGPU="GPU${gpu_idx}Algos"
+                    echoString+="${actCombinedGPU[${algoidx}]},"
+                done
+                echo "${echoString%%?}"
+            fi  ## if [ ${verbose} == 1 ]
         fi
         
         # Hier ist der Testlauf beendet und der nächste kann eingeleitet werden, sofern es noch einen gibt
@@ -393,6 +395,7 @@ function _read_in_actual_RUNNING_STATE () {
         if [[ ${verbose} == 1 ]]; then
             if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
                 echo "---> Alledgedly Running GPUs/Algos"
+                unset lfdUUID
                 for lfdUUID in ${!RunningGPUid[@]}; do
                     echo "GPU-Index      : ${RunningGPUid[$lfdUUID]}, UUID=$lfdUUID"
                     echo "War sie Enabled? $((${WasItEnabled[$lfdUUID]} == 1))"
