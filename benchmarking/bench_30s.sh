@@ -60,15 +60,15 @@ if [ "$algo" = "lyra2rev2" ] ; then
     algo="lyra2v2" 
     echo "algo muss geändert werden" 
    else 
-    echo "gibt keine algoveränderung" 
+    if [ "$algo" = "x11gost" ] ; then 
+        algo="sib" 
+        echo "algo muss geändert werden" 
+       else 
+        echo "gibt keine algoveränderung" 
+    fi  
 fi 
  
-if [ "$algo" = "x11gost" ] ; then 
-    algo="sib" 
-    echo "algo muss geändert werden" 
-   else 
-    echo "gibt keine algoveränderung" 
-fi 
+
 # miner wird ausgeführt mit device und schreiben der log datei (mehrere minuten) 
 # CUDA export .. wo das Cuda verzeichnis ist und ggf version 
 export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH 
@@ -180,13 +180,14 @@ fi
 echo " $algo_original " 
 ######################## 
 # 
-# Benschmarkspeeed HASH wert 
+# Benschmarkspeeed HASH und WATT werte
 # (original benchmakŕk.json) für herrausfinden wo an welcher stelle ersetzt werden muss  
 # 
 #bechchmarkfile="benchmark_${uuid}.json"    # gpu index uuid in "../$uuid/benchmark_$uuid" 
 
-cat benchmark_${uuid}.json |grep -n -A 4 ${algo_original} | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > temp_algo_zeile 
- 
+cat benchmark_${uuid}.json |grep -n -A 4 ${algo_original} | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > tempazb
+cat benchmark_${uuid}.json |grep -n -A 4 ${algo_original} | grep WATT | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > tempazw
+
 ## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
 # cat benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json |grep -n -A 4 equihash | grep BenchmarkSpeed 
 # Zeilennummer ; Name ; HASH, 
@@ -222,7 +223,7 @@ cat benchmark_${algo}_${uuid}.log |grep Total | gawk -e 'BEGIN {FS=" "} {print $
 cat benchmark_${algo}_${uuid}.log |grep /s |grep GPU | gawk -e 'BEGIN {FS=" "} {print $9}' >> temp_hash
 
 # herrausfiltern ob KH,MH ....
-cat benchmark_${algo}_${uuid}.log |grep Total | gawk -e 'BEGIN {FS=" "} {print $5}' > temp_einheit
+cat benchmark_${algo}_${uuid}.log |grep -m1 Total | gawk -e 'BEGIN {FS=" "} {print $5}' > temp_einheit
 
 ############################################################################### 
 # 
@@ -284,28 +285,22 @@ if [ "$temp_einheit" = "kH/s" ] ; then
 fi
 
 
-#------------------------------------------BIS HIER ERSTMAL------------------------------------------------------- 
-#cat $benchmark_$algo_$uuid.log |grep -n -A 4 $algo_original | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > temp_algo 
-#hashwert="...." 
+#########
+#
+# Einfügen des Hash wertes in die Original bench*.json datei
  
+# ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
+tempazw=$(cat "tempazw")
+tempazb=$(cat "tempazb") 
+
+# Hash wert änderung
+echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt" 
+sed -i -e ''$tempazb's/[0-9.]\+/'$avgHASH'/' benchmark_${uuid}.json
+# WATT wert änderung
+echo "der WATT wert $avgWATT wird nun in der Zeile $tempazw eingefügt" 
+sed -i -e ''$tempazw's/[0-9.]\+/'$avgWATT'/' benchmark_${uuid}.json
  
- 
-#algo="equihash"     # $xxxx aus dem array 
-#bechchmarkfile="benchmark_${uuid}.json"    # gpu index uuid in "../$uuid/benchmark_$uuid" 
-#cat $bechchmarkfile |grep -n -A 4 $algo | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > temp 
- 
- 
-# ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes 
-#tempaz=$(cat "temp_algo_zeile") 
-#echo "$tempaz" 
- 
-#sed -i -e ''$tempaz's/[0-9.]\+/$WWWEEERRRTTT----HASH/' $bechchmarkfile 
-#sed -i -e '${tempaz}s/[0-9.]\+/$WWWEEERRRTTT----HASH/' $bechchmarkfile 
- 
- 
-##### WATT WERT 
-# $avgWATT 
- 
+
 ###################### 
 # Löschen der Log datei 
 #rm benchmark_$tempnv.log 
