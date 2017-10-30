@@ -48,11 +48,7 @@ SYNCFILE="you_can_read_now.sync"
 
 function _On_Exit () {
     # Wir könnten auch alle GPUs stoppen...
-    rm -f ${ALGO_NAMES_ARR}
-    rm -f ${algoID_KURSE_ARR}
-    rm -f BTC_EUR_kurs.in
-    rm -f ${SYNCFILE}
-    rm -f $(basename $0 .sh).pid
+    rm -f ${ALGO_NAMES_ARR} ${algoID_KURSE_ARR} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
 
