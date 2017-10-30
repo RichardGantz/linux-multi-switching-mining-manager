@@ -92,16 +92,10 @@ for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
     uuid[${index[$j]}]=${READARR[$i+3]}
     auslastung[${index[$j]}]=${READARR[$i+4]}
     # EXTREM WICHTIGE Deklarationen!
-    declare -ag "GPU${index[$j]}Algos"
-    declare -ag "GPU${index[$j]}Watts"
-    declare -ag "GPU${index[$j]}Mines"
-    declare -n deleteIt="GPU${index[$j]}Algos"
-    #unset -n deleteIt
-    unset deleteIt
-    declare -n deleteIt="GPU${index[$j]}Watts"
-    unset deleteIt
-    declare -n deleteIt="GPU${index[$j]}Mines"
-    unset deleteIt
+    # Seitdem dieser Teil am Anfang einer Endlosschleife enthalten ist, müssen wir die Arrays erst mal löschen!
+    declare -n deleteIt="GPU${index[$j]}Algos";     unset deleteIt
+    declare -n deleteIt="GPU${index[$j]}Watts";     unset deleteIt
+    declare -n deleteIt="GPU${index[$j]}Mines";     unset deleteIt
     declare -ag "GPU${index[$j]}Algos"
     declare -ag "GPU${index[$j]}Watts"
     declare -ag "GPU${index[$j]}Mines"
