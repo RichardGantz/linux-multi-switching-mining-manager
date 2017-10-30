@@ -27,9 +27,9 @@
       "NiceHashID": 21,
       "MinerBaseType": 2,
       "MinerName": "decred",
-      "BenchmarkSpeed": 2294846453.0,
+      "BenchmarkSpeed": 2863000000,
       "ExtraLaunchParameters": "",
-      "WATT": 295,
+      "WATT": 284,
       "LessThreads": 0
     },
     {
@@ -37,9 +37,9 @@
       "NiceHashID": 22,
       "MinerBaseType": 2,
       "MinerName": "cryptonight",
-      "BenchmarkSpeed": 645.0947816826,
+      "BenchmarkSpeed": 646,
       "ExtraLaunchParameters": "",
-      "WATT": 140,
+      "WATT": 142,
       "LessThreads": 0
     },
     {
@@ -47,9 +47,9 @@
       "NiceHashID": 23,
       "MinerBaseType": 2,
       "MinerName": "lbry",
-      "BenchmarkSpeed": 269609712.460064,
+      "BenchmarkSpeed": 267000000,
       "ExtraLaunchParameters": "",
-      "WATT": 258,
+      "WATT": 251,
       "LessThreads": 0
     },
     {
@@ -77,7 +77,7 @@
       "NiceHashID": 24,
       "MinerBaseType": 9,
       "MinerName": "equihash",
-      "BenchmarkSpeed": 1111,
+      "BenchmarkSpeed": 469.765087,
       "ExtraLaunchParameters": "",
       "WATT": 267,
       "LessThreads": 0
@@ -97,9 +97,9 @@
       "NiceHashID": 25,
       "MinerBaseType": 9,
       "MinerName": "sia",
-      "BenchmarkSpeed": 1609260191.69329,
+      "BenchmarkSpeed": 1776000000,
       "ExtraLaunchParameters": "",
-      "WATT": 1000,
+      "WATT": 299,
       "LessThreads": 0
     },
 {
@@ -107,9 +107,9 @@
       "NiceHashID": 25,
       "MinerBaseType": 9,
       "MinerName": "skunk",
-      "BenchmarkSpeed": 18653325.69329,
+      "BenchmarkSpeed": 28000000,
       "ExtraLaunchParameters": "",
-      "WATT": 1000,
+      "WATT": 245,
       "LessThreads": 0
     },
 {
@@ -117,9 +117,9 @@
       "NiceHashID": 25,
       "MinerBaseType": 9,
       "MinerName": "blake2s",
-      "BenchmarkSpeed": 58653325.69329,
+      "BenchmarkSpeed": 4135000000,
       "ExtraLaunchParameters": "",
-      "WATT": 1000,
+      "WATT": 276,
       "LessThreads": 0
     },
 {
@@ -217,9 +217,9 @@
       "NiceHashID": 25,
       "MinerBaseType": 9,
       "MinerName": "blake256r8",
-      "BenchmarkSpeed": 4609260191.69329,
+      "BenchmarkSpeed": 4628000000,
       "ExtraLaunchParameters": "",
-      "WATT": 1000,
+      "WATT": 276,
       "LessThreads": 0
     },
 {
@@ -237,9 +237,9 @@
       "NiceHashID": 25,
       "MinerBaseType": 9,
       "MinerName": "blake256r8vnl",
-      "BenchmarkSpeed": 4609260191.69329,
+      "BenchmarkSpeed": 6933000000,
       "ExtraLaunchParameters": "",
-      "WATT": 1000,
+      "WATT": 278,
       "LessThreads": 0
     }
   ]

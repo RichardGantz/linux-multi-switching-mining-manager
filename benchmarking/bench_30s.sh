@@ -32,13 +32,43 @@ uuid=$(cat "uuid")
  
 # Auswahl des Algos  
  
-a0="scrypt"  
-a1="lyra2rev2"  
-a2="x11gost" 
- 
+a0="scrypt"
+a1="lyra2rev2"
+a2="x11gost"
+#a3="scryptnf"
+a4="x11"
+a5="x13"
+a6="keccak"
+a7="x15"
+a8="nist5"
+a9="neoscrypt"
+#------
+a10="lyra2re"
+a11="whirlpoolx"
+a12="qubit"
+a13="quark"
+#a14="axiom"
+a15="scryptjanenf16"
+a16="blake256r8"
+#a17="blake256r14"
+a18="blake256r8vnl"
+#a19="hodl"
+#a20="daggerhashimoto"
+a21="decred"
+a22="cryptonight"
+a23="lbry"
+#a24="equihash"
+#a25="pascal"
+a26="sia"
+a27="blake2s"
+a28="skunk"
+
 declare -n algonr 
  
-echo "a0=scrypt ; a1=lyra2rev2 ; a2=x11gost" 
+echo "a0=scrypt ; a1=lyra2rev2 ; a2=x11gost ; a3=scryptnf ; a4=x11 ; a5=x13 ; a6=keccak ; a7=x15 ; a8=nist5 ; a9=neoscrypt"
+echo "a10=lyra2re ; a11=whirlpoolx ; a12=qubit ; a13=quark ; a14=axiom ; a15=scryptjanenf16 ; a16=blake256r8 ; a17=blake256r14"
+echo "a18=blake256r8vnl ; a19=hodl ; a20=daggerhashimoto ; a21=decred ; a22=cryptonight ; a23=lbry ; a24=equihash ; a25=pascal"
+echo "a26=sia ; a27=blake2s ; a28=skunk"
  
 read -p "Für welchen Algo willst du testen: " algonr 
  
@@ -47,7 +77,7 @@ algo=$(cat "algo.out")
  
 #algo=($algonr) 
  
-echo "das ist der Algo den du ausgewählt hast : $algo" 
+echo "das ist der Algo den du ausgewählt hast : ${algo}" 
  
 ########## 
 # 
@@ -64,7 +94,28 @@ if [ "$algo" = "lyra2rev2" ] ; then
         algo="sib" 
         echo "algo muss geändert werden" 
        else 
-        echo "gibt keine algoveränderung" 
+        if [ "$algo" = "whirlpoolx" ] ; then 
+            algo="whirlpool" 
+            echo "algo muss geändert werden" 
+        else 
+            if [ "$algo" = "scryptjanenf16" ] ; then 
+                algo="scrypt-jane" 
+                echo "algo muss geändert werden" 
+            else 
+                if [ "$algo" = "blake256r8" ] ; then 
+                    algo="blakecoin" 
+                    echo "algo muss geändert werden" 
+                else 
+                    if [ "$algo" = "blake256r8vnl" ] ; then 
+                        algo="vanilla" 
+                        echo "algo muss geändert werden" 
+                    else 
+                        echo "gibt keine algoveränderung" 
+                    fi     
+                fi    
+ 
+            fi    
+        fi   
     fi  
 fi 
  
@@ -96,9 +147,24 @@ rm COUNTER
 rm watt_bensh_30s.out 
 rm -f watt_bensh_30s_max.out
 
+#####
+#
+# Teilweise brauchen die Algos längere zeit um hash werte zu erzeugen, deswegen wird der timer
+# je nach algo hochgesetzt, wenn dieses gebraucht wird .... bzw ... anhand der ausgabe datei
+# kann es ggf festgesellt werden .... minium 20 hash werte sollten aufgerechnet werden können.
+time=30    #wieviel mal soll die schleife laufen ein durchlauf 1 sekunde
+    
+    if [ "$algo" = "scrypt" ] ; then 
+        time=1 
+        echo "Dieser Algo ist nicht mehr mit Graffikkarten lohnenswert" 
+       else 
+        echo "gibt keine zeit Anpassung läuft mit $time Sekunden" 
+    fi  
+
+
 COUNTER=0
 id=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
-time=30    #wieviel mal soll die schleife laufen ein durchlauf 1 sekunde
+
 
 #### für so und so viele Sekunden den Watt wert in eine Datei schreiben
 while [  $COUNTER -lt $time ]; do
@@ -179,7 +245,27 @@ if [ "$algo" = "lyra2v2" ] ; then
         algo_original="x11gost" 
         echo "algo muss geändert werden" 
     else 
-        echo "Algo muss nicht geändert werden" 
+        if [ "$algo" = "whirlpool" ] ; then 
+            algo_original="whirlpoolx" 
+            echo "algo muss geändert werden" 
+        else 
+            if [ "$algo" = "scrypt-jane" ] ; then 
+                algo_original="scryptjanenf16" 
+                echo "algo muss geändert werden" 
+            else 
+                if [ "$algo" = "blakecoin" ] ; then 
+                    algo_original="blake256r8" 
+                    echo "algo muss geändert werden" 
+                else 
+                    if [ "$algo" = "vanilla" ] ; then 
+                        algo_original="blake256r8vnl" 
+                        echo "algo muss geändert werden" 
+                    else 
+                        echo "Algo muss nicht geändert werden" 
+                    fi     
+                fi    
+            fi   
+        fi  
     fi 
 fi 
  
@@ -192,9 +278,10 @@ echo " $algo_original "
 # 
 #bechchmarkfile="benchmark_${uuid}.json"    # gpu index uuid in "../$uuid/benchmark_$uuid" 
 
-cat benchmark_${uuid}.json |grep -n -A 4 ${algo_original} | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > tempazb
-cat benchmark_${uuid}.json |grep -n -A 4 ${algo_original} | grep WATT | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > tempazw
+cat benchmark_${uuid}.json |grep -n -A 4 \"${algo_original}\" | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > tempazb
+cat benchmark_${uuid}.json |grep -n -A 4 \"${algo_original}\" | grep WATT | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > tempazw
 
+#" <-- wegen richtigem Highlightning in meinem proggi ... bitte nicht entfernen
 ## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
 # cat benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json |grep -n -A 4 equihash | grep BenchmarkSpeed 
 # Zeilennummer ; Name ; HASH, 
@@ -228,6 +315,9 @@ cat benchmark_${uuid}.json |grep -n -A 4 ${algo_original} | grep WATT | gawk -e 
 
 cat benchmark_${algo}_${uuid}.log |grep Total | gawk -e 'BEGIN {FS=" "} {print $4}' > temp_hash
 cat benchmark_${algo}_${uuid}.log |grep /s |grep GPU | gawk -e 'BEGIN {FS=" "} {print $9}' >> temp_hash
+
+#falls buchstaben hinzugekommen sind in einer zeile = falsch muss sie komplett entfernt werden
+sed -i '/[a-z]/d' temp_hash
 
 # herrausfiltern ob KH,MH ....
 cat benchmark_${algo}_${uuid}.log |grep -m1 Total | gawk -e 'BEGIN {FS=" "} {print $5}' > temp_einheit
@@ -300,12 +390,29 @@ fi
 tempazw=$(cat "tempazw")
 tempazb=$(cat "tempazb") 
 
-# Hash wert änderung
-echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt" 
-sed -i -e ''$tempazb's/[0-9.]\+/'$avgHASH'/' benchmark_${uuid}.json
-# WATT wert änderung
-echo "der WATT wert $avgWATT wird nun in der Zeile $tempazw eingefügt" 
-sed -i -e ''$tempazw's/[0-9.]\+/'$avgWATT'/' benchmark_${uuid}.json
+if [ "$tempazw" -gt 1 ] ; then  
+        # Hash wert änderung
+        echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt" 
+        sed -i -e ''$tempazb's/[0-9.]\+/'$avgHASH'/' benchmark_${uuid}.json
+        # WATT wert änderung
+        echo "der WATT wert $avgWATT wird nun in der Zeile $tempazw eingefügt" 
+        sed -i -e ''$tempazw's/[0-9.]\+/'$avgWATT'/' benchmark_${uuid}.json
+    else 
+        echo "Der Algo wird zur Benchmark Datei hinzugefügt"
+        echo "{" >> benchmark_${uuid}.json
+        echo ""Name": "$algo_original"," >> benchmark_${uuid}.json
+        echo ""NiceHashID": 0," >> benchmark_${uuid}.json
+        echo ""MinerBaseType": 0," >> benchmark_${uuid}.json
+        echo ""MinerName": "$algo_original"," >> benchmark_${uuid}.json
+        echo ""BenchmarkSpeed": $avgHASH," >> benchmark_${uuid}.json
+        echo ""ExtraLaunchParameters": ""," >> benchmark_${uuid}.json
+        echo ""WATT": $avgWATT," >> benchmark_${uuid}.json
+        echo ""LessThreads": 0" >> benchmark_${uuid}.json
+        echo "}," >> benchmark_${uuid}.json
+
+fi   
+
+
  
 
 ###################### 
