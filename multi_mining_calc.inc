@@ -1,24 +1,6 @@
 #!/bin/bash
 ########################################################################
 #
-#               _push_onto_array
-#
-#
-# Um die Berechnungs-Mechaniken besser verstehen zu können, ist es wichtig, den Sinn von Arrays
-# tief zu verstehen.
-# Diese Funktion legt auf ein vorhandenes Indexiertes Array in lückenloser Manier einen Wert
-# oben drauf oder initialisiert es mit einem Wert bei Index 0, wenn es noch nicht vorhanden sein sollte.
-# Nach diesem Push gibt es das Array auf jeden Fall und es hat mindestens 1 Member.
-# Und alle Member können lückenlos von 0 bis zur "Anzahl Member - 1" in einer Schleife angesteuert werden.
-#
-function _push_onto_array () {
-    declare -n arry="$1"
-    arrCnt=${#arry[@]}
-    arry[${arrCnt}]="$2"
-}
-
-########################################################################
-#
 #               _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
 #
 #
@@ -311,13 +293,7 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
             # Jede Ebene vorher hat ihren aktuelen Indexwert an die Parameterliste gehängt.
             # Das Array TestCombinationGPUs, das die zu untersuchenden GPU-Indexe enthält,
             # wird jetzt komplett für die Berechnungsroutine aufgebaut.
-            while [[ $# -gt 0 ]]; do
-                # Zuerst alle bisherigen GPUs dieser Kombination aus GPUs ...
-                _push_onto_array TestCombinationGPUs ${PossibleCandidateGPUidx[$1]}
-                shift
-            done
-            # ... und dann die momentan letzte, die eigene, oben drauf.
-            _push_onto_array TestCombinationGPUs ${PossibleCandidateGPUidx[${iii}]}
+            TestCombinationGPUs=($* ${PossibleCandidateGPUidx[${iii}]})
             #echo "Anzahl Test-Member-Array: ${#TestCombinationGPUs[@]}"
             _CALCULATE_GV_of_all_TestCombinationGPUs_members
         done

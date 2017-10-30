@@ -161,7 +161,10 @@ if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
         fi
     done
 fi
-echo "Sum of actually running WATTS: ${SUM_OF_RUNNING_WATTS}W"
+# Ausgabe besser weiter unten, dass zusammen mit den anderen beiden Angaben sichtbar ist.
+# Die Hintergrundprozesse posten ihren Output einfach frech dazwischen, so dass diese Zeilen,
+# die über die momentanen Leistungsverhältnisse aufklären, nicht untereinander stehen könnten.
+#printf "         Sum of actually running WATTS: %5dW\n" ${SUM_OF_RUNNING_WATTS}
 
 ###############################################################################################
 # (26.10.2017)
@@ -238,9 +241,9 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
         unset READARR
         readarray -n 0 -O 0 -t READARR <${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in
         for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
-            _push_onto_array actGPUAlgos  "${READARR[$i]}"
-            _push_onto_array actAlgoWatt  "${READARR[$i+1]}"
-            _push_onto_array actAlgoMines "${READARR[$i+2]}"
+            actGPUAlgos=(${actGPUAlgos[@]}   "${READARR[$i]}")
+            actAlgoWatt=(${actAlgoWatt[@]}   "${READARR[$i+1]}")
+            actAlgoMines=(${actAlgoMines[@]} "${READARR[$i+2]}")
         done
     fi
 done
@@ -299,13 +302,16 @@ if [ ! $NoCards ]; then
     w3m "http://192.168.6.170/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData" > smartmeter
 fi
     
+printf "         Sum of actually running WATTS: %5dW\n" ${SUM_OF_RUNNING_WATTS}
+
 # ABFRAGE PowerReal_P_Sum
 ACTUAL_SMARTMETER_KW=$(grep $PHASE smartmeter | gawk '{print substr($3,0,index($3,".")-1)}')
-echo "Aktueller Verbrauch aus dem Smartmeter: ${ACTUAL_SMARTMETER_KW}W"
+printf "Aktueller Verbrauch aus dem Smartmeter: %5dW\n" ${ACTUAL_SMARTMETER_KW}
 
 if [[ $((${ACTUAL_SMARTMETER_KW} - ${SUM_OF_RUNNING_WATTS})) -lt 0 ]]; then
     SolarWattAvailable=$(expr ${SUM_OF_RUNNING_WATTS} - ${ACTUAL_SMARTMETER_KW})    
 fi
+printf "                 Verfügbare SolarPower: %5dW\n" ${SolarWattAvailable}
 
 ###############################################################################################
 #
@@ -484,7 +490,7 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
         "0")
             # Karte ist auszuschalten. Kein (gewinnbringender) Algo im Moment
             # (Noch haben wir die Gewinne nicht ausgerechnet!)
-            _push_onto_array SwitchOffGPUs ${index[$idx]}
+            SwitchOffGPUs=(${SwitchOffGPUs[@]} ${index[$idx]})
             ;;
 
         *)
@@ -501,35 +507,30 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
             for (( algoIdx=0; $algoIdx<${numAlgos}; algoIdx++ )); do
                 _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
                     ${SolarWattAvailable} ${actAlgoWatt[$algoIdx]} "${actAlgoMines[$algoIdx]}"
+                # Wenn das NEGATIV ist, muss die Karte übergangen werden. Uns interessieren nur diejenigen,
+                # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
+                if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
+                    profitableAlgoIndexes=(${profitableAlgoIndexes[@]} ${algoIdx})
+                fi
                 if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
                     MAX_PROFIT_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
                     echo "New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
                 fi
-
-                # Wenn das NEGATIV ist, muss die Karte übergangen werden. Uns interessieren nur diejenigen,
-                # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
-                if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
-                    _push_onto_array profitableAlgoIndexes ${algoIdx}
-                fi
             done
 
             profitableAlgoIndexesCnt=${#profitableAlgoIndexes[@]}
-            #echo "profitableAlgoIndexesCnt: ${profitableAlgoIndexesCnt}"
             if [[ ${profitableAlgoIndexesCnt} -gt 0 ]]; then
-                # Können wir das noch brauchen?
-                pushIdx=${#PossibleCandidateGPUidx[@]}
-                PossibleCandidateGPUidx[${pushIdx}]=${index[$idx]}
+                PossibleCandidateGPUidx=(${PossibleCandidateGPUidx[@]} ${index[$idx]})
                 exactNumAlgos[${index[$idx]}]=${profitableAlgoIndexesCnt}
                 # Hilfsarray für AlgoIndexe vor dem Neuaufbau immer erst löschen
                 declare -n deleteIt="PossibleCandidate${index[$idx]}AlgoIndexes";    unset deleteIt
                 declare -ag "PossibleCandidate${index[$idx]}AlgoIndexes"
                 declare -n actCandidatesAlgoIndexes="PossibleCandidate${index[$idx]}AlgoIndexes"
-                for (( algoIdx=0; $algoIdx<${profitableAlgoIndexesCnt}; algoIdx++ )); do
-                    _push_onto_array actCandidatesAlgoIndexes ${profitableAlgoIndexes[${algoIdx}]}
-                done
+                # Array kopieren
+                actCandidatesAlgoIndexes=(${profitableAlgoIndexes[@]})
             else
                 # Wenn kein Algo übrigbleiben sollte, GPU aus.
-                _push_onto_array SwitchOffGPUs ${index[$idx]}
+                SwitchOffGPUs=(${SwitchOffGPUs[@]} ${index[$idx]})
             fi
             ;;
 
@@ -622,8 +623,6 @@ done
 # Zum Schreiben reservieren
 echo $$ >${RUNNING_STATE}.lock
 
-#_read_in_actual_RUNNING_STATE
-
 #####################################################
 # Ausgabe des neuen Status
 ####################################################
@@ -657,11 +656,9 @@ for (( i=0; $i<${SwitchOnCnt}; i++ )); do
 
     # Ausfiltern der Guten GPUs aus PossibleCandidateGPUidx.
     # PossibleCandidateGPUidx enthält dann zum Schluss nur noch ebenfalls abzuschaltende GPUs
-    for gpu_candidate in ${!PossibleCandidateGPUidx[@]}; do
-        if [[ "${PossibleCandidateGPUidx[${gpu_candidate}]}" == "${gpu_idx}" ]]; then
-            unset PossibleCandidateGPUidx[${gpu_candidate}]
-        fi
-    done
+    # ${gpu_idx} ausfiltern durch Neu-Initialisierung des Arrays, wobei ${gpu_idx} durch '' ersetzt wird
+    #            und damit einfach nicht mit ausgegeben und also nicht mehr im neuen Array enthalten ist.
+    PossibleCandidateGPUidx=(${PossibleCandidateGPUidx[@]/${gpu_idx}/})
 
     declare -n actGPUalgoName="GPU${gpu_idx}Algos"
     declare -n actGPUalgoWatt="GPU${gpu_idx}Watts"
@@ -809,9 +806,7 @@ done
 # Die Guten GPUs sind raus aus PossibleCandidateGPUidx.
 # PossibleCandidateGPUidx enthält jetzt nur noch ebenfalls abzuschaltende GPUs,
 # die wir jetzt auf's SwitchOffGPUs Array packen
-for gpu_candidate in "${PossibleCandidateGPUidx[@]}"; do
-    _push_onto_array SwitchOffGPUs ${gpu_candidate}
-done
+SwitchOffGPUs=(${SwitchOffGPUs[@]} ${PossibleCandidateGPUidx[@]})
 
 ###                                                             ###
 #   ... dann die GPU's, die abgeschaltet werden sollen            #
@@ -876,6 +871,12 @@ for algoName in ${!AlgoDisabled[@]}; do
     printf "AlgoDisabled:$algoName\n" >>${RUNNING_STATE}
 done
 
+# Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
+rm -f ${RUNNING_STATE}.lock
+
+echo "Neues globales Switching Sollzustand Kommandofile"
+cat ${RUNNING_STATE}
+
 if [ $NoCards ]; then
     if [[ $NewLoad -gt 0 ]]; then
         echo "         \"PowerReal_P_Sum\" : $((${ACTUAL_SMARTMETER_KW}-${SUM_OF_RUNNING_WATTS}+${NewLoad})).6099354," \
@@ -883,15 +884,9 @@ if [ $NoCards ]; then
     fi
 fi
 
-# Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
-rm -f ${RUNNING_STATE}.lock
-
-echo "Neues globales Switching Sollzustand Kommandofile"
-cat ${RUNNING_STATE}
-
-    while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
-        sleep 1
-    done
+while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
+    sleep 1
+done
 
 done  ## while : 
 
