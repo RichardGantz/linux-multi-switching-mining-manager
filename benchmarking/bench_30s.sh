@@ -86,26 +86,33 @@ sleep 3
  
  
  
-### Starten der WATT Messung über 30 Sekunden um ein ersten wert zu bekommen 
-# Hier drin läuft der counter 30 Sekunden, danach werden Miner bench beendet 
+### Starten der WATT Messung über xx Sekunden um ein ersten wert zu bekommen 
+# Hier drin läuft der counter xx Sekunden, danach werden Miner bench beendet 
 #  (wattmessung sekunde vorher als variable abfragen irgendwann) 
  
 echo "starten des Wattmessens" 
 #echo "watt_bensh_30s.sh &" 
 rm COUNTER 
 rm watt_bensh_30s.out 
-rm -f watt_bensh_30s_max.out 
-./watt_bensh_30s.sh & 
-echo $! > watt_bensh_30s.pid 
- 
-sleep 31 
- 
-echo "beenden des Wattmessens" 
-#echo "kill -15 $watt_bensh_30s.pid" 
- 
-#watt_bensh_30s=$(cat "watt_bensh_30s.pid") 
-#kill -15 $watt_bensh_30s 
- 
+rm -f watt_bensh_30s_max.out
+
+COUNTER=0
+id=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
+time=30    #wieviel mal soll die schleife laufen ein durchlauf 1 sekunde
+
+#### für so und so viele Sekunden den Watt wert in eine Datei schreiben
+while [  $COUNTER -lt $time ]; do
+    nvidia-smi --id=$id --query-gpu=power.draw --format=csv,noheader |gawk -e 'BEGIN {FS=" "} {print $1}'  >> watt_bensh_30s.out
+    let COUNTER=COUNTER+1
+    echo $COUNTER > COUNTER
+    sleep 1
+done
+
+
+
+echo "Wattmessen ist beendet!!" 
+
+
 echo "beenden des miners" 
 ## Beenden des miners 
 ccminer=$(cat  "ccminer.pid") 
@@ -168,14 +175,14 @@ if [ "$algo" = "lyra2v2" ] ; then
     algo_original="lyra2rev2" 
     echo "algo muss geändert werden" 
     else 
-    echo "." 
-fi 
-if [ "$algo" = "sib" ] ; then 
-    algo_original="x11gost" 
-    echo "algo muss geändert werden" 
+    if [ "$algo" = "sib" ] ; then 
+        algo_original="x11gost" 
+        echo "algo muss geändert werden" 
     else 
-    echo "." 
+        echo "Algo muss nicht geändert werden" 
+    fi 
 fi 
+ 
  
 echo " $algo_original " 
 ######################## 
