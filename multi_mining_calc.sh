@@ -11,46 +11,41 @@
 #
 ###############################################################################
 
+# Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
+# Null, Empty String, oder irgendetwas andere bedeutet AUS.
+verbose=0
+
+# Sicherheitshalber alle .pid Dateien löschen.
+# Das machen die Skripts zwar selbst bei SIGTERM, nicht aber bei SIGKILL und anderen.
+# Sonst startet er die Prozesse nicht.
+# Die .pid ist in der Endlosschleife der Hinweis, dass der Prozess läuft und NICHT gestartet werden muss.
+#
+find . -depth -name \*.pid -delete
+
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
 
 #
-# Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
+# Aufräumarbeiten beim ordungsgemäßen kill -15 Signal (SIGTERM)
 #
-function _kill_all_gpu_gv_algos () {
+function _terminate_all_processes_of_script () {
     kill_pids=$(ps -ef \
-       | grep -e '/bin/bash.*gpu_gv-algo.sh' \
+       | grep -e "/bin/bash.*$1" \
        | grep -v 'grep -e ' \
        | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
     if [ ! "$kill_pids" == "" ]; then
-        printf "Killing all gpu_gv-algo.sh processes... "
-        kill $kill_pids
-        printf "done.\n"
-    fi
-}
-
-function _kill_algo_multi_abfrage () {
-    kill_pids=$(ps -ef \
-       | grep -e '/bin/bash.*algo_multi_abfrage.sh' \
-       | grep -v 'grep -e ' \
-       | gawk -e '{print $2}')
-    if [ ! "$kill_pids" == "" ]; then
-        printf "Killing algo_multi_abfrage.sh process... "
+        printf "Killing all $1 processes... "
         kill $kill_pids
         printf "done.\n"
     fi
 }
 
 function _On_Exit () {
-    _kill_all_gpu_gv_algos
-    _kill_algo_multi_abfrage
+    _terminate_all_processes_of_script "gpu_gv-algo.sh"
+    _terminate_all_processes_of_script "algo_multi_abfrage.sh"
     rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
-
-# Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
-# Null, Empty String, oder irgendetwas andere bedeutet AUS.
-verbose=0
 
 # Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
 # und müssen sich auf den Inhalt fixer Dateien beziehen.
@@ -89,13 +84,14 @@ source ./multi_mining_calc.inc
 # ALLE LAUFENDEN gpu_gv-algo.sh killen.
 # ---> DAS MUSS NATÜRLICH AUCH DEN MINERN NOCH MITGETEILT WERDEN! <---
 # ---> WIR BEFINDEN UNS HIER NOCH IN DER TROCKENÜBUNG             <---
-_kill_all_gpu_gv_algos
-_kill_algo_multi_abfrage
+_terminate_all_processes_of_script "gpu_gv-algo.sh"
+_terminate_all_processes_of_script "algo_multi_abfrage.sh"
 # ---> WIR MÜSSEN AUCH ÜBERLEGEN, WAS WIR MIT DEM RUNNING_STATE MACHEN !!! <---
 # ---> WIE SINNVOLL IST ES, DEN AUFZUHEBEN?                                <---
 # Danach ist alles saubergeputzt, soweit wir das im Moment überblicken und es kann losgehen, die
 # gpu_gv-algos's zu starten, die erst mal auf SYNCFILE warten
 # und dann algo_multi_abfrage.sh
+
 
 while : ; do
 
@@ -524,10 +520,8 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                 pushIdx=${#PossibleCandidateGPUidx[@]}
                 PossibleCandidateGPUidx[${pushIdx}]=${index[$idx]}
                 exactNumAlgos[${index[$idx]}]=${profitableAlgoIndexesCnt}
-                declare -ag "PossibleCandidate${index[$idx]}AlgoIndexes"
-                declare -n deleteIt="PossibleCandidate${index[$idx]}AlgoIndexes"
-                #unset -n deleteIt
-                unset deleteIt
+                # Hilfsarray für AlgoIndexe vor dem Neuaufbau immer erst löschen
+                declare -n deleteIt="PossibleCandidate${index[$idx]}AlgoIndexes";    unset deleteIt
                 declare -ag "PossibleCandidate${index[$idx]}AlgoIndexes"
                 declare -n actCandidatesAlgoIndexes="PossibleCandidate${index[$idx]}AlgoIndexes"
                 for (( algoIdx=0; $algoIdx<${profitableAlgoIndexesCnt}; algoIdx++ )); do

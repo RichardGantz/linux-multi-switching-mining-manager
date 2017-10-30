@@ -209,11 +209,8 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
                 _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
                 echoString="Exactly: "
                 for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
-                    declare -i pos=$(expr index "${GPUINDEXES[$i]}" ":")
-                    declare -i len=$(($pos-1))
-                    gpu_idx=${GPUINDEXES[$i]:0:$len}
-                    algoidx=${GPUINDEXES[$i]:$pos}
-                    #echoString+="GPU#${PossibleCandidateGPUidx[${i}]}:Algo#"
+                    # Split the "String" at ":" into the 2 variables "gpu_idx" and "algoidx"
+                    read gpu_idx algoidx <<<"${GPUINDEXES[$i]//:/ }"
                     echoString+="GPU#${gpu_idx}:Algo#"
                     declare -n actCombinedGPU="GPU${gpu_idx}Algos"
                     echoString+="${actCombinedGPU[${algoidx}]},"
