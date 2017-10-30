@@ -60,15 +60,15 @@ if [ "$algo" = "lyra2rev2" ] ; then
     algo="lyra2v2" 
     echo "algo muss geändert werden" 
    else 
-    echo "gibt keine algoveränderung" 
+    if [ "$algo" = "x11gost" ] ; then 
+        algo="sib" 
+        echo "algo muss geändert werden" 
+       else 
+        echo "gibt keine algoveränderung" 
+    fi  
 fi 
  
-if [ "$algo" = "x11gost" ] ; then 
-    algo="sib" 
-    echo "algo muss geändert werden" 
-   else 
-    echo "gibt keine algoveränderung" 
-fi 
+
 # miner wird ausgeführt mit device und schreiben der log datei (mehrere minuten) 
 # CUDA export .. wo das Cuda verzeichnis ist und ggf version 
 export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH 
@@ -180,44 +180,127 @@ fi
 echo " $algo_original " 
 ######################## 
 # 
-# Benschmarkspeeed HASH wert 
+# Benschmarkspeeed HASH und WATT werte
 # (original benchmakŕk.json) für herrausfinden wo an welcher stelle ersetzt werden muss  
 # 
-cat benchmark_${uuid}.json |grep -n -A 4 $algo_original | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > temp_algo 
- 
+#bechchmarkfile="benchmark_${uuid}.json"    # gpu index uuid in "../$uuid/benchmark_$uuid" 
+
+cat benchmark_${uuid}.json |grep -n -A 4 ${algo_original} | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > tempazb
+cat benchmark_${uuid}.json |grep -n -A 4 ${algo_original} | grep WATT | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > tempazw
+
 ## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
 # cat benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json |grep -n -A 4 equihash | grep BenchmarkSpeed 
 # Zeilennummer ; Name ; HASH, 
 # 80-      "BenchmarkSpeed": 469.765087, 
  
  
-#------------------------------------------BIS HIER ERSTMAL------------------------------------------------------- 
+
 # 
 # ccminer log vom algo benchmark_$algo_$uuid.log 
 # 
+#[2017-10-28 16:46:56] 1 miner thread started, using 'lyra2v2' algorithm.
+#[2017-10-28 16:46:56] GPU #0: Intensity set to 20, 1048576 cuda threads
+#[2017-10-28 16:46:58] GPU #0: Zotac GTX 980 Ti, 33.95 MH/s
+#[2017-10-28 16:46:59] Total: 34.36 MH/s
+#[2017-10-28 16:47:00] Total: 34.21 MH/s
+#[2017-10-28 16:47:01] Total: 34.22 MH/s
+#[2017-10-28 16:47:02] GPU #0: Zotac GTX 980 Ti, 34.40 MH/s
+
+#[2017-10-28 16:39:44] 1 miner thread started, using 'sib' algorithm.
+#[2017-10-28 16:39:44] GPU #0: Intensity set to 19, 524288 cuda threads
+#[2017-10-28 16:39:47] GPU #0: Zotac GTX 980 Ti, 8878.28 kH/s
+#[2017-10-28 16:39:54] GPU #0: Zotac GTX 980 Ti, 9029.67 kH/s
+#[2017-10-28 16:39:54] Total: 9029.67 kH/s
+#[2017-10-28 16:40:04] GPU #0: Zotac GTX 980 Ti, 8964.48 kH/s
+#[2017-10-28 16:40:04] Total: 8997.08 kH/s
+
+
+# Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
+# die Werte werden in zwei schritten herausgefiltert und in eine hash temp datei zusammengepakt, so dass jeder hash
+# wert erfasst werden kann
+
+cat benchmark_${algo}_${uuid}.log |grep Total | gawk -e 'BEGIN {FS=" "} {print $4}' > temp_hash
+cat benchmark_${algo}_${uuid}.log |grep /s |grep GPU | gawk -e 'BEGIN {FS=" "} {print $9}' >> temp_hash
+
+# herrausfiltern ob KH,MH ....
+cat benchmark_${algo}_${uuid}.log |grep -m1 Total | gawk -e 'BEGIN {FS=" "} {print $5}' > temp_einheit
+
+############################################################################### 
+# 
+#Berechnung der Durchschnittlichen Hash wertes 
+# 
+
+HASHCOUNTER=0 
+
+HASH_temp=$(cat "temp_hash") 
+sum=0 
  
+for i in $HASH_temp ; do  
  
-#cat $benchmark_$algo_$uuid.log |grep -n -A 4 $algo_original | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > temp_algo 
-#hashwert="...." 
+  sum=$(echo "$sum + $i" | bc)
+  let HASHCOUNTER=HASHCOUNTER+1 
+  echo $HASHCOUNTER > HASHCOUNTER  
+done 
  
+avgHASH=$(echo "$sum / $HASHCOUNTER" | bc) 
  
+echo " Summe: $sum " 
+echo " Durchschnitt: $avgHASH "
+temp_einheit=$(cat "temp_einheit")
+echo "${temp_einheit}"
+
+#######################################################
+#
+# Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
+#
+#######################################
+
+# if abfragen ob MH KH bla blub dann berechnung und richtigstellung $temp_einheit
+if [ "$temp_einheit" = "kH/s" ] ; then  
+    avgHASH=$(echo "${avgHASH} * 1000" | bc)
+    echo "HASHWERT wurde in Einheit ${temp_einheit} umgerechnet $avgHASH"
+    else
+    
+    if [ "$temp_einheit" = "MH/s" ] ; then  
+        avgHASH=$(echo "${avgHASH} * 1000000" | bc)
+        echo "HASHWERT wurde in Einheit ${temp_einheit} umgerechnet $avgHASH"
+        else 
+        
+        if [ "$temp_einheit" = "GH/s" ] ; then  
+            avgHASH=$(echo "${avgHASH} * 1000000000" | bc)
+            echo "HASHWERT wurde in Einheit ${temp_einheit} umgerechnet $avgHASH"
+            else 
+            
+            if [ "$temp_einheit" = "TH/s" ] ; then  
+                avgHASH=$(echo "${avgHASH} * 1000000000000" | bc)
+                echo "HASHWERT wurde in Einheit ${temp_einheit} umgerechnet $avgHASH"
+                else 
+                echo "HASHWERT $avgHASH brauchte nicht umgerechnet werden" 
+
+            fi    
+
+        fi   
+
+    fi  
+fi
+
+
+#########
+#
+# Einfügen des Hash wertes in die Original bench*.json datei
  
-#algo="equihash"     # $xxxx aus dem array 
-#bechchmarkfile="benchmark_${uuid}.json"    # gpu index uuid in "../$uuid/benchmark_$uuid" 
-#cat $bechchmarkfile |grep -n -A 4 $algo | grep BenchmarkSpeed | gawk -e 'BEGIN {FS=" "} {print $1}' | sed 's/-//' > temp 
+# ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
+tempazw=$(cat "tempazw")
+tempazb=$(cat "tempazb") 
+
+# Hash wert änderung
+echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt" 
+sed -i -e ''$tempazb's/[0-9.]\+/'$avgHASH'/' benchmark_${uuid}.json
+# WATT wert änderung
+echo "der WATT wert $avgWATT wird nun in der Zeile $tempazw eingefügt" 
+sed -i -e ''$tempazw's/[0-9.]\+/'$avgWATT'/' benchmark_${uuid}.json
  
- 
-# ## in der temp steht die zeilen nummer zum editieren des hashwertes 
-#temp=$(cat "temp") 
-#echo "$temp" 
- 
-#sed -i -e ''$temp's/[0-9.]\+/$WWWEEERRRTTT----HASH/' $bechchmarkfile 
-#sed -i -e '${temp}s/[0-9.]\+/$WWWEEERRRTTT----HASH/' $bechchmarkfile 
- 
- 
-##### WATT WERT 
-# $avgWATT 
- 
+
 ###################### 
 # Löschen der Log datei 
 #rm benchmark_$tempnv.log 
