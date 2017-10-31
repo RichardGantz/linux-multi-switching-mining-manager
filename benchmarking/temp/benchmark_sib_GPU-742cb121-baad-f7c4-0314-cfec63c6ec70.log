@@ -1,0 +1,20 @@
+*** ccminer 2.2 for nVidia GPUs by tpruvot@github ***
+    Built with the nVidia CUDA Toolkit 8.0 64-bits
+
+  Originally based on Christian Buchner and Christian H. project
+  Include some algos from alexis78, djm34, sp, tsiv and klausT.
+
+BTC donation address: 1AJdfCpLWPNoAMDfHF1wD5y8VgKSSTHxPo (tpruvot)
+
+[2017-10-30 00:14:54] NVML GPU monitoring enabled.
+[2017-10-30 00:14:54] 1 miner thread started, using 'sib' algorithm.
+[2017-10-30 00:14:54] GPU #0: Intensity set to 19, 524288 cuda threads
+[2017-10-30 00:14:57] GPU #0: Zotac GTX 980 Ti, 8935.35 kH/s
+[2017-10-30 00:15:04] GPU #0: Zotac GTX 980 Ti, 9118.66 kH/s
+[2017-10-30 00:15:04] Total: 9118.66 kH/s
+[2017-10-30 00:15:13] GPU #0: Zotac GTX 980 Ti, 9139.95 kH/s
+[2017-10-30 00:15:13] Total: 9129.30 kH/s
+[2017-10-30 00:15:15] Total: 9050.13 kH/s
+[2017-10-30 00:15:24] GPU #0: Zotac GTX 980 Ti, 9135.30 kH/s
+[2017-10-30 00:15:24] Total: 9071.42 kH/s
+[2017-10-30 00:15:25] Total: 9030.62 kH/s
