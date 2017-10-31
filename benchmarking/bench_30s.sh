@@ -137,8 +137,8 @@ sleep 3
  
  
  
-### Starten der WATT Messung über 30 Sekunden um ein ersten wert zu bekommen 
-# Hier drin läuft der counter 30 Sekunden, danach werden Miner bench beendet 
+### Starten der WATT Messung über xx Sekunden um ein ersten wert zu bekommen 
+# Hier drin läuft der counter xx Sekunden, danach werden Miner bench beendet 
 #  (wattmessung sekunde vorher als variable abfragen irgendwann) 
  
 echo "starten des Wattmessens" 
@@ -241,11 +241,9 @@ if [ "$algo" = "lyra2v2" ] ; then
     algo_original="lyra2rev2" 
     echo "algo muss geändert werden" 
     else 
-    echo "." 
-fi 
-if [ "$algo" = "sib" ] ; then 
-    algo_original="x11gost" 
-    echo "algo muss geändert werden" 
+    if [ "$algo" = "sib" ] ; then 
+        algo_original="x11gost" 
+        echo "algo muss geändert werden" 
     else 
         if [ "$algo" = "whirlpool" ] ; then 
             algo_original="whirlpoolx" 
@@ -270,6 +268,7 @@ if [ "$algo" = "sib" ] ; then
         fi  
     fi 
 fi 
+ 
  
 echo " $algo_original " 
 ######################## 
