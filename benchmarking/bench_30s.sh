@@ -1,4 +1,4 @@
-#!/bin/bash 
+
 ############################################################################### 
 # 
 # Erstellung der Benchmarkwerte mit hielfe des ccminers 
