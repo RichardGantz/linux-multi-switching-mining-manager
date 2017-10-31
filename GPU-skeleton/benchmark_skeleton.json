@@ -2,6 +2,26 @@
   "DeviceUUID": "",
   "DeviceName": "",
   "AlgorithmSettings": [
+   {
+      "Name": "scryptjanenf16",
+      "NiceHashID": 8,
+      "MinerBaseType": 2,
+      "MinerName": "scryptjanenf16",
+      "BenchmarkSpeed": 0,
+      "ExtraLaunchParameters": "",
+      "WATT": 0,
+      "LessThreads": 0
+    },
+    {
+      "Name": "scrypt",
+      "NiceHashID": 8,
+      "MinerBaseType": 2,
+      "MinerName": "scrypt",
+      "BenchmarkSpeed": 0,
+      "ExtraLaunchParameters": "",
+      "WATT": 0,
+      "LessThreads": 0
+    },
     {
       "Name": "neoscrypt",
       "NiceHashID": 8,
