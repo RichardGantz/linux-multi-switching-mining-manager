@@ -1,0 +1,72 @@
+*** ccminer 2.2 for nVidia GPUs by tpruvot@github ***
+    Built with the nVidia CUDA Toolkit 8.0 64-bits
+
+  Originally based on Christian Buchner and Christian H. project
+  Include some algos from alexis78, djm34, sp, tsiv and klausT.
+
+BTC donation address: 1AJdfCpLWPNoAMDfHF1wD5y8VgKSSTHxPo (tpruvot)
+
+[2017-10-30 19:46:24] NVML GPU monitoring enabled.
+[2017-10-30 19:46:24] 1 miner thread started, using 'vanilla' algorithm.
+[2017-10-30 19:46:24] GPU #0: Intensity set to 30, 1073741824 cuda threads
+[2017-10-30 19:46:25] GPU #0: Zotac GTX 980 Ti, 6902.55 MH/s
+[2017-10-30 19:46:26] Total: 7001.00 MH/s
+[2017-10-30 19:46:26] Total: 6940.66 MH/s
+[2017-10-30 19:46:27] Total: 6941.34 MH/s
+[2017-10-30 19:46:27] Total: 6927.58 MH/s
+[2017-10-30 19:46:28] Total: 6924.72 MH/s
+[2017-10-30 19:46:29] GPU #0: Zotac GTX 980 Ti, 6973.78 MH/s
+[2017-10-30 19:46:29] Total: 6932.89 MH/s
+[2017-10-30 19:46:29] Total: 6940.14 MH/s
+[2017-10-30 19:46:30] Total: 6933.89 MH/s
+[2017-10-30 19:46:31] Total: 6934.83 MH/s
+[2017-10-30 19:46:31] Total: 6932.14 MH/s
+[2017-10-30 19:46:32] Total: 6932.82 MH/s
+[2017-10-30 19:46:32] Total: 6936.57 MH/s
+[2017-10-30 19:46:33] GPU #0: Zotac GTX 980 Ti, 6960.89 MH/s
+[2017-10-30 19:46:33] Total: 6938.44 MH/s
+[2017-10-30 19:46:34] Total: 6940.55 MH/s
+[2017-10-30 19:46:34] Total: 6938.13 MH/s
+[2017-10-30 19:46:35] Total: 6935.10 MH/s
+[2017-10-30 19:46:35] Total: 6930.85 MH/s
+[2017-10-30 19:46:36] Total: 6929.24 MH/s
+[2017-10-30 19:46:37] GPU #0: Zotac GTX 980 Ti, 6879.00 MH/s
+[2017-10-30 19:46:37] Total: 6926.59 MH/s
+[2017-10-30 19:46:37] Total: 6923.59 MH/s
+[2017-10-30 19:46:38] Total: 6921.11 MH/s
+[2017-10-30 19:46:39] Total: 6911.37 MH/s
+[2017-10-30 19:46:39] Total: 6908.98 MH/s
+[2017-10-30 19:46:40] Total: 6909.84 MH/s
+[2017-10-30 19:46:41] GPU #0: Zotac GTX 980 Ti, 6925.52 MH/s
+[2017-10-30 19:46:41] Total: 6910.47 MH/s
+[2017-10-30 19:46:41] Total: 6912.70 MH/s
+[2017-10-30 19:46:42] Total: 6915.63 MH/s
+[2017-10-30 19:46:42] Total: 6917.98 MH/s
+[2017-10-30 19:46:43] Total: 6920.17 MH/s
+[2017-10-30 19:46:44] Total: 6921.42 MH/s
+[2017-10-30 19:46:44] Total: 6919.53 MH/s
+[2017-10-30 19:46:45] GPU #0: Zotac GTX 980 Ti, 7001.48 MH/s
+[2017-10-30 19:46:45] Total: 6923.57 MH/s
+[2017-10-30 19:46:45] Total: 6923.98 MH/s
+[2017-10-30 19:46:46] Total: 6926.50 MH/s
+[2017-10-30 19:46:47] Total: 6928.24 MH/s
+[2017-10-30 19:46:47] Total: 6927.71 MH/s
+[2017-10-30 19:46:48] Total: 6925.53 MH/s
+[2017-10-30 19:46:49] GPU #0: Zotac GTX 980 Ti, 6912.40 MH/s
+[2017-10-30 19:46:49] Total: 6926.27 MH/s
+[2017-10-30 19:46:49] Total: 6926.81 MH/s
+[2017-10-30 19:46:50] Total: 6929.09 MH/s
+[2017-10-30 19:46:50] Total: 6929.80 MH/s
+[2017-10-30 19:46:51] Total: 6929.04 MH/s
+[2017-10-30 19:46:52] Total: 6928.82 MH/s
+[2017-10-30 19:46:52] Total: 6928.88 MH/s
+[2017-10-30 19:46:53] GPU #0: Zotac GTX 980 Ti, 6982.81 MH/s
+[2017-10-30 19:46:53] Total: 6931.50 MH/s
+[2017-10-30 19:46:53] Total: 6935.18 MH/s
+[2017-10-30 19:46:54] Total: 6937.44 MH/s
+[2017-10-30 19:46:55] Total: 6940.57 MH/s
+[2017-10-30 19:46:55] Total: 6942.74 MH/s
+[2017-10-30 19:46:56] Total: 6943.96 MH/s
+[2017-10-30 19:46:57] GPU #0: Zotac GTX 980 Ti, 6990.13 MH/s
+[2017-10-30 19:46:57] Total: 6947.92 MH/s
+[2017-10-30 19:46:57] Total: 6955.81 MH/s

@@ -1,0 +1,39 @@
+*** ccminer 2.2 for nVidia GPUs by tpruvot@github ***
+    Built with the nVidia CUDA Toolkit 8.0 64-bits
+
+  Originally based on Christian Buchner and Christian H. project
+  Include some algos from alexis78, djm34, sp, tsiv and klausT.
+
+BTC donation address: 1AJdfCpLWPNoAMDfHF1wD5y8VgKSSTHxPo (tpruvot)
+
+[2017-10-30 17:22:47] NVML GPU monitoring enabled.
+[2017-10-30 17:22:47] 1 miner thread started, using 'x13' algorithm.
+[2017-10-30 17:22:47] GPU #0: Intensity set to 19, 524288 cuda threads
+[2017-10-30 17:22:49] GPU #0: Zotac GTX 980 Ti, 10.48 MH/s
+[2017-10-30 17:22:51] Total: 10.64 MH/s
+[2017-10-30 17:22:52] Total: 10.66 MH/s
+[2017-10-30 17:22:53] GPU #0: Zotac GTX 980 Ti, 10.67 MH/s
+[2017-10-30 17:22:53] Total: 10.66 MH/s
+[2017-10-30 17:22:57] GPU #0: Zotac GTX 980 Ti, 10.58 MH/s
+[2017-10-30 17:22:57] Total: 10.64 MH/s
+[2017-10-30 17:22:59] Total: 10.64 MH/s
+[2017-10-30 17:23:00] Total: 10.65 MH/s
+[2017-10-30 17:23:02] GPU #0: Zotac GTX 980 Ti, 10.66 MH/s
+[2017-10-30 17:23:02] Total: 10.65 MH/s
+[2017-10-30 17:23:03] Total: 10.66 MH/s
+[2017-10-30 17:23:05] Total: 10.64 MH/s
+[2017-10-30 17:23:06] GPU #0: Zotac GTX 980 Ti, 10.68 MH/s
+[2017-10-30 17:23:06] Total: 10.64 MH/s
+[2017-10-30 17:23:07] Total: 10.62 MH/s
+[2017-10-30 17:23:09] Total: 10.62 MH/s
+[2017-10-30 17:23:10] GPU #0: Zotac GTX 980 Ti, 10.66 MH/s
+[2017-10-30 17:23:10] Total: 10.62 MH/s
+[2017-10-30 17:23:12] Total: 10.63 MH/s
+[2017-10-30 17:23:13] Total: 10.63 MH/s
+[2017-10-30 17:23:15] GPU #0: Zotac GTX 980 Ti, 10.63 MH/s
+[2017-10-30 17:23:15] Total: 10.63 MH/s
+[2017-10-30 17:23:16] Total: 10.63 MH/s
+[2017-10-30 17:23:17] Total: 10.61 MH/s
+[2017-10-30 17:23:19] GPU #0: Zotac GTX 980 Ti, 10.62 MH/s
+[2017-10-30 17:23:19] Total: 10.61 MH/s
+[2017-10-30 17:23:20] Total: 10.62 MH/s
