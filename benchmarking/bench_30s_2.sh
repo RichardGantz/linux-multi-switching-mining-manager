@@ -64,7 +64,7 @@ while [ ${jsonValid} -eq 0 ]; do
                   | tee ${ALGO_NAMES_WEB} \
                   | grep -c -e "$searchPattern" )
     fi
-    sleep 1
+    if [ ${jsonValid} -eq 0 ]; then sleep 1; fi
 done
 
 # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach READARR
@@ -214,7 +214,7 @@ if [ ! $NoCards ]; then
     echo " Max WATT wert: $MAXWATT " 
 
 else
-    avgWATT=222
+    avgWATT=278
 fi  ## $NoCards
 
 ############################################################################### 
@@ -234,8 +234,10 @@ algo_original="$algo"
 # 
 #bechchmarkfile="benchmark_${uuid}.json"    # gpu index uuid in "../$uuid/benchmark_$uuid" 
 
+# ---> WICHTIGE ANPUSSUNG NÖTIG, WENN "MinerName" endlich wirklich den "Miner" <---
+# --->           und nicht den Algorithemnnamen enthält!!!
 # Zeilennummern in temporärer Datei merken
-cat benchmark_${uuid}.json |grep -n -A 4 \"${algo_original}\" \
+cat benchmark_${uuid}.json |grep -m1 -n -A 6 -e '\"Name.*\"'${algo_original}'\"' \
     | tee >(grep BenchmarkSpeed | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazb ) \
     | grep WATT | gawk -e 'BEGIN {FS="-"} {print $1}'                 > tempazw
 
