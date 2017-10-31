@@ -11,6 +11,10 @@
 #   Vor--benchmark um einen ersten überblick zu bekommen über algos und hashes 
 # 
 
+# Umrechnungsfaktor für die kH/s, MH/s etc. Zahlen.
+# CCminer scheint mit 1024 zu rechnen gemäß bench.cpp
+k_base=1024
+
 # Wenn auf 1 steht, wird der Code ausgeführt, wie er vorher war.
 if [ $HOME == "/home/richard" ]; then NoCards=true; fi
 
@@ -60,6 +64,7 @@ while [ ${jsonValid} -eq 0 ]; do
                   | tee ${ALGO_NAMES_WEB} \
                   | grep -c -e "$searchPattern" )
     fi
+    sleep 1
 done
 
 # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach READARR
@@ -133,28 +138,9 @@ if [ ! $NoCards ]; then
     sleep 3
 else
     echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var >> benchmark_${algo}_$uuid.log"
-    case "${algo}" in
-
-	sib)
-	    echo "[2017-10-28 16:39:44] 1 miner thread started, using 'sib' algorithm."     >benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:39:44] GPU #0: Intensity set to 19, 524288 cuda threads"  >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:39:47] GPU #0: Zotac GTX 980 Ti, 8878.28 kH/s"            >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:39:54] GPU #0: Zotac GTX 980 Ti, 9029.67 kH/s"            >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:39:54] Total: 9029.67 kH/s"                               >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:40:04] GPU #0: Zotac GTX 980 Ti, 8964.48 kH/s"            >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:40:04] Total: 8997.08 kH/s"                               >>benchmark_${algo}_${uuid}.log
-	    ;;
-
-	*)
-	    echo "[2017-10-28 16:46:56] 1 miner thread started, using '${algo}' algorithm." >benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:46:56] GPU #0: Intensity set to 20, 1048576 cuda threads" >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:46:58] GPU #0: Zotac GTX 980 Ti, 33.95 MH/s"              >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:46:59] Total: 34.36 MH/s"                                 >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:47:00] Total: 34.21 MH/s"                                 >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:47:01] Total: 34.22 MH/s"                                 >>benchmark_${algo}_${uuid}.log
-	    echo "[2017-10-28 16:47:02] GPU #0: Zotac GTX 980 Ti, 34.40 MH/s"              >>benchmark_${algo}_${uuid}.log
-	    ;;
-    esac
+    if [ ! -f "benchmark_${algo}_${uuid}.log" ]; then
+        cp benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.log benchmark_${algo}_${uuid}.log
+    fi
 fi  ## $NoCards
 
 if [ ! $NoCards ]; then
@@ -188,10 +174,10 @@ if [ ! $NoCards ]; then
 
     #### für so und so viele Sekunden den Watt wert in eine Datei schreiben
     while [  $COUNTER -lt $time ]; do
-	nvidia-smi --id=$id --query-gpu=power.draw --format=csv,noheader |gawk -e 'BEGIN {FS=" "} {print $1}'  >> watt_bensh_30s.out
-	let COUNTER=COUNTER+1
-	echo $COUNTER > COUNTER
-	sleep 1
+        nvidia-smi --id=$id --query-gpu=power.draw --format=csv,noheader |gawk -e 'BEGIN {FS=" "} {print $1}'  >> watt_bensh_30s.out
+        let COUNTER=COUNTER+1
+        echo $COUNTER > COUNTER
+        sleep 1
     done
 
 
@@ -205,38 +191,39 @@ if [ ! $NoCards ]; then
     kill -15 $ccminer 
     sleep 2 
 
-    ############################################################################### 
-    # 
+    ###############################################################################
+    #
     #Berechnung der Durchschnittlichen Verbrauches 
-    # 
-    COUNTER=$(cat "COUNTER") 
- 
-    sort watt_bensh_30s.out |tail -1 > watt_bensh_30s_max.out 
- 
-    WATT=$(cat "watt_bensh_30s.out") 
-    MAXWATT=$(cat "watt_bensh_30s_max.out") 
-    sum=0 
- 
+    #
+    COUNTER=$(cat "COUNTER")
+
+    sort watt_bensh_30s.out |tail -1 > watt_bensh_30s_max.out
+
+    WATT=$(cat "watt_bensh_30s.out")
+    MAXWATT=$(cat "watt_bensh_30s_max.out")
+    sum=0
+
     for i in $WATT ; do  
-	sum=$(echo "$sum + $i" | bc) 
+        sum=$(echo "$sum + $i" | bc) 
     done 
- 
+
     avgWATT=$(echo "$sum / $COUNTER" | bc) 
- 
+
     echo " Summe: $sum " 
     echo " Durchschnitt: $avgWATT " 
     echo " Max WATT wert: $MAXWATT " 
- 
-    ############################################################################### 
- 
- 
-    # 
-    # cat 980ti_bench_log |grep MB, |gawk -M -e 'BEGIN {FS=" "} {print $3}{print $5*1000}' ### noch fehle rdrin bei 0.4 dann ausgabe 0 
-    # 
-    #  cat benchmark_$uuid.log |grep MB, |gawk -M -e 'BEGIN {FS=" "} {print $3}{print $5*1000}' 
-    # 
-    #  
+
+else
+    avgWATT=222
 fi  ## $NoCards
+
+############################################################################### 
+# 
+# cat 980ti_bench_log |grep MB, |gawk -M -e 'BEGIN {FS=" "} {print $3}{print $5*1000}' ### noch fehle rdrin bei 0.4 dann ausgabe 0 
+# 
+#  cat benchmark_$uuid.log |grep MB, |gawk -M -e 'BEGIN {FS=" "} {print $3}{print $5*1000}' 
+# 
+#  
 
 algo_original="$algo" 
  
@@ -283,15 +270,14 @@ cat benchmark_${uuid}.json |grep -n -A 4 \"${algo_original}\" \
 # Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
 # die Werte werden in zwei schritten herausgefiltert und in eine hash temp datei zusammengepakt, so dass jeder hash
 # wert erfasst werden kann
-
-cat benchmark_${algo}_${uuid}.log |grep Total | gawk -e 'BEGIN {FS=" "} {print $4}' > temp_hash
-cat benchmark_${algo}_${uuid}.log |grep /s |grep GPU | gawk -e 'BEGIN {FS=" "} {print $9}' >> temp_hash
-exit
-#falls buchstaben hinzugekommen sind in einer zeile = falsch muss sie komplett entfernt werden
-sed -i '/[a-z]/d' temp_hash
+rm -f temp_hash
+cat benchmark_${algo}_${uuid}.log | grep "/s$" \
+    | gawk -e '{hash=NF-1; print $hash }' >>temp_hash
 
 # herrausfiltern ob KH,MH ....
-cat benchmark_${algo}_${uuid}.log |grep -m1 Total | gawk -e 'BEGIN {FS=" "} {print $5}' > temp_einheit
+cat benchmark_${algo}_${uuid}.log | grep -m1 "/s$" \
+    | gawk -e '{print $NF}' > temp_einheit
+
 
 ############################################################################### 
 # 
@@ -300,17 +286,16 @@ cat benchmark_${algo}_${uuid}.log |grep -m1 Total | gawk -e 'BEGIN {FS=" "} {pri
 
 HASHCOUNTER=0 
 
-HASH_temp=$(cat "temp_hash") 
-sum=0 
- 
+HASH_temp=$(cat "temp_hash")
+sum=0
 for i in $HASH_temp ; do  
  
-  sum=$(echo "$sum + $i" | bc)
+  sum=$(echo "scale=9; $sum + $i" | bc)
   let HASHCOUNTER=HASHCOUNTER+1 
   echo $HASHCOUNTER > HASHCOUNTER  
 done 
  
-avgHASH=$(echo "$sum / $HASHCOUNTER" | bc) 
+avgHASH=$(echo "scale=9; $sum / $HASHCOUNTER" | bc) 
  
 echo " Summe: $sum " 
 echo " Durchschnitt: $avgHASH "
@@ -323,68 +308,81 @@ echo "${temp_einheit}"
 #
 #######################################
 
-# if abfragen ob MH KH bla blub dann berechnung und richtigstellung $temp_einheit
-if [ "$temp_einheit" = "kH/s" ] ; then  
-    avgHASH=$(echo "${avgHASH} * 1000" | bc)
-    echo "HASHWERT wurde in Einheit ${temp_einheit} umgerechnet $avgHASH"
-    else
-    
-    if [ "$temp_einheit" = "MH/s" ] ; then  
-        avgHASH=$(echo "${avgHASH} * 1000000" | bc)
-        echo "HASHWERT wurde in Einheit ${temp_einheit} umgerechnet $avgHASH"
-        else 
-        
-        if [ "$temp_einheit" = "GH/s" ] ; then  
-            avgHASH=$(echo "${avgHASH} * 1000000000" | bc)
-            echo "HASHWERT wurde in Einheit ${temp_einheit} umgerechnet $avgHASH"
-            else 
-            
-            if [ "$temp_einheit" = "TH/s" ] ; then  
-                avgHASH=$(echo "${avgHASH} * 1000000000000" | bc)
-                echo "HASHWERT wurde in Einheit ${temp_einheit} umgerechnet $avgHASH"
-                else 
-                echo "HASHWERT $avgHASH brauchte nicht umgerechnet werden" 
+# if abfragen ob "MH/s" KH bla blub dann berechnung und richtigstellung $temp_einheit
+case "${temp_einheit:0:1}" in
 
-            fi    
+    H)
+        faktor=1
+        ;;
+    k)
+        faktor=${k_base}
+        ;;
+    M)
+        faktor=$((${k_base}**2))
+        ;;
+    G)
+        faktor=$((${k_base}**3))
+        ;;
+    T)
+        faktor=$((${k_base}**4))
+        ;;
+    P)
+        faktor=$((${k_base}**5))
+        ;;
+    *)
+        echo "Shit: Unknown Umrechnungsfaktor ${temp_einheit:0:1}"
+esac
 
-        fi   
-
-    fi  
-fi
+avgHASH=$(echo "${avgHASH} * $faktor" | bc)
+echo "HASHWERT wurde in Einheit ${temp_einheit:1} umgerechnet $avgHASH"
 
 
 #########
 #
 # Einfügen des Hash wertes in die Original bench*.json datei
  
+BLOCK_FORMAT=(
+    '      =Name=: =%s=,\n'
+    '      =NiceHashID=: %s,\n'
+    '      =MinerBaseType=: %s,\n'
+    '      =MinerName=: =%s=,\n'
+    '      =BenchmarkSpeed=: %s,\n'
+    '      =ExtraLaunchParameters=: =%s=,\n'
+    '      =WATT=: %s,\n'
+    '      =LessThreads=: %s\n'
+)
+
 # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
-tempazw=$(cat "tempazw")
-tempazb=$(cat "tempazb") 
+declare -i tempazw=$(cat "tempazw")
+declare -i tempazb=$(cat "tempazb") 
 
-if [ "$tempazw" -gt 1 ] ; then  
-        # Hash wert änderung
-        echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt" 
-        sed -i -e ''$tempazb's/[0-9.]\+/'$avgHASH'/' benchmark_${uuid}.json
-        # WATT wert änderung
-        echo "der WATT wert $avgWATT wird nun in der Zeile $tempazw eingefügt" 
-        sed -i -e ''$tempazw's/[0-9.]\+/'$avgWATT'/' benchmark_${uuid}.json
-    else 
-        echo "Der Algo wird zur Benchmark Datei hinzugefügt"
-        echo "{" >> benchmark_${uuid}.json
-        echo ""Name": "$algo_original"," >> benchmark_${uuid}.json
-        echo ""NiceHashID": 0," >> benchmark_${uuid}.json
-        echo ""MinerBaseType": 0," >> benchmark_${uuid}.json
-        echo ""MinerName": "$algo_original"," >> benchmark_${uuid}.json
-        echo ""BenchmarkSpeed": $avgHASH," >> benchmark_${uuid}.json
-        echo ""ExtraLaunchParameters": ""," >> benchmark_${uuid}.json
-        echo ""WATT": $avgWATT," >> benchmark_${uuid}.json
-        echo ""LessThreads": 0" >> benchmark_${uuid}.json
-        echo "}," >> benchmark_${uuid}.json
-
-fi   
-
-
- 
+if [ $tempazw -gt 1 ] ; then  
+    # Hash wert änderung
+    echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt" 
+    sed -i -e "${tempazb}s/[0-9.]\+/$avgHASH/" benchmark_${uuid}.json
+    # WATT wert änderung
+    echo "der WATT wert $avgWATT wird nun in der Zeile $tempazw eingefügt" 
+    sed -i -e "${tempazw}s/[0-9.]\+/$avgWATT/" benchmark_${uuid}.json
+else
+    BLOCK_VALUES=(
+        ${algo_original}
+        30
+        9
+        ${algo_original}
+        ${avgHASH}
+        ""
+        ${avgWATT}
+        0
+    )
+    echo "Der Algo wird zur Benchmark Datei hinzugefügt"
+    sed -i -e '/]/,/}$/d'                                    benchmark_${uuid}.json
+    printf ",   {\n"                                       >>benchmark_${uuid}.json
+    for (( i=0; $i<${#BLOCK_FORMAT[@]}; i++ )); do
+        printf "${BLOCK_FORMAT[$i]}" ${BLOCK_VALUES[$i]} \
+            | sed -e 's/\=/"/g'                            >>benchmark_${uuid}.json
+    done
+    printf "    }\n  ]\n}\n"                               >>benchmark_${uuid}.json
+fi
 
 ###################### 
 # Löschen der Log datei 
