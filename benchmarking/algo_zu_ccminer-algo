@@ -1,7 +1,8 @@
-blake256r8vnl vanilla
-sha256 sha256d
-whirlpoolx whirlpool
-lyra2rev2 lyra2v2
-scryptjanenf16 scrypt-jane
-blake256r8 blakecoin
-x11gost sib
+# NH Algo Name  CCminer Algo Name
+blake256r8      blakecoin
+blake256r8vnl   vanilla
+lyra2rev2       lyra2v2
+scryptjanenf16  scrypt-jane
+sha256          sha256d
+whirlpoolx      whirlpool
+x11gost         sib
