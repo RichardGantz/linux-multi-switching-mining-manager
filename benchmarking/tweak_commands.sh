@@ -15,7 +15,7 @@ WISHED_LOGFILES=$(< tweak_to_these_logs)
 read OWN_LOGFILE WATT_LOGFILE HASH_LOGFILE <<<${WISHED_LOGFILES}
 
 echo "Benchmark is actually running for the following GPU:"
-echo "GPU #$(cat bensh_gpu_30s_.index) with UUID: $(cat "uuid")"
+echo "GPU #$(cat bensh_gpu_30s_.index) with UUID: $(cat uuid)"
 
 echo "Die gewünschte Logdatei für die Tweaking-Kommandos lautet: $OWN_LOGFILE"
 echo "Zusätzlich muss das Kommando in die folgenden Dateien geschrieben werden:"
