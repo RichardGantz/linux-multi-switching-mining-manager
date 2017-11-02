@@ -126,3 +126,25 @@ benchmarking/more_watt_values\.fake
 benchmarking/test/more_hash_values\.fake
 
 benchmarking/tweak_cmd\.log
+
+benchmarking/COUNTER
+
+benchmarking/bensh_gpu_30s_\.index
+
+benchmarking/temp_hash_bc_input
+
+benchmarking/temp_hash_sum
+
+benchmarking/tempazI
+
+benchmarking/temp_watt_sum
+
+benchmarking/tweak_cmd_*
+
+benchmarking/tweak_to_these_logs
+
+benchmarking/uuid
+
+benchmarking/watt_bensh_30s\.out
+
+benchmarking/watt_bensh_30s_max\.out
