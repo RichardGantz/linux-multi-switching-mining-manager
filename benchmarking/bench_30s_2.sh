@@ -12,7 +12,7 @@
 # 
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
-debug=0
+debug=1
 
 # Umrechnungsfaktor für die kH/s, MH/s etc. Zahlen.
 declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu rechnen
@@ -20,7 +20,8 @@ declare -i MIN_HASH_COUNT=20    # Mindestanzahl Hashberechnungswerte, die abgewa
 declare -i MIN_WATT_COUNT=30    # Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
 STOP_AFTER_MIN_REACHED=1     # Abbruch nach der Mindestlaufzeit- und Mindest-Hashzahleenermittlung
 
-TWEAK_CMD_LOG=tweak_cmd.log
+TWEAK_CMD_LOG=tweak_cmd_$$.log
+rm -f ${TWEAK_CMD_LOG}
 touch ${TWEAK_CMD_LOG}
 
 #POSITIONAL=()
@@ -258,29 +259,30 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
                 cat test/more_hash_values.fake >>test/benchmark_${algo}_${uuid}.log
                 cat more_watt_values.fake >>watt_bensh_30s.out
             fi
+            hash_line=$(cat test/benchmark_${algo}_${uuid}.log \
+                      | grep -n -e "${tweak_msg}" \
+                      | tail -n 1 \
+                      | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+                     )
+            watt_line=$(cat "watt_bensh_30s.out" \
+                      | grep -n -e "${tweak_msg}" \
+                      | tail -n 1 \
+                      | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+                     )
+            printf "Hashwerte ab jetzt ab Zeile $hash_line und Wattwerte ab Zeile $watt_line\n"
         fi
         # Suche die Zeile in der Logdatei
         if [ ${#tweak_msg} -gt 0 ]; then
             # Calculate only the values after the last command
-            from_line=$(cat test/benchmark_${algo}_${uuid}.log \
-                      | grep -n "${tweak_msg}" \
-                      | tail -n 1 \
-                      | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
-                     )
             hashCount=$(cat test/benchmark_${algo}_${uuid}.log \
-                      | tail -n +$from_line \
-                      | grep "/s$" \
+                      | tail -n +$hash_line \
+                      | grep -e "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
-                                   | tee temp_hash_bc_input | bc >temp_hash_sum )\
+                                   | tee temp_hash_bc_input | bc >temp_hash_sum ) \
                       | wc -l \
                      )
-            from_line=$(cat "watt_bensh_30s.out" \
-                      | grep -n "${tweak_msg}" \
-                      | tail -n 1 \
-                      | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
-                     )
             wattCount=$(cat "watt_bensh_30s.out" \
-                      | tail -n +$from_line \
+                      | tail -n +$watt_line \
                       | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >temp_watt_sum ) \
                       | wc -l \
                      )
@@ -311,6 +313,9 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
 
         printf "%12s H; %#12.2f W; %#10.2f H/W, GPU-Einstellung ???\n" \
                ${avgHASH/\./,} ${avgWATT/\./,} ${quotient/\./,}
+    else
+        printf "%3s Hashwerte von mindestens $MIN_HASH_COUNT und %3s Wattwerte von mindestens $MIN_WATT_COUNT\n" \
+               ${hashCount} ${COUNTER}
     fi
 
     # Eine Sekunde pausieren vor dem nächsten Wattwert
