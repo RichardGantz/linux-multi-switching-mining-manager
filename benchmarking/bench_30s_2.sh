@@ -11,9 +11,69 @@
 #   Vor--benchmark um einen ersten überblick zu bekommen über algos und hashes 
 # 
 
+# Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
+debug=0
+
 # Umrechnungsfaktor für die kH/s, MH/s etc. Zahlen.
-# CCminer scheint mit 1024 zu rechnen gemäß bench.cpp
-k_base=1024
+declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu rechnen
+declare -i MIN_HASH_COUNT=20    # Mindestanzahl Hashberechnungswerte, die abgewartet werden müssen
+declare -i MIN_WATT_COUNT=30    # Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
+STOP_AFTER_MIN_REACHED=1     # Abbruch nach der Mindestlaufzeit- und Mindest-Hashzahleenermittlung
+
+TWEAK_CMD_LOG=tweak_cmd.log
+touch ${TWEAK_CMD_LOG}
+
+#POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+    parameter="$1"
+
+    case $parameter in
+        -w|--min-watt-seconds)
+            MIN_WATT_COUNT="$2"
+            shift 2
+            ;;
+        -m|--min-hash-count)
+            MIN_HASH_COUNT="$2"
+            shift 2
+            ;;
+        -t|--tweak-mode)
+            STOP_AFTER_MIN_REACHED=0
+            shift
+            ;;
+        -h|--help)
+            echo $0 \[-w\|--min-watt-seconds TIME\] \
+                 \[-m\|--min-hash-count HASHES\] \
+                 \[-t\|--tweak-mode\] \
+                 \[-h\|--help\]
+            echo "-w default is ${MIN_WATT_COUNT} seconds"
+            echo "-m default is ${MIN_HASH_COUNT} hashes"
+            echo "-t runs the script infinitely. Otherwise it stops after both minimums are reached."
+            echo "-h this help message"
+            exit
+            ;;
+        *)
+            POSITIONAL+=("$1") # save it in an array for later
+            shift # past argument
+            ;;
+    esac
+done
+#set -- "${POSITIONAL[@]}" # restore positional parameters
+
+function _On_Exit () {
+    # CCminer stoppen
+    if [ -s ccminer.pid ]; then kill $(cat "ccminer.pid"); fi
+    if [ $debug -eq 0 ]; then
+        rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
+           temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb tempazw tempazI temp_hash temp_einheit \
+           HASHCOUNTER
+    fi
+    rm -f $(basename $0 .sh).pid
+}
+trap _On_Exit EXIT
+
+# Aktuelle eigene PID merken
+echo $$ >$(basename $0 .sh).pid
+if [ ! -d test ]; then mkdir test; fi
 
 # Wenn auf 1 steht, wird der Code ausgeführt, wie er vorher war.
 if [ $HOME == "/home/richard" ]; then NoCards=true; fi
@@ -32,12 +92,14 @@ if [ ! $NoCards ]; then
     echo $var > bensh_gpu_30s_.index
  
     # mit ausgewählten device fortfahren (mit der Index zahl die ausgewählt wurde) 
-    nvidia-smi --id=$var --query-gpu=index,gpu_name,gpu_uuid --format=csv,noheader | gawk -e 'BEGIN {FS=", | %"} {print $3}' > uuid 
+    nvidia-smi --id=$var --query-gpu=index,gpu_name,gpu_uuid --format=csv,noheader \
+        | gawk -e 'BEGIN {FS=", | %"} {print $3}' > uuid 
  
-    uuid=$(cat "uuid")
 else
-    uuid="GPU-742cb121-baad-f7c4-0314-cfec63c6ec70"
+    echo "GPU-742cb121-baad-f7c4-0314-cfec63c6ec70" >uuid
+    echo 0 > bensh_gpu_30s_.index
 fi
+uuid=$(cat "uuid")
 
 # Aufbau des Arrays NH_algos[] mit allen bekannten NiceHash Algorithmennamen
 # Eigentlich sollten wir erst den Abruf so oder so aus dem Netz machen, um die AlgoNames zu erfahren.
@@ -81,11 +143,12 @@ gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
      ${ALGO_NAMES_WEB} 2>/dev/null \
     | readarray -n 0 -O 0 -t READARR
 
-unset kMGTP ALGOs
-declare -Ag kMGTP
+unset kMGTP ALGOs ALGO_IDs
+declare -Ag kMGTP ALGO_IDs
 for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
     kMGTP[${READARR[$i]}]=${READARR[$i+1]}
     ALGOs[${READARR[$i+2]}]=${READARR[$i]}
+    ALGO_IDs[${READARR[$i]}]=${READARR[$i+2]}
 done
 NH_Algos=(${ALGOs[@]})
 
@@ -122,7 +185,15 @@ read -p "Für welchen Algo willst du testen: " algonr
 algo=${NH_Algos[${algonr:1}]}
     
 echo "das ist der Algo den du ausgewählt hast : ${algo}" 
+if [ "$algo" = "scrypt" ] ; then
+    echo "Dieser Algo ist nicht mehr mit Grafikkarten lohnenswert. Dafür ermitteln wir keine Werte mehr."
+    exit
+fi
 
+
+###
+### START DES BENCHMARKING
+###
 if [ ! $NoCards ]; then
     # miner wird ausgeführt mit device und schreiben der log datei (mehrere minuten) 
     # CUDA export .. wo das Cuda verzeichnis ist und ggf version 
@@ -131,91 +202,156 @@ if [ ! $NoCards ]; then
     #wo der Miner ist und welcher benutzt wird 
     minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ccminer-windows" 
 
-    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var >> benchmark_${algo}_$uuid.log" 
-    $minerfolder/ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var > benchmark_${algo}_${uuid}.log &
+    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var >> test/benchmark_${algo}_$uuid.log" 
+    $minerfolder/ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var > test/benchmark_${algo}_${uuid}.log &
     echo $! > ccminer.pid 
 
     sleep 3
 else
-    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var >> benchmark_${algo}_$uuid.log"
-    if [ ! -f "benchmark_${algo}_${uuid}.log" ]; then
-        cp benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.log benchmark_${algo}_${uuid}.log
+    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var >> test/benchmark_${algo}_$uuid.log"
+    if [ ! -f "test/benchmark_${algo}_${uuid}.log" ]; then
+        cp test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.log test/benchmark_${algo}_${uuid}.log
     fi
 fi  ## $NoCards
 
+
+
+
+rm -f COUNTER watt_bensh_30s.out watt_bensh_30s_max.out
+id=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
+countWatts=1
+countHashes=1
+declare -i COUNTER=0
+declare -i hashCount=0
+declare -i wattCount=0
+declare -i new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
+tweak_msg=''
+echo "$TWEAK_CMD_LOG"                      >tweak_to_these_logs
+echo "watt_bensh_30s.out"                 >>tweak_to_these_logs
+echo "test/benchmark_${algo}_${uuid}.log" >>tweak_to_these_logs
+
+
+echo "Starten des Wattmessens..."
+while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REACHED -eq 1 ]; do
+    ### Wattwert messen und in Datei protokollieren
+    if [ ! $NoCards ]; then
+        nvidia-smi --id=$id --query-gpu=power.draw --format=csv,noheader \
+            | gawk -e 'BEGIN {FS=" "} {print $1}' >> watt_bensh_30s.out
+    else
+        echo $((222 + $COUNTER)) >> watt_bensh_30s.out
+    fi
+    if [ $((++COUNTER)) -ge $MIN_WATT_COUNT ]; then countWatts=0; fi
+    echo $COUNTER > COUNTER
+
+    ### Hashwerte nachsehen und zählen
+    hashCount=$(cat test/benchmark_${algo}_${uuid}.log | grep -c "/s$")
+    if [ $hashCount -ge $MIN_HASH_COUNT ]; then countHashes=0; fi
+
+    if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
+        ### TWEAKING MODE
+        if [ $new_TweakCommand_available -lt $(stat -c %Y ${TWEAK_CMD_LOG}) ]; then
+            # Ermittle das gerade gegebene Tweaking-Kommando
+            tweak_msg="$(tail -n 1 ${TWEAK_CMD_LOG})"
+            new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
+            if [ $NoCards ]; then
+                # Hänge ein paar andere Werte an die Logdateien - zum Testen
+                cat test/more_hash_values.fake >>test/benchmark_${algo}_${uuid}.log
+                cat more_watt_values.fake >>watt_bensh_30s.out
+            fi
+        fi
+        # Suche die Zeile in der Logdatei
+        if [ ${#tweak_msg} -gt 0 ]; then
+            # Calculate only the values after the last command
+            from_line=$(cat test/benchmark_${algo}_${uuid}.log \
+                      | grep -n "${tweak_msg}" \
+                      | tail -n 1 \
+                      | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+                     )
+            hashCount=$(cat test/benchmark_${algo}_${uuid}.log \
+                      | tail -n +$from_line \
+                      | grep "/s$" \
+                      | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
+                                   | tee temp_hash_bc_input | bc >temp_hash_sum )\
+                      | wc -l \
+                     )
+            from_line=$(cat "watt_bensh_30s.out" \
+                      | grep -n "${tweak_msg}" \
+                      | tail -n 1 \
+                      | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+                     )
+            wattCount=$(cat "watt_bensh_30s.out" \
+                      | tail -n +$from_line \
+                      | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >temp_watt_sum ) \
+                      | wc -l \
+                     )
+        else
+            # Nimm alle Werte aus der BenchLog und der WattLog Datei, um den lfd. Durchschnitt zu errechnen
+            # zuerst die BenchLog...
+            hashCount=$(cat test/benchmark_${algo}_${uuid}.log \
+                      | grep "/s$" \
+                      | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
+                                   | tee temp_hash_bc_input | bc >temp_hash_sum )\
+                      | wc -l \
+                     )
+            # ... dann die WattLog
+            wattCount=$(cat "watt_bensh_30s.out" \
+                      | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >temp_watt_sum ) \
+                      | wc -l \
+                     )
+        fi
+        hashSum=$(< temp_hash_sum)
+        wattSum=$(< temp_watt_sum)
+
+        echo "scale=2; \
+              avghash  = $hashSum / $hashCount; \
+              avgwatt  = $wattSum / $wattCount; \
+              quotient = avghash / avgwatt; \
+              print avghash, \" \", avgwatt, \" \", quotient" | bc \
+            | read avgHASH avgWATT quotient
+
+        printf "%12s H; %#12.2f W; %#10.2f H/W, GPU-Einstellung ???\n" \
+               ${avgHASH/\./,} ${avgWATT/\./,} ${quotient/\./,}
+    fi
+
+    # Eine Sekunde pausieren vor dem nächsten Wattwert
+    sleep 1
+
+done  ##  while [ $countWatts ] || [ $countHashes ] || [ ! $STOP_AFTER_MIN_REACHED ]
+echo "... Wattmessen ist beendet!!" 
+
+echo "Beenden des Miners" 
 if [ ! $NoCards ]; then
-    ### Starten der WATT Messung über 30 Sekunden um ein ersten wert zu bekommen 
-    # Hier drin läuft der counter 30 Sekunden, danach werden Miner bench beendet 
-    #  (wattmessung sekunde vorher als variable abfragen irgendwann) 
- 
-    echo "starten des Wattmessens" 
-    #echo "watt_bensh_30s.sh &" 
-    rm COUNTER 
-    rm watt_bensh_30s.out 
-    rm -f watt_bensh_30s_max.out
-
-    #####
-    #
-    # Teilweise brauchen die Algos längere zeit um hash werte zu erzeugen, deswegen wird der timer
-    # je nach algo hochgesetzt, wenn dieses gebraucht wird .... bzw ... anhand der ausgabe datei
-    # kann es ggf festgesellt werden .... minium 20 hash werte sollten aufgerechnet werden können.
-    time=30    #wieviel mal soll die schleife laufen ein durchlauf 1 sekunde
-    
-    if [ "$algo" = "scrypt" ] ; then 
-        time=1 
-        echo "Dieser Algo ist nicht mehr mit Graffikkarten lohnenswert" 
-    else 
-        echo "gibt keine zeit Anpassung läuft mit $time Sekunden" 
-    fi
-
-    COUNTER=0
-    id=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
-
-
-    #### für so und so viele Sekunden den Watt wert in eine Datei schreiben
-    while [  $COUNTER -lt $time ]; do
-        nvidia-smi --id=$id --query-gpu=power.draw --format=csv,noheader |gawk -e 'BEGIN {FS=" "} {print $1}'  >> watt_bensh_30s.out
-        let COUNTER=COUNTER+1
-        echo $COUNTER > COUNTER
-        sleep 1
-    done
-
-
-
-    echo "Wattmessen ist beendet!!" 
-
-
-    echo "beenden des miners" 
-    ## Beenden des miners 
-    ccminer=$(cat  "ccminer.pid") 
-    kill -15 $ccminer 
-    sleep 2 
-
-    ###############################################################################
-    #
-    #Berechnung der Durchschnittlichen Verbrauches 
-    #
-    COUNTER=$(cat "COUNTER")
-
-    sort watt_bensh_30s.out |tail -1 > watt_bensh_30s_max.out
-
-    WATT=$(cat "watt_bensh_30s.out")
-    MAXWATT=$(cat "watt_bensh_30s_max.out")
-    sum=0
-
-    for i in $WATT ; do  
-        sum=$(echo "$sum + $i" | bc) 
-    done 
-
-    avgWATT=$(echo "$sum / $COUNTER" | bc) 
-
-    echo " Summe: $sum " 
-    echo " Durchschnitt: $avgWATT " 
-    echo " Max WATT wert: $MAXWATT " 
-
-else
-    avgWATT=278
+    ## Beenden des miners
+    ccminer=$(cat "ccminer.pid")
+    kill -15 $ccminer
+    rm ccminer.pid
+    sleep 2
 fi  ## $NoCards
+
+###############################################################################
+#
+#Berechnung der Durchschnittlichen Verbrauches 
+#
+COUNTER=$(cat "COUNTER")
+
+sort watt_bensh_30s.out |tail -1 > watt_bensh_30s_max.out
+
+WATT=$(cat "watt_bensh_30s.out")
+MAXWATT=$(cat "watt_bensh_30s_max.out")
+
+sum=0
+for i in $WATT ; do  
+    sum=$(echo "$sum + $i" | bc) 
+done 
+
+avgWATT=$(echo "$sum / $COUNTER" | bc) 
+
+echo " Summe: $sum " 
+echo " Durchschnitt: $avgWATT " 
+echo " Max WATT wert: $MAXWATT " 
+
+
+
 
 ############################################################################### 
 # 
@@ -239,7 +375,8 @@ algo_original="$algo"
 # Zeilennummern in temporärer Datei merken
 cat benchmark_${uuid}.json |grep -m1 -n -A 6 -e '\"Name.*\"'${algo_original}'\"' \
     | tee >(grep BenchmarkSpeed | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazb ) \
-    | grep WATT | gawk -e 'BEGIN {FS="-"} {print $1}'                 > tempazw
+          >(grep NiceHashID     | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazI ) \
+    |       grep WATT           | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazw
 
 
 #" <-- wegen richtigem Highlightning in meinem proggi ... bitte nicht entfernen
@@ -250,7 +387,7 @@ cat benchmark_${uuid}.json |grep -m1 -n -A 6 -e '\"Name.*\"'${algo_original}'\"'
  
 
 # 
-# ccminer log vom algo benchmark_$algo_$uuid.log 
+# ccminer log vom algo test/benchmark_$algo_$uuid.log 
 # 
 #[2017-10-28 16:46:56] 1 miner thread started, using 'lyra2v2' algorithm.
 #[2017-10-28 16:46:56] GPU #0: Intensity set to 20, 1048576 cuda threads
@@ -273,11 +410,11 @@ cat benchmark_${uuid}.json |grep -m1 -n -A 6 -e '\"Name.*\"'${algo_original}'\"'
 # die Werte werden in zwei schritten herausgefiltert und in eine hash temp datei zusammengepakt, so dass jeder hash
 # wert erfasst werden kann
 rm -f temp_hash
-cat benchmark_${algo}_${uuid}.log | grep "/s$" \
+cat test/benchmark_${algo}_${uuid}.log | grep "/s$" \
     | gawk -e '{hash=NF-1; print $hash }' >>temp_hash
 
 # herrausfiltern ob KH,MH ....
-cat benchmark_${algo}_${uuid}.log | grep -m1 "/s$" \
+cat test/benchmark_${algo}_${uuid}.log | grep -m1 "/s$" \
     | gawk -e '{print $NF}' > temp_einheit
 
 
@@ -294,7 +431,7 @@ for i in $HASH_temp ; do
  
   sum=$(echo "scale=9; $sum + $i" | bc)
   let HASHCOUNTER=HASHCOUNTER+1 
-  echo $HASHCOUNTER > HASHCOUNTER  
+  echo $HASHCOUNTER > HASHCOUNTER
 done 
  
 avgHASH=$(echo "scale=9; $sum / $HASHCOUNTER" | bc) 
@@ -313,62 +450,55 @@ echo "${temp_einheit}"
 # if abfragen ob "MH/s" KH bla blub dann berechnung und richtigstellung $temp_einheit
 case "${temp_einheit:0:1}" in
 
-    H)
-        faktor=1
-        ;;
-    k)
-        faktor=${k_base}
-        ;;
-    M)
-        faktor=$((${k_base}**2))
-        ;;
-    G)
-        faktor=$((${k_base}**3))
-        ;;
-    T)
-        faktor=$((${k_base}**4))
-        ;;
-    P)
-        faktor=$((${k_base}**5))
-        ;;
-    *)
-        echo "Shit: Unknown Umrechnungsfaktor ${temp_einheit:0:1}"
+    H)  faktor=1                  ;;
+    k)  faktor=${k_base}          ;;
+    M)  faktor=$((${k_base}**2))  ;;
+    G)  faktor=$((${k_base}**3))  ;;
+    T)  faktor=$((${k_base}**4))  ;;
+    P)  faktor=$((${k_base}**5))  ;;
+    *)  echo "Shit: Unknown Umrechnungsfaktor '${temp_einheit:0:1}'"
 esac
 
 avgHASH=$(echo "${avgHASH} * $faktor" | bc)
-echo "HASHWERT wurde in Einheit ${temp_einheit:1} umgerechnet $avgHASH"
+echo "HASHWERT wurde in Einheit ${temp_einheit:1} umgerechnet: $avgHASH"
 
 
 #########
 #
 # Einfügen des Hash wertes in die Original bench*.json datei
- 
+
 BLOCK_FORMAT=(
-    '      =Name=: =%s=,\n'
-    '      =NiceHashID=: %s,\n'
-    '      =MinerBaseType=: %s,\n'
-    '      =MinerName=: =%s=,\n'
-    '      =BenchmarkSpeed=: %s,\n'
-    '      =ExtraLaunchParameters=: =%s=,\n'
-    '      =WATT=: %s,\n'
-    '      =LessThreads=: %s\n'
+    '      \"Name\": \"%s\",\n'
+    '      \"NiceHashID\": %s,\n'
+    '      \"MinerBaseType\": %s,\n'
+    '      \"MinerName\": \"%s\",\n'
+    '      \"BenchmarkSpeed\": %s,\n'
+    '      \"ExtraLaunchParameters\": \"%s\",\n'
+    '      \"WATT\": %s,\n'
+    '      \"LessThreads\": %s\n'
 )
 
 # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
 declare -i tempazw=$(cat "tempazw")
 declare -i tempazb=$(cat "tempazb") 
+declare -i tempazI=$(cat "tempazI") 
 
-if [ $tempazw -gt 1 ] ; then  
+if [ $tempazw -gt 1 ] ; then
+    if [ ${ALGO_IDs[${algo_original}]} -ne ${tempazI} ]; then
+        # NiceHashID korrigieren?
+        echo "Die NiceHashID \"${ALGO_IDs[${algo_original}]}\" wird nun in der Zeile $tempazI eingefügt" 
+        sed -i -e "${tempazI}s/[0-9]\+/${ALGO_IDs[${algo_original}]}/" benchmark_${uuid}.json
+    fi
     # Hash wert änderung
-    echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt" 
+    echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
     sed -i -e "${tempazb}s/[0-9.]\+/$avgHASH/" benchmark_${uuid}.json
     # WATT wert änderung
-    echo "der WATT wert $avgWATT wird nun in der Zeile $tempazw eingefügt" 
+    echo "der WATT wert $avgWATT wird nun in der Zeile $tempazw eingefügt"
     sed -i -e "${tempazw}s/[0-9.]\+/$avgWATT/" benchmark_${uuid}.json
 else
     BLOCK_VALUES=(
         ${algo_original}
-        30
+        ${ALGO_IDs[${algo_original}]}
         9
         ${algo_original}
         ${avgHASH}
@@ -380,8 +510,7 @@ else
     sed -i -e '/]/,/}$/d'                                    benchmark_${uuid}.json
     printf ",   {\n"                                       >>benchmark_${uuid}.json
     for (( i=0; $i<${#BLOCK_FORMAT[@]}; i++ )); do
-        printf "${BLOCK_FORMAT[$i]}" ${BLOCK_VALUES[$i]} \
-            | sed -e 's/\=/"/g'                            >>benchmark_${uuid}.json
+        printf "${BLOCK_FORMAT[$i]}" ${BLOCK_VALUES[$i]}   >>benchmark_${uuid}.json
     done
     printf "    }\n  ]\n}\n"                               >>benchmark_${uuid}.json
 fi

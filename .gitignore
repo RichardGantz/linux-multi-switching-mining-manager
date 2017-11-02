@@ -116,3 +116,13 @@ benchmarking/temp_hash
 benchmarking/tempazb
 
 benchmarking/tempazw
+
+benchmarking/temp_hash_sum_bc
+
+*.fake~
+
+benchmarking/more_watt_values\.fake
+
+benchmarking/test/more_hash_values\.fake
+
+benchmarking/tweak_cmd\.log
