@@ -237,9 +237,9 @@
       "NiceHashID": 25,
       "MinerBaseType": 9,
       "MinerName": "blake256r8vnl",
-      "BenchmarkSpeed": 6933000000,
+      "BenchmarkSpeed": 6980516328.695136256,
       "ExtraLaunchParameters": "",
-      "WATT": 278,
+      "WATT": 272,
       "LessThreads": 0
     }
   ]
