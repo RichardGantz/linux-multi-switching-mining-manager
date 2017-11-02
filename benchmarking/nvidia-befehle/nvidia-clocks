@@ -1,0 +1,75 @@
+nvidia-smi  -q -i 1 -d Clock
+==============NVSMI LOG==============
+
+Timestamp                           : Thu Nov  2 11:16:51 2017
+Driver Version                      : 375.26
+
+Attached GPUs                       : 2
+GPU 0000:05:00.0
+    Clocks
+        Graphics                    : 139 MHz
+        SM                          : 139 MHz
+        Memory                      : 405 MHz
+        Video                       : 544 MHz
+    Applications Clocks
+        Graphics                    : N/A
+        Memory                      : N/A
+    Default Applications Clocks
+        Graphics                    : N/A
+        Memory                      : N/A
+    Max Clocks
+        Graphics                    : 1911 MHz
+        SM                          : 1911 MHz
+        Memory                      : 4004 MHz
+        Video                       : 1708 MHz
+    SM Clock Samples
+        Duration                    : 1905.66 sec
+        Number of Samples           : 100
+        Max                         : 2037 MHz
+        Min                         : 139 MHz
+        Avg                         : 1358 MHz
+    Memory Clock Samples
+        Duration                    : 1905.66 sec
+        Number of Samples           : 100
+        Max                         : 4184 MHz
+        Min                         : 405 MHz
+        Avg                         : 592 MHz
+    Clock Policy
+        Auto Boost                  : N/A
+        Auto Boost Default          : N/A
+
+---------------------------------------------------------------------------------------
+ (root powerconsumption) nvidia-smi --id=1 -pl 82
+nvidia-settings --assign [gpu:1]/GPUGraphicsClockOffset[3]=170
+nvidia-settings --assign [gpu:1]/GPUMemoryTransferRateOffset[3]=360
+nvidia-settings --assign [gpu:1]/GPUFanControlState=1
+nvidia-settings --assign [fan:1]/GPUTargetFanSpeed=66
+
+
+
+nvidia-smi  -q -i 1 -d Power
+==============NVSMI LOG==============
+
+Timestamp                           : Thu Nov  2 11:19:50 2017
+Driver Version                      : 375.26
+
+Attached GPUs                       : 2
+GPU 0000:05:00.0
+    Power Readings
+        Power Management            : Supported
+        Power Draw                  : 4.60 W
+        Power Limit                 : 82.00 W
+        Default Power Limit         : 120.00 W
+        Enforced Power Limit        : 82.00 W
+        Min Power Limit             : 60.00 W
+        Max Power Limit             : 140.00 W
+    Power Samples
+        Duration                    : 118.03 sec
+        Number of Samples           : 119
+        Max                         : 5.09 W
+        Min                         : 4.60 W
+        Avg                         : 4.86 W
+
+
+nvidia-smi -i"[indexnummer]"--query-gpu=temperature.gpu --format=csv,noheader
+
