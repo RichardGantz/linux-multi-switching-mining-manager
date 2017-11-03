@@ -155,4 +155,6 @@ benchmarking/nvidia-befehle/nvidia-settings
 
 benchmarking/nvidia-befehle/smi
 
-benchmarking/tweak_commands\.log
+benchmarking/tweak_.*\.log
+
+benchmarking/test/tweak_.*\.log

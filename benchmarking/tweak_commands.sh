@@ -10,7 +10,7 @@ function _On_Exit () {
     if [ -s bench_30s_2.pid ]; then kill $(cat "bench_30s_2.pid"); fi
     # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
     if [ -s tweak_commands.log ]; then
-        cp ${OWN_LOGFILE} test/tweak_commands_${algo}_${uuid}_$(date "+%Y%m%d_%H%M%S").log
+        cp ${OWN_LOGFILE} test/tweak_commands_${algo}_${gpu_uuid}_$(date "+%Y%m%d_%H%M%S").log
     fi
 }
 trap _On_Exit EXIT
@@ -22,8 +22,9 @@ if [ $HOME == "/home/richard" ]; then
 fi
 
 read OWN_LOGFILE WATT_LOGFILE HASH_LOGFILE <<<$(< tweak_to_these_logs)
-gpu_idx=$(cat bensh_gpu_30s_.index)
-gpu_uuid=$(cat uuid)
+gpu_idx=$(< bensh_gpu_30s_.index)
+gpu_uuid=$(< uuid)
+algo=$(< benching_${gpu_idx}_algo)
 
 # Fan-Kontrolle ermöglichen
 if [ ! $NoCards ]; then
