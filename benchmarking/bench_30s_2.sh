@@ -12,7 +12,7 @@
 # 
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
-debug=1
+debug=0
 
 declare -i t_base=3             # Messintervall in Sekunden für Temperatur
 declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu rechnen
@@ -37,14 +37,20 @@ while [[ $# -gt 0 ]]; do
             STOP_AFTER_MIN_REACHED=0
             shift
             ;;
+        -d|--debug-infos)
+            debug=0
+            shift
+            ;;
         -h|--help)
             echo $0 \[-w\|--min-watt-seconds TIME\] \
                  \[-m\|--min-hash-count HASHES\] \
                  \[-t\|--tweak-mode\] \
+                 \[-d\|--debug-infos\] \
                  \[-h\|--help\]
             echo "-w default is ${MIN_WATT_COUNT} seconds"
             echo "-m default is ${MIN_HASH_COUNT} hashes"
             echo "-t runs the script infinitely. Otherwise it stops after both minimums are reached."
+            echo "-d keeps temporary files for debugging purposes"
             echo "-h this help message"
             exit
             ;;
@@ -65,11 +71,20 @@ function _On_Exit () {
     if [ $debug -eq 0 ]; then
         rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
            temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb tempazw tempazI temp_hash temp_einheit \
-           HASHCOUNTER
+           HASHCOUNTER benching_${gpu_idx}_algo
     fi
     # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
     if [ -f test/benchmark_${algo}_${uuid}.log ]; then
         cp test/benchmark_${algo}_${uuid}.log test/benchmark_${algo}_${uuid}_$(date "+%Y%m%d_%H%M%S").log
+    fi
+    if [ -f test/tweak_${algo}_${uuid}.log ]; then
+        if [ ${#TWEAK_MSGs[@]} -gt 0 ]; then
+            echo "Letzter Stand aller verwendeten Befehle:" >>test/tweak_${algo}_${uuid}.log
+            for tweak_msg in "${!TWEAK_MSGs[@]}"; do
+                echo "${TWEAK_MSGs[${tweak_msg}]}" >>test/tweak_${algo}_${uuid}.log
+            done
+        fi
+        cp test/tweak_${algo}_${uuid}.log test/tweak_${algo}_${uuid}_$(date "+%Y%m%d_%H%M%S").log
     fi
     rm -f $(basename $0 .sh).pid
 }
@@ -119,12 +134,12 @@ if [ ! $NoCards ]; then
     # 1, GeForce GTX 1060 3GB, GPU-84f7ca95-d215-185d-7b27-a7f017e776fb 
  
     # auswahl des devices "eingabe wartend" 
-    read -p "Für welches GPU device soll ein Benchmark druchgeführt werden: " var 
- 
-    echo $var > bensh_gpu_30s_.index
- 
+    read -p "Für welches GPU device soll ein Benchmark druchgeführt werden: " gpu_idx
+
+    echo ${gpu_idx} > bensh_gpu_30s_.index
+
     # mit ausgewählten device fortfahren (mit der Index zahl die ausgewählt wurde) 
-    nvidia-smi --id=$var --query-gpu=index,gpu_name,gpu_uuid --format=csv,noheader \
+    nvidia-smi --id=${gpu_idx} --query-gpu=index,gpu_name,gpu_uuid --format=csv,noheader \
         | gawk -e 'BEGIN {FS=", | %"} {print $3}' > uuid 
  
 else
@@ -132,6 +147,8 @@ else
     echo 0 > bensh_gpu_30s_.index
 fi
 uuid=$(cat "uuid")
+gpu_idx=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
+
 
 # Aufbau des Arrays NH_algos[] mit allen bekannten NiceHash Algorithmennamen
 # Eigentlich sollten wir erst den Abruf so oder so aus dem Netz machen, um die AlgoNames zu erfahren.
@@ -221,6 +238,7 @@ if [ "$algo" = "scrypt" ] ; then
     echo "Dieser Algo ist nicht mehr mit Grafikkarten lohnenswert. Dafür ermitteln wir keine Werte mehr."
     exit
 fi
+echo "${algo}" >benching_${gpu_idx}_algo
 
 ####################################################################################
 ###
@@ -235,15 +253,16 @@ if [ ! $NoCards ]; then
     #wo der Miner ist und welcher benutzt wird
     minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ccminer-windows"
 
-    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var \
+    rm -f test/benchmark_${algo}_${uuid}.log
+    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices ${gpu_idx} \
                          >> test/benchmark_${algo}_$uuid.log"
-    $minerfolder/ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var \
+    $minerfolder/ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices ${gpu_idx} \
                          >> test/benchmark_${algo}_${uuid}.log &
     echo $! > ccminer.pid
 
     sleep 3
 else
-    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var >> test/benchmark_${algo}_$uuid.log"
+    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices ${gpu_idx} >> test/benchmark_${algo}_$uuid.log"
     if [ ! -f "test/benchmark_${algo}_${uuid}.log" ]; then
         cp test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.log test/benchmark_${algo}_${uuid}.log
     fi
@@ -256,12 +275,14 @@ if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
     ###
     ### Variablen für TWEAKING MODE 
     ###
+    rm -f test/tweak_${algo}_${uuid}.log
     TWEAK_CMD_LOG=tweak_commands.log
     rm -f ${TWEAK_CMD_LOG}
     touch ${TWEAK_CMD_LOG}
     declare -i TWEAK_CMD_LOG_AGE
     declare -i new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
     tweak_msg=''
+    declare -A TWEAK_MSGs
     echo "$TWEAK_CMD_LOG"                      >tweak_to_these_logs
     echo "watt_bensh_30s.out"                 >>tweak_to_these_logs
     echo "test/benchmark_${algo}_${uuid}.log" >>tweak_to_these_logs
@@ -270,7 +291,6 @@ if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
 fi
 
 rm -f COUNTER watt_bensh_30s.out watt_bensh_30s_max.out
-gpu_idx=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
 countWatts=1
 countHashes=1
 declare -i COUNTER=0
@@ -305,24 +325,28 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             new_TweakCommand_available=${TWEAK_CMD_LOG_AGE}
             # Ermittle das gerade gegebene Tweaking-Kommando
             tweak_msg="$(tail -n 1 ${TWEAK_CMD_LOG})"
-            tweak_msg="${tweak_msg//[[]/\\[}"
-            tweak_msg="${tweak_msg//[\]]/\\]}"
+            TWEAK_MSGs["${tweak_msg/=[[:digit:]]*/}"]="${tweak_msg}"
+            tweak_pat="${tweak_msg//[[]/\\[}"
+            tweak_pat="${tweak_pat//[\]]/\\]}"
             if [ $NoCards ]; then
                 # Hänge ein paar andere Werte an die Logdateien - zum Testen
                 cat test/more_hash_values.fake >>test/benchmark_${algo}_${uuid}.log
                 cat more_watt_values.fake >>watt_bensh_30s.out
             fi
             hash_line=$(cat test/benchmark_${algo}_${uuid}.log \
-                      | grep -n -e "${tweak_msg}" \
+                      | grep -n -e "${tweak_pat}" \
                       | tail -n 1 \
                       | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
                      )
             watt_line=$(cat "watt_bensh_30s.out" \
-                      | grep -n -e "${tweak_msg}" \
+                      | grep -n -e "${tweak_pat}" \
                       | tail -n 1 \
                       | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
                      )
-            printf "Hashwerte ab jetzt ab Zeile $hash_line und Wattwerte ab Zeile $watt_line\n"
+            printf "${tweak_msg}\n" \
+                | tee -a test/tweak_${algo}_${uuid}.log
+            printf "Hashwerte ab jetzt ab Zeile $hash_line und Wattwerte ab Zeile $watt_line\n" \
+                | tee -a test/tweak_${algo}_${uuid}.log
         fi
         # Suche die Zeile in der Logdatei
         if [ ${#tweak_msg} -gt 0 ]; then
@@ -373,13 +397,15 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             # Möglich sind: ( "Graphics" "SM" "Memory" "Video" )
             # ("Power Draw" "Power Limit" "Default Power Limit" "Enforced Power Limit" "Min Power Limit" "Max Power Limit")
             printf "%5iMHz/%5iMHz %5iMHz/%5iMHz %7.2fW/%7.2fW %3i°C\n" \
-                   ${actClocks["Memory"]}   ${maxClocks["Memory"]} \
                    ${actClocks["Graphics"]} ${maxClocks["Graphics"]} \
+                   ${actClocks["Memory"]}   ${maxClocks["Memory"]} \
                    ${actPowers["Power Limit"]/\./,} ${actPowers["Max Power Limit"]/\./,} \
-                   ${actTemp}
+                   ${actTemp} \
+                | tee -a test/tweak_${algo}_${uuid}.log
         fi
         printf "%12s H; %#12.2f W; %#10.2f H/W\n" \
-               ${avgHASH/\./,} ${avgWATT/\./,} ${quotient/\./,}
+               ${avgHASH/\./,} ${avgWATT/\./,} ${quotient/\./,} \
+            | tee -a test/tweak_${algo}_${uuid}.log
     else
         ###
         ### "Normal" BENCHMARK MODE
