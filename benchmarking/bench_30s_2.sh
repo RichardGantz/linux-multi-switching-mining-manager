@@ -605,15 +605,24 @@ fi
 # Ein algo können mit xx verschiedenen minern betrieben werden  
 # 
 # Block_empty 
-#    { 
-#      "Name": "$1", 
-#      "NiceHashID": 0, 
-#      "MinerBaseType": 0, 
-#      "MinerName": "$3",       #$3 wird am anfang dann vom miner xyz gesetzt bzw von hand eingetragen 
-#      "BenchmarkSpeed": $2, 
-#      "ExtraLaunchParameters": "", 
-#      "WATT": 0, 
-#      "LessThreads": 0 
+#    {
+ 
+#      "Name": "$1",
+ 
+#      "NiceHashID": 0,
+ 
+#      "MinerBaseType": 0,
+ 
+#      "MinerName": "$3",       #$3 wird am anfang dann vom miner xyz gesetzt bzw von hand eingetragen
+ 
+#      "BenchmarkSpeed": $2,
+ 
+#      "ExtraLaunchParameters": "",
+ 
+#      "WATT": 0,
+ 
+#      "LessThreads": 0
+ 
 #    }, 
 # 
 # 
