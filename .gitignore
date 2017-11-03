@@ -148,3 +148,11 @@ benchmarking/uuid
 benchmarking/watt_bensh_30s\.out
 
 benchmarking/watt_bensh_30s_max\.out
+
+benchmarking/nvidia-befehle/nvidia-Clock-Power\.out
+
+benchmarking/nvidia-befehle/nvidia-settings
+
+benchmarking/nvidia-befehle/smi
+
+benchmarking/tweak_commands\.log
