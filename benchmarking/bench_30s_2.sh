@@ -14,15 +14,11 @@
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
 debug=1
 
-# Umrechnungsfaktor für die kH/s, MH/s etc. Zahlen.
+declare -i t_base=3             # Messintervall in Sekunden für Temperatur
 declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu rechnen
 declare -i MIN_HASH_COUNT=20    # Mindestanzahl Hashberechnungswerte, die abgewartet werden müssen
 declare -i MIN_WATT_COUNT=30    # Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
 STOP_AFTER_MIN_REACHED=1     # Abbruch nach der Mindestlaufzeit- und Mindest-Hashzahleenermittlung
-
-TWEAK_CMD_LOG=tweak_cmd_$$.log
-rm -f ${TWEAK_CMD_LOG}
-touch ${TWEAK_CMD_LOG}
 
 #POSITIONAL=()
 while [[ $# -gt 0 ]]; do
@@ -62,22 +58,57 @@ done
 
 function _On_Exit () {
     # CCminer stoppen
-    if [ -s ccminer.pid ]; then kill $(cat "ccminer.pid"); fi
+    if [ -s ccminer.pid ]; then
+        kill $(cat "ccminer.pid")
+        rm ccminer.pid
+    fi
     if [ $debug -eq 0 ]; then
         rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
            temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb tempazw tempazI temp_hash temp_einheit \
            HASHCOUNTER
     fi
+    # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
+    if [ -f test/benchmark_${algo}_${uuid}.log ]; then
+        cp test/benchmark_${algo}_${uuid}.log test/benchmark_${algo}_${uuid}_$(date "+%Y%m%d_%H%M%S").log
+    fi
     rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
 
+# Für Fake in Entwicklungssystemen ohne Grakas
+if [ $HOME == "/home/richard" ]; then NoCards=true; fi
+
+###################################################################################
+#
+#                _query_actual_Power_Temp_and_Clocks
+#
+# NVIDIA Befehle
+#nvidia-smi -q -i ${gpu_idx} -d Clock,Power
+#nvidia-smi -i ${gpu_idx} --query-gpu=temperature.gpu --format=csv,noheader
+#
+# Die folgenden Strings kommen vor und dienen als Index für die Assoziativen Arrays
+# actClocks[] und maxClocks[]
+# "Graphics"
+# "SM"
+# "Memory"
+# "Video"
+#
+# Die folgenden Strings kommen vor und dienen als Index für das Assoziative Array
+# actPowers[]
+# "Power Draw"
+# "Power Limit"
+# "Default Power Limit"
+# "Enforced Power Limit"
+# "Min Power Limit"
+# "Max Power Limit"
+#
+#                _query_actual_Power_Temp_and_Clocks
+#
+source nvidia-befehle/nvidia-query.inc
+
 # Aktuelle eigene PID merken
 echo $$ >$(basename $0 .sh).pid
 if [ ! -d test ]; then mkdir test; fi
-
-# Wenn auf 1 steht, wird der Code ausgeführt, wie er vorher war.
-if [ $HOME == "/home/richard" ]; then NoCards=true; fi
 
 if [ ! $NoCards ]; then
     # 
@@ -191,21 +222,24 @@ if [ "$algo" = "scrypt" ] ; then
     exit
 fi
 
-
+####################################################################################
 ###
-### START DES BENCHMARKING
+###                          START DES BENCHMARKING
 ###
+####################################################################################
 if [ ! $NoCards ]; then
-    # miner wird ausgeführt mit device und schreiben der log datei (mehrere minuten) 
-    # CUDA export .. wo das Cuda verzeichnis ist und ggf version 
-    export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH 
+    # miner wird ausgeführt mit device und schreiben der log datei (mehrere minuten)
+    # CUDA export .. wo das Cuda verzeichnis ist und ggf version
+    export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
 
-    #wo der Miner ist und welcher benutzt wird 
-    minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ccminer-windows" 
+    #wo der Miner ist und welcher benutzt wird
+    minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ccminer-windows"
 
-    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var >> test/benchmark_${algo}_$uuid.log" 
-    $minerfolder/ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var > test/benchmark_${algo}_${uuid}.log &
-    echo $! > ccminer.pid 
+    echo " ./ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var \
+                         >> test/benchmark_${algo}_$uuid.log"
+    $minerfolder/ccminer --no-color -a ${CC_testAlgos[${algo}]} --benchmark --devices $var \
+                         >> test/benchmark_${algo}_${uuid}.log &
+    echo $! > ccminer.pid
 
     sleep 3
 else
@@ -218,25 +252,39 @@ fi  ## $NoCards
 
 
 
+if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
+    ###
+    ### Variablen für TWEAKING MODE 
+    ###
+    TWEAK_CMD_LOG=tweak_commands.log
+    rm -f ${TWEAK_CMD_LOG}
+    touch ${TWEAK_CMD_LOG}
+    declare -i TWEAK_CMD_LOG_AGE
+    declare -i new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
+    tweak_msg=''
+    echo "$TWEAK_CMD_LOG"                      >tweak_to_these_logs
+    echo "watt_bensh_30s.out"                 >>tweak_to_these_logs
+    echo "test/benchmark_${algo}_${uuid}.log" >>tweak_to_these_logs
+    declare -i wattCount=0
+    declare -i queryCnt=0
+fi
+
 rm -f COUNTER watt_bensh_30s.out watt_bensh_30s_max.out
-id=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
+gpu_idx=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
 countWatts=1
 countHashes=1
 declare -i COUNTER=0
 declare -i hashCount=0
-declare -i wattCount=0
-declare -i new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
-tweak_msg=''
-echo "$TWEAK_CMD_LOG"                      >tweak_to_these_logs
-echo "watt_bensh_30s.out"                 >>tweak_to_these_logs
-echo "test/benchmark_${algo}_${uuid}.log" >>tweak_to_these_logs
+
+
 
 
 echo "Starten des Wattmessens..."
+
 while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REACHED -eq 1 ]; do
     ### Wattwert messen und in Datei protokollieren
     if [ ! $NoCards ]; then
-        nvidia-smi --id=$id --query-gpu=power.draw --format=csv,noheader \
+        nvidia-smi --id=${gpu_idx} --query-gpu=power.draw --format=csv,noheader \
             | gawk -e 'BEGIN {FS=" "} {print $1}' >> watt_bensh_30s.out
     else
         echo $((222 + $COUNTER)) >> watt_bensh_30s.out
@@ -249,11 +297,16 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
     if [ $hashCount -ge $MIN_HASH_COUNT ]; then countHashes=0; fi
 
     if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
+        ###
         ### TWEAKING MODE
-        if [ $new_TweakCommand_available -lt $(stat -c %Y ${TWEAK_CMD_LOG}) ]; then
+        ###
+        TWEAK_CMD_LOG_AGE=$(stat -c %Y ${TWEAK_CMD_LOG})
+        if [ $new_TweakCommand_available -lt ${TWEAK_CMD_LOG_AGE} ]; then
+            new_TweakCommand_available=${TWEAK_CMD_LOG_AGE}
             # Ermittle das gerade gegebene Tweaking-Kommando
             tweak_msg="$(tail -n 1 ${TWEAK_CMD_LOG})"
-            new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
+            tweak_msg="${tweak_msg//[[]/\\[}"
+            tweak_msg="${tweak_msg//[\]]/\\]}"
             if [ $NoCards ]; then
                 # Hänge ein paar andere Werte an die Logdateien - zum Testen
                 cat test/more_hash_values.fake >>test/benchmark_${algo}_${uuid}.log
@@ -304,16 +357,33 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
         hashSum=$(< temp_hash_sum)
         wattSum=$(< temp_watt_sum)
 
-        echo "scale=2; \
-              avghash  = $hashSum / $hashCount; \
-              avgwatt  = $wattSum / $wattCount; \
-              quotient = avghash / avgwatt; \
-              print avghash, \" \", avgwatt, \" \", quotient" | bc \
-            | read avgHASH avgWATT quotient
+        if [ ${hashCount} -gt 0 ]; then
+            echo "scale=2; \
+                  avghash  = $hashSum / $hashCount; \
+                  avgwatt  = $wattSum / $wattCount; \
+                  quotient = avghash / avgwatt; \
+                  print avghash, \" \", avgwatt, \" \", quotient" | bc \
+                | read avgHASH avgWATT quotient
+        else
+            avgHASH=0; avgWATT=0; quotient=0
+        fi
 
-        printf "%12s H; %#12.2f W; %#10.2f H/W, GPU-Einstellung ???\n" \
+        if [ $((queryCnt++ % ${t_base})) -eq 0 ]; then
+            _query_actual_Power_Temp_and_Clocks
+            # Möglich sind: ( "Graphics" "SM" "Memory" "Video" )
+            # ("Power Draw" "Power Limit" "Default Power Limit" "Enforced Power Limit" "Min Power Limit" "Max Power Limit")
+            printf "%5iMHz/%5iMHz %5iMHz/%5iMHz %7.2fW/%7.2fW %3i°C\n" \
+                   ${actClocks["Memory"]}   ${maxClocks["Memory"]} \
+                   ${actClocks["Graphics"]} ${maxClocks["Graphics"]} \
+                   ${actPowers["Power Limit"]/\./,} ${actPowers["Max Power Limit"]/\./,} \
+                   ${actTemp}
+        fi
+        printf "%12s H; %#12.2f W; %#10.2f H/W\n" \
                ${avgHASH/\./,} ${avgWATT/\./,} ${quotient/\./,}
     else
+        ###
+        ### "Normal" BENCHMARK MODE
+        ###
         printf "%3s Hashwerte von mindestens $MIN_HASH_COUNT und %3s Wattwerte von mindestens $MIN_WATT_COUNT\n" \
                ${hashCount} ${COUNTER}
     fi
@@ -322,9 +392,11 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
     sleep 1
 
 done  ##  while [ $countWatts ] || [ $countHashes ] || [ ! $STOP_AFTER_MIN_REACHED ]
+
 echo "... Wattmessen ist beendet!!" 
 
 echo "Beenden des Miners" 
+
 if [ ! $NoCards ]; then
     ## Beenden des miners
     ccminer=$(cat "ccminer.pid")
@@ -332,6 +404,9 @@ if [ ! $NoCards ]; then
     rm ccminer.pid
     sleep 2
 fi  ## $NoCards
+
+
+
 
 ###############################################################################
 #
@@ -351,9 +426,9 @@ done
 
 avgWATT=$(echo "$sum / $COUNTER" | bc) 
 
-echo " Summe: $sum " 
-echo " Durchschnitt: $avgWATT " 
-echo " Max WATT wert: $MAXWATT " 
+printf " Summe        : %12s; Messwerte: %5s\n" $sum $COUNTER
+printf " Durchschnitt : %12s\n" $avgWATT
+printf " Max WATT Wert: %12s\n" $MAXWATT
 
 
 
@@ -441,10 +516,10 @@ done
  
 avgHASH=$(echo "scale=9; $sum / $HASHCOUNTER" | bc) 
  
-echo " Summe: $sum " 
-echo " Durchschnitt: $avgHASH "
 temp_einheit=$(cat "temp_einheit")
-echo "${temp_einheit}"
+printf " Summe        : %12.2f; Messwerte: %5s\n" ${sum/\./,} $HASHCOUNTER
+printf " Durchschnitt : %12.2f %6s\n" ${avgHASH/\./,} ${temp_einheit}
+
 
 #######################################################
 #
