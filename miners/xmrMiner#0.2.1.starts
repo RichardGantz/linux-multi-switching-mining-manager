@@ -1,0 +1,29 @@
+#!/bin/bash
+###############################################################################
+#
+# xmrMiner - im Moment nur der Benchmarkmodus
+#
+
+#LIVE_START_CMD='%s/%s --devices %s -o stratum+tcp://%s.%s.%s:%s -u 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s -p 0 -a %s'
+#LIVE_PARAMETERSTACK=(
+#    "minerfolder"
+#    "miner_name"
+#    "gpu_idx"
+#    "algo"
+#    "continent"
+#    "NH_DOMAIN"
+#    "algo_port"
+#    "worker"
+#    "TestAlgos[${algo}]"
+#)
+#
+#function PREP_LIVE_PARAMETERSTACK () {
+#    LIVE_PARAMETERSTACK[-1]="TestAlgos[${algo}]"
+#}
+
+BENCH_START_CMD='%s/%s -d %s --benchmark'
+BENCH_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "gpu_idx"
+)
