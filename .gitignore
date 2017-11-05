@@ -11,6 +11,8 @@ BTCEURkurs
 
 BTC_EUR_kurs\.in
 
+GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/benchmarking/*
+
 GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/ALGO_WATTS_MINES\.in
 
 GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/best_algo_netz\.out
@@ -162,3 +164,15 @@ benchmarking/test/tweak_.*\.log
 MULTI_ALGO_INFO\.json
 
 *.sh#
+
+*.BAK
+
+GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.json\.original
+
+benchmarking/benching_0_algo
+
+benchmarking/benching_0_miner
+
+benchmarking/ALGO_PORTS\.in
+
+benchmarking/tweak_commands\.log

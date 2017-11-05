@@ -297,6 +297,10 @@ echo "${algo}" >benching_${gpu_idx}_algo
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle gleich ist.
 source ../miners/${miner_name}#${miner_version}.starts
+# ---> Die folgenden Variablen müssen noch vollständig implementiert werden! <---
+continent="eu"        # Noch nicht vollständig implementiert!      <--------------------------------------
+algo_port="3357"      # Momentan der vom equihash, weil der auch beim Benching gebraucht wird <-----------
+worker="1060"         # Noch nicht vollständig implementiert!      <--------------------------------------
 
 rm -f ${BENCHLOGFILE}
 # Jetzt bauen wir den Benchmakaufruf zusammen, der in dem .inc entsprechend vorbereitet ist.
@@ -308,7 +312,7 @@ rm -f ${BENCHLOGFILE}
 # deshalb kommentieren wir sie hier zur Gedächtnisstütze aus, damit wir es im Live Fall nicht vergessen.
 
 # So rufen wir eine Funktion, wenn sie definiert wurde.
-#declare -f PREP_LIVE_PARAMETERSTACK >/dev/null && PREP_LIVE_PARAMETERSTACK
+declare -f PREP_BENCH_PARAMETERSTACK >/dev/null && PREP_BENCH_PARAMETERSTACK
 paramlist=""
 for (( i=0; $i<${#BENCH_PARAMETERSTACK[@]}; i++ )); do
     declare -n param="${BENCH_PARAMETERSTACK[$i]}"
