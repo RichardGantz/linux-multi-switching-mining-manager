@@ -4,6 +4,8 @@
 # xmrMiner - im Moment nur der Benchmarkmodus
 #
 
+minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/xmrMiner"
+
 #LIVE_START_CMD='%s/%s --devices %s -o stratum+tcp://%s.%s.%s:%s -u 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s -p 0 -a %s'
 #LIVE_PARAMETERSTACK=(
 #    "minerfolder"
