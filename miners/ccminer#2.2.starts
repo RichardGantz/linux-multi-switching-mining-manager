@@ -1,0 +1,34 @@
+#!/bin/bash
+###############################################################################
+#
+# Erstellung der Benchmarkwerte mit Hilfe des CCminers
+#
+#
+
+export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
+minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ccminer-windows"
+
+LIVE_START_CMD='%s/%s --devices %s -o stratum+tcp://%s.%s.%s:%s -u 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s -p 0 -a %s'
+LIVE_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "gpu_idx"
+    "algo"
+    "continent"
+    "NH_DOMAIN"
+    "algo_port"
+    "worker"
+    "TestAlgos[${algo}]"
+)
+
+function PREP_LIVE_PARAMETERSTACK () {
+    LIVE_PARAMETERSTACK[-1]="TestAlgos[${algo}]"
+}
+
+BENCH_START_CMD='%s/%s --devices %s -a %s --no-color --benchmark'
+BENCH_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "gpu_idx"
+    "algo"
+)

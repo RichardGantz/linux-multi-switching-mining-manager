@@ -158,3 +158,7 @@ benchmarking/nvidia-befehle/smi
 benchmarking/tweak_.*\.log
 
 benchmarking/test/tweak_.*\.log
+
+MULTI_ALGO_INFO\.json
+
+*.sh#

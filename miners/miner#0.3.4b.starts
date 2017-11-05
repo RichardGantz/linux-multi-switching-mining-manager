@@ -1,0 +1,31 @@
+#!/bin/bash
+###############################################################################
+#
+# EQUIHASH Startkommando
+#
+# Hier muss auch das Benchmarking mit dem Live-Kommando gemacht werden!
+#
+
+LIVE_START_CMD='%s/%s --cuda_devices %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --solver 0 --intensity 64'
+LIVE_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "gpu_idx"
+    "algo"
+    "continent"
+    "NH_DOMAIN"
+    "algo_port"
+    "worker"
+)
+
+BENCH_START_CMD='%s/%s --cuda_devices %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --solver 0 --intensity 64'
+BENCH_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "gpu_idx"
+    "algo"
+    "continent"
+    "NH_DOMAIN"
+    "algo_port"
+    "worker"
+)
