@@ -30,5 +30,10 @@ BENCH_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
     "gpu_idx"
-    "algo"
+    "TestAlgos[${algo}]"
 )
+
+function PREP_BENCH_PARAMETERSTACK () {
+    LIVE_PARAMETERSTACK[-1]="TestAlgos[${algo}]"
+}
+
