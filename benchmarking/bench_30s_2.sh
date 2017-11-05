@@ -62,6 +62,197 @@ while [[ $# -gt 0 ]]; do
 done
 #set -- "${POSITIONAL[@]}" # restore positional parameters
 
+function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
+    ######################## 
+    # 
+    # Benschmarkspeeed HASH und WATT werte
+    # (original benchmakŕk.json) für herrausfinden wo an welcher stelle ersetzt werden muss  
+    # 
+    # bechchmarkfile="benchmark_${gpu_uuid}.json"
+    # gpu index uuid in "../${gpu_uuid}/benchmark_${gpu_uuid}.json" 
+
+    IMPORTANT_BENCHMARK_JSON=../${gpu_uuid}/benchmark_${gpu_uuid}.json
+    cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.BAK
+
+    #
+    # Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um MinerVersion, etc.
+    # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien gibt
+    #
+    grep -c "\"MinerVersion\": \"" ${IMPORTANT_BENCHMARK_JSON}.BAK &>/dev/null \
+        || gawk -e 'BEGIN {FS=":"} \
+           match( $0, /"MinerName": "[[:alnum:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); miner=tolower( substr(M, index(M,":")+3 ) ); \
+                 if ( miner == "equihash" ) { miner="miner"; version="0.3.4b" } else { miner="ccminer"; version="2.2" } \
+                 print "      \"MinerName\": \"" miner "\","; \
+                 print "      \"MinerVersion\": \"" version "\","; \
+                 next } \
+           match( $0, /"LessThreads": [[:digit:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); miner=tolower( substr(M, index(M,":")+2 ) ); \
+                 print "      \"GPUGraphicsClockOffset[3]\": 0,"; \
+                 print "      \"GPUMemoryTransferRateOffset[3]\": 0,"; \
+                 print "      \"GPUTargetFanSpeed\": 0,"; \
+                 print "      \"PowerLimit\": 0," \
+               } \
+           {print}' ${IMPORTANT_BENCHMARK_JSON}.BAK >${IMPORTANT_BENCHMARK_JSON}
+
+    # ---> WICHTIGE ANPASSUNG NÖTIG, WENN "MinerName" endlich wirklich den "Miner" <---
+    # --->           und nicht den Algorithemnnamen enthält!!!
+    # (05.11.2017) Erledigt durch sed im Anschluss
+    #cat ${IMPORTANT_BENCHMARK_JSON} |grep -m1 -n -A 6 -e '\"Name.*\"'${algo}'\"' \
+    #    | tee >(grep BenchmarkSpeed | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazb ) \
+    #          >(grep NiceHashID     | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazI ) \
+    #    |       grep WATT           | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazw
+
+    # Den EXAKTEN Textblock für ${algo} && ${miner_name} && ${miner_version} raussuchen
+    # Zeilennummern in temporärer Datei merken
+    # Das folgende Kommando funktioniert exakt wie das gut dokumentierte:
+    #sed -n -e '/"Name": "'${algo}'",/{N;N;N;/"MinerName": "'${miner_name}'",/bversion;d;:version;N;/"MinerVersion": "'${miner_version}'/bmatched;d;:matched;N;=}' \
+
+    sed -n -e '/"Name": "'${algo}'",/ {                  # if found...
+        N                                                # append N(ext) line to pattern-space, here "NiceHashID"
+        N                                                # append N(ext) line to pattern-space, "MinerBaseType"
+        N                                                # append N(ext) line to pattern-space, "MinerName"
+        /"MinerName": "'${miner_name}'",/ b version      # if found ${miner_name} b(ranch) to :version
+        d                                                # d(elete) pattern-space, read next line and start from beginning
+        :version
+        N                                                # append N(ext) line to pattern-space, "MinerVersion"
+        /"MinerVersion": "'${miner_version}'/ b matched  # if found ${miner_version} b(ranch) to :matched
+        d                                                # d(elete) pattern space, read next line and start from beginning
+        :matched
+        N                                                # append N(ext) line to pattern-space, here "BenchmarkSpeed"
+        =                                                # print line number, here line of "BenchmarkSpeed"
+        }' \
+        ${IMPORTANT_BENCHMARK_JSON} \
+        > tempazb
+
+    #" <-- wegen richtigem Highlightning in meinem proggi ... bitte nicht entfernen
+    ## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
+    # cat benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json |grep -n -A 4 equihash | grep BenchmarkSpeed 
+    # Zeilennummer ; Name ; HASH, 
+    # 80-      "BenchmarkSpeed": 469.765087, 
+ 
+
+    # 
+    # ccminer log vom algo test/benchmark_$algo_${gpu_uuid}.log 
+    # 
+    #[2017-10-28 16:46:56] 1 miner thread started, using 'lyra2v2' algorithm.
+    #[2017-10-28 16:46:56] GPU #0: Intensity set to 20, 1048576 cuda threads
+    #[2017-10-28 16:46:58] GPU #0: Zotac GTX 980 Ti, 33.95 MH/s
+    #[2017-10-28 16:46:59] Total: 34.36 MH/s
+    #[2017-10-28 16:47:00] Total: 34.21 MH/s
+    #[2017-10-28 16:47:01] Total: 34.22 MH/s
+    #[2017-10-28 16:47:02] GPU #0: Zotac GTX 980 Ti, 34.40 MH/s
+
+    #[2017-10-28 16:39:44] 1 miner thread started, using 'sib' algorithm.
+    #[2017-10-28 16:39:44] GPU #0: Intensity set to 19, 524288 cuda threads
+    #[2017-10-28 16:39:47] GPU #0: Zotac GTX 980 Ti, 8878.28 kH/s
+    #[2017-10-28 16:39:54] GPU #0: Zotac GTX 980 Ti, 9029.67 kH/s
+    #[2017-10-28 16:39:54] Total: 9029.67 kH/s
+    #[2017-10-28 16:40:04] GPU #0: Zotac GTX 980 Ti, 8964.48 kH/s
+    #[2017-10-28 16:40:04] Total: 8997.08 kH/s
+
+
+    #######################################################
+    #
+    # Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
+    #
+    #######################################
+
+    # herrausfiltern ob KH,MH ....
+    temp_einheit=$(cat ${BENCHLOGFILE} | grep -m1 "/s$" | gawk -e '{print $NF}')
+    case "${temp_einheit:0:1}" in
+        H)  faktor=1                  ;;
+        k)  faktor=${k_base}          ;;
+        M)  faktor=$((${k_base}**2))  ;;
+        G)  faktor=$((${k_base}**3))  ;;
+        T)  faktor=$((${k_base}**4))  ;;
+        P)  faktor=$((${k_base}**5))  ;;
+        *)  echo "Shit: Unknown Umrechnungsfaktor '${temp_einheit:0:1}'"
+    esac
+
+    avgHASH=$(echo "${avgHASH} * $faktor" | bc)
+    echo "HASHWERT wurde in Einheit ${temp_einheit:1} umgerechnet: $avgHASH"
+
+
+    #########
+    #
+    # Einfügen des Hash wertes in die Original bench*.json datei
+
+    BLOCK_FORMAT=(
+        '      \"Name\": \"%s\",\n'
+        '      \"NiceHashID\": %s,\n'
+        '      \"MinerBaseType\": %s,\n'
+        '      \"MinerName\": \"%s\",\n'
+        '      \"MinerVersion\": \"%s\",\n'
+        '      \"BenchmarkSpeed\": %s,\n'
+        '      \"ExtraLaunchParameters\": \"%s\",\n'
+        '      \"WATT\": %s,\n'
+        '      \"GPUGraphicsClockOffset[3]\": %s,\n'
+        '      \"GPUMemoryTransferRateOffset[3]\": %s,\n'
+        '      \"GPUTargetFanSpeed\": %s,\n'
+        '      \"PowerLimit\": %s,\n'
+        '      \"LessThreads\": %s\n'
+    )
+
+    # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
+    declare -i tempazb=$(< "tempazb") 
+
+    if [ ${tempazb} -gt 1 ] ; then
+        echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
+        sed -i -e "$((tempazb-4))s/[0-9]\+/${ALGO_IDs[${algo}]}/" ${IMPORTANT_BENCHMARK_JSON}
+        echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
+        sed -i -e "${tempazb}s/[0-9.]\+/$avgHASH/" ${IMPORTANT_BENCHMARK_JSON}
+        echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+2)) eingefügt"
+        sed -i -e "$((tempazb+2))s/[0-9.]\+/$avgWATT/" ${IMPORTANT_BENCHMARK_JSON}
+        if [ ${#grafik_clock} -ne 0 ]; then
+            echo "der GraphicClock Wert ${grafik_clock} wird nun in der Zeile $((tempazb+3)) eingefügt"
+            sed -i -e "$((tempazb+3))s/[0-9]\+,/${grafik_clock}/" ${IMPORTANT_BENCHMARK_JSON}
+        fi
+        if [ ${#memory_clock} -ne 0 ]; then
+            echo "der MemoryClock Wert ${memory_clock} wird nun in der Zeile $((tempazb+4)) eingefügt"
+            sed -i -e "$((tempazb+4))s/[0-9]\+,/${memory_clock}/" ${IMPORTANT_BENCHMARK_JSON}
+        fi
+        if [ ${#fan_speed}    -ne 0 ]; then
+            echo "der FanSpeed Wert ${fan_speed} wird nun in der Zeile $((tempazb+5)) eingefügt"
+            sed -i -e "$((tempazb+5))s/[0-9]\+,/${fan_speed}/" ${IMPORTANT_BENCHMARK_JSON}
+        fi
+        if [ ${#power_limit}  -ne 0 ]; then
+            echo "der PowerLimit Wert ${powerlimit} wird nun in der Zeile $((tempazb+6)) eingefügt"
+            sed -i -e "$((tempazb+6))s/[0-9]\+,/${powerlimit}/" ${IMPORTANT_BENCHMARK_JSON}
+        fi
+    else
+        if [ ${#miner_base_type} -eq 0 ]; then miner_base_type=9; fi
+        if [ ${#grafik_clock}    -eq 0 ]; then grafik_clock=0;    fi
+        if [ ${#memory_clock}    -eq 0 ]; then memory_clock=0;    fi
+        if [ ${#fan_speed}       -eq 0 ]; then fan_speed=0;       fi
+        if [ ${#power_limit}     -eq 0 ]; then powerlimit=0;      fi
+        if [ ${#less_threads}    -eq 0 ]; then less_threads=0;    fi
+        BLOCK_VALUES=(
+            ${algo}
+            ${ALGO_IDs[${algo}]}
+            ${miner_base_type}
+            ${miner_name}
+            ${miner_version}
+            ${avgHASH}
+            ""
+            ${avgWATT}
+            ${grafik_clock}
+            ${memory_clock}
+            ${fan_speed}
+            ${power_limit}
+            ${less_threads}
+        )
+        echo "Der Algo wird zur Benchmark Datei hinzugefügt"
+        sed -i -e '/ ]/,/}$/d'     ${IMPORTANT_BENCHMARK_JSON}
+        printf ",   {\n"         >>${IMPORTANT_BENCHMARK_JSON}
+        for (( i=0; $i<${#BLOCK_FORMAT[@]}; i++ )); do
+            printf "${BLOCK_FORMAT[$i]}" "${BLOCK_VALUES[$i]}" \
+                | tee -a ${IMPORTANT_BENCHMARK_JSON}
+        done
+        printf "    }\n  ]\n}\n" >>${IMPORTANT_BENCHMARK_JSON}
+    fi
+}
+
 function _On_Exit () {
     # CCminer stoppen
     if [ -s ccminer.pid ]; then
@@ -82,8 +273,20 @@ function _On_Exit () {
             echo "Letzter Stand aller verwendeten Befehle:" >>${TWEAKLOGFILE}
             for tweak_msg in "${!TWEAK_MSGs[@]}"; do
                 echo "${TWEAK_MSGs[${tweak_msg}]}" >>${TWEAKLOGFILE}
+                value=$(echo "${TWEAK_MSGs[${tweak_msg}]}" | grep -o -e '[[:digit:]]\+$')
+                if [ "${tweak_msg}" == "nvidia-smi --id" ]; then
+                    power_limit=${value}
+                elif [ "${tweak_msg}" == "nvidia-settings --assign [fan:${gpu_idx}]/GPUTargetFanSpeed" ]; then
+                    fan_speed=${value}
+                elif [ "${tweak_msg}" == "nvidia-settings --assign [gpu:${gpu_idx}]/GPUGraphicsClockOffset[3]" ]; then
+                    grafik_clock=${value}
+                else
+                    memory_clock=${value}
+                fi
             done
         fi
+        # Es sind ja wenigstens avgHASH und avgWATT ermittelt worden.
+        _edit_BENCHMARK_JSON_and_put_in_the_new_values
         cp ${TWEAKLOGFILE} ${LOGPATH}/tweak_$(date "+%Y%m%d_%H%M%S").log
     fi
     rm -f $(basename $0 .sh).pid
@@ -520,105 +723,13 @@ printf " Durchschnitt : %12s\n" $avgWATT
 printf " Max WATT Wert: %12s\n" $MAXWATT
 
 
-
-
 ############################################################################### 
 # 
-# cat 980ti_bench_log |grep MB, |gawk -M -e 'BEGIN {FS=" "} {print $3}{print $5*1000}'
-### noch fehle rdrin bei 0.4 dann ausgabe 0 
+#Berechnung der Durchschnittlichen Hash wertes 
 # 
-#  cat benchmark_${gpu_uuid}.log |grep MB, |gawk -M -e 'BEGIN {FS=" "} {print $3}{print $5*1000}' 
-# 
-#  
 
-######################## 
-# 
-# Benschmarkspeeed HASH und WATT werte
-# (original benchmakŕk.json) für herrausfinden wo an welcher stelle ersetzt werden muss  
-# 
-# bechchmarkfile="benchmark_${gpu_uuid}.json"
-# gpu index uuid in "../${gpu_uuid}/benchmark_${gpu_uuid}.json" 
-
-IMPORTANT_BENCHMARK_JSON=../${gpu_uuid}/benchmark_${gpu_uuid}.json
-cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.BAK
-
-#
-# Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um MinerVersion, etc.
-# Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien gibt
-#
-grep -c "\"MinerVersion\": \"" ${IMPORTANT_BENCHMARK_JSON}.BAK &>/dev/null \
-    || gawk -e 'BEGIN {FS=":"} \
-          match( $0, /"MinerName": "[[:alnum:]]*/ )\
-               { M=substr($0, RSTART, RLENGTH); miner=tolower( substr(M, index(M,":")+3 ) ); \
-                 if ( miner == "equihash" ) { miner="miner"; version="0.3.4b" } else { miner="ccminer"; version="2.2" } \
-                 print "      \"MinerName\": \"" miner "\","; \
-                 print "      \"MinerVersion\": \"" version "\","; \
-                 next } \
-          match( $0, /"LessThreads": [[:digit:]]*/ )\
-               { M=substr($0, RSTART, RLENGTH); miner=tolower( substr(M, index(M,":")+2 ) ); \
-                 print "      \"GPUGraphicsClockOffset[3]\": 0,"; \
-                 print "      \"GPUMemoryTransferRateOffset[3]\": 0,"; \
-                 print "      \"GPUTargetFanSpeed\": 0,"; \
-                 print "      \"PowerLimit\": 0," \
-               } \
-          {print}' ${IMPORTANT_BENCHMARK_JSON}.BAK >${IMPORTANT_BENCHMARK_JSON}
-
-# ---> WICHTIGE ANPASSUNG NÖTIG, WENN "MinerName" endlich wirklich den "Miner" <---
-# --->           und nicht den Algorithemnnamen enthält!!!
-# (05.11.2017) Erledigt durch sed im Anschluss
-#cat ${IMPORTANT_BENCHMARK_JSON} |grep -m1 -n -A 6 -e '\"Name.*\"'${algo}'\"' \
-#    | tee >(grep BenchmarkSpeed | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazb ) \
-#          >(grep NiceHashID     | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazI ) \
-#    |       grep WATT           | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazw
-
-# Den EXAKTEN Textblock für ${algo} && ${miner_name} && ${miner_version} raussuchen
-# Zeilennummern in temporärer Datei merken
-# Das folgende Kommando funktioniert exakt wie das gut dokumentierte:
-#sed -n -e '/"Name": "'${algo}'",/{N;N;N;/"MinerName": "'${miner_name}'",/bversion;d;:version;N;/"MinerVersion": "'${miner_version}'/bmatched;d;:matched;N;=}' \
-
-sed -n -e '/"Name": "'${algo}'",/ {                  # if found...
-    N                                                # append N(ext) line to pattern-space, here "NiceHashID"
-    N                                                # append N(ext) line to pattern-space, "MinerBaseType"
-    N                                                # append N(ext) line to pattern-space, "MinerName"
-    /"MinerName": "'${miner_name}'",/ b version      # if found ${miner_name} b(ranch) to :version
-    d                                                # d(elete) pattern-space, read next line and start from beginning
-    :version
-    N                                                # append N(ext) line to pattern-space, "MinerVersion"
-    /"MinerVersion": "'${miner_version}'/ b matched  # if found ${miner_version} b(ranch) to :matched
-    d                                                # d(elete) pattern space, read next line and start from beginning
-    :matched
-    N                                                # append N(ext) line to pattern-space, here "BenchmarkSpeed"
-    =                                                # print line number, here line of "BenchmarkSpeed"
-    }' \
-    ${IMPORTANT_BENCHMARK_JSON} \
-    > tempazb
-
-#" <-- wegen richtigem Highlightning in meinem proggi ... bitte nicht entfernen
-## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
-# cat benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json |grep -n -A 4 equihash | grep BenchmarkSpeed 
-# Zeilennummer ; Name ; HASH, 
-# 80-      "BenchmarkSpeed": 469.765087, 
- 
-
-# 
-# ccminer log vom algo test/benchmark_$algo_${gpu_uuid}.log 
-# 
-#[2017-10-28 16:46:56] 1 miner thread started, using 'lyra2v2' algorithm.
-#[2017-10-28 16:46:56] GPU #0: Intensity set to 20, 1048576 cuda threads
-#[2017-10-28 16:46:58] GPU #0: Zotac GTX 980 Ti, 33.95 MH/s
-#[2017-10-28 16:46:59] Total: 34.36 MH/s
-#[2017-10-28 16:47:00] Total: 34.21 MH/s
-#[2017-10-28 16:47:01] Total: 34.22 MH/s
-#[2017-10-28 16:47:02] GPU #0: Zotac GTX 980 Ti, 34.40 MH/s
-
-#[2017-10-28 16:39:44] 1 miner thread started, using 'sib' algorithm.
-#[2017-10-28 16:39:44] GPU #0: Intensity set to 19, 524288 cuda threads
-#[2017-10-28 16:39:47] GPU #0: Zotac GTX 980 Ti, 8878.28 kH/s
-#[2017-10-28 16:39:54] GPU #0: Zotac GTX 980 Ti, 9029.67 kH/s
-#[2017-10-28 16:39:54] Total: 9029.67 kH/s
-#[2017-10-28 16:40:04] GPU #0: Zotac GTX 980 Ti, 8964.48 kH/s
-#[2017-10-28 16:40:04] Total: 8997.08 kH/s
-
+#cat miner.out |gawk -e 'BEGIN {FS=", "} {print $2}' |grep -E -o -e '[0-9.]*' 
+# ---> nur die mit "yes!" zur berechnung des hashes nehmen bei "THREADING" <---
 
 # Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
 # die Werte werden in zwei schritten herausgefiltert und in eine hash temp datei zusammengepakt, so dass jeder hash
@@ -630,16 +741,12 @@ cat ${BENCHLOGFILE} | grep "/s$" \
 # herrausfiltern ob KH,MH ....
 cat ${BENCHLOGFILE} | grep -m1 "/s$" \
     | gawk -e '{print $NF}' > temp_einheit
+temp_einheit=$(< "temp_einheit")
 
-
-############################################################################### 
-# 
-#Berechnung der Durchschnittlichen Hash wertes 
-# 
 
 HASHCOUNTER=0 
 
-HASH_temp=$(cat "temp_hash")
+HASH_temp=$(< "temp_hash")
 sum=0
 for float in $HASH_temp ; do  
  
@@ -650,122 +757,8 @@ done
  
 avgHASH=$(echo "scale=9; $sum / $HASHCOUNTER" | bc) 
  
-temp_einheit=$(cat "temp_einheit")
 printf " Summe        : %12.2f; Messwerte: %5s\n" ${sum/\./,} $HASHCOUNTER
 printf " Durchschnitt : %12.2f %6s\n" ${avgHASH/\./,} ${temp_einheit}
 
+_edit_BENCHMARK_JSON_and_put_in_the_new_values
 
-#######################################################
-#
-# Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
-#
-#######################################
-
-# if abfragen ob "MH/s" KH bla blub dann berechnung und richtigstellung $temp_einheit
-case "${temp_einheit:0:1}" in
-
-    H)  faktor=1                  ;;
-    k)  faktor=${k_base}          ;;
-    M)  faktor=$((${k_base}**2))  ;;
-    G)  faktor=$((${k_base}**3))  ;;
-    T)  faktor=$((${k_base}**4))  ;;
-    P)  faktor=$((${k_base}**5))  ;;
-    *)  echo "Shit: Unknown Umrechnungsfaktor '${temp_einheit:0:1}'"
-esac
-
-avgHASH=$(echo "${avgHASH} * $faktor" | bc)
-echo "HASHWERT wurde in Einheit ${temp_einheit:1} umgerechnet: $avgHASH"
-
-
-#########
-#
-# Einfügen des Hash wertes in die Original bench*.json datei
-
-BLOCK_FORMAT=(
-    '      \"Name\": \"%s\",\n'
-    '      \"NiceHashID\": %s,\n'
-    '      \"MinerBaseType\": %s,\n'
-    '      \"MinerName\": \"%s\",\n'
-    '      \"MinerVersion\": \"%s\",\n'
-    '      \"BenchmarkSpeed\": %s,\n'
-    '      \"ExtraLaunchParameters\": \"%s\",\n'
-    '      \"WATT\": %s,\n'
-    '      \"GPUGraphicsClockOffset[3]\": %s,\n'
-    '      \"GPUMemoryTransferRateOffset[3]\": %s,\n'
-    '      \"GPUTargetFanSpeed\": %s,\n'
-    '      \"PowerLimit\": %s,\n'
-    '      \"LessThreads\": %s\n'
-)
-
-# ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
-declare -i tempazb=$(< "tempazb") 
-
-if [ ${tempazb} -gt 1 ] ; then
-    # NiceHashID korrigieren
-    echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
-    sed -i -e "$((tempazb-4))s/[0-9]\+/${ALGO_IDs[${algo}]}/" ${IMPORTANT_BENCHMARK_JSON}
-    # Hash wert änderung
-    echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
-    sed -i -e "${tempazb}s/[0-9.]\+/$avgHASH/" ${IMPORTANT_BENCHMARK_JSON}
-    # WATT wert änderung
-    echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+2)) eingefügt"
-    sed -i -e "$((tempazb+2))s/[0-9.]\+/$avgWATT/" ${IMPORTANT_BENCHMARK_JSON}
-else
-    if [ ${#miner_base_type} -eq 0 ]; then miner_base_type=9; fi
-    if [ ${#grafik_clock}    -eq 0 ]; then grafik_clock=0;    fi
-    if [ ${#memory_clock}    -eq 0 ]; then memory_clock=0;    fi
-    if [ ${#fan_speed}       -eq 0 ]; then fan_speed=0;       fi
-    if [ ${#power_limit}     -eq 0 ]; then powerlimit=0;      fi
-    if [ ${#less_threads}    -eq 0 ]; then less_threads=0;    fi
-    BLOCK_VALUES=(
-        ${algo}
-        ${ALGO_IDs[${algo}]}
-        ${miner_base_type}
-        ${miner_name}
-        ${miner_version}
-        ${avgHASH}
-        ""
-        ${avgWATT}
-        ${grafik_clock}
-        ${memory_clock}
-        ${fan_speed}
-        ${power_limit}
-        ${less_threads}
-    )
-    echo "Der Algo wird zur Benchmark Datei hinzugefügt"
-    sed -i -e '/ ]/,/}$/d'                                   ${IMPORTANT_BENCHMARK_JSON}
-    printf ",   {\n"                                       >>${IMPORTANT_BENCHMARK_JSON}
-    for (( i=0; $i<${#BLOCK_FORMAT[@]}; i++ )); do
-        printf "${BLOCK_FORMAT[$i]}" ${BLOCK_VALUES[$i]}   >>${IMPORTANT_BENCHMARK_JSON}
-    done
-    printf "    }\n  ]\n}\n"                               >>${IMPORTANT_BENCHMARK_JSON}
-fi
-
-###################### 
-# Löschen der Log datei 
-#rm benchmark_$tempnv.log 
- 
- 
-# 
-# Benchmark test ist nur für den ccminer ($3) ## "MinerName" (wird später folder bezogen da es mehrere miner gibt ... noch nicht ganz klar) 
-# Ein algo können mit xx verschiedenen minern betrieben werden  
-# 
-# Block_empty 
-#    { 
-#      "Name": "$1", 
-#      "NiceHashID": 0, 
-#      "MinerBaseType": 0, 
-#      "MinerName": "$3",       #$3 wird am anfang dann vom miner xyz gesetzt bzw von hand eingetragen 
-#      "BenchmarkSpeed": $2, 
-#      "ExtraLaunchParameters": "", 
-#      "WATT": 0, 
-#      "LessThreads": 0 
-#    }, 
-# 
-# 
-# 
-# 
-# 
-##### old 
-#cat miner.out |gawk -e 'BEGIN {FS=", "} {print $2}' |grep -E -o -e '[0-9.]*' 
-#nur die mit "yes!" zur berechnung des hashes nehmen bei "threading"
