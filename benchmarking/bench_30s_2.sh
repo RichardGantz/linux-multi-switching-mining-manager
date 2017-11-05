@@ -161,13 +161,13 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # herrausfiltern ob KH,MH ....
     temp_einheit=$(cat ${BENCHLOGFILE} | grep -m1 "/s$" | gawk -e '{print $NF}')
     case "${temp_einheit:0:1}" in
-        H)  faktor=1                  ;;
-        k)  faktor=${k_base}          ;;
-        M)  faktor=$((${k_base}**2))  ;;
-        G)  faktor=$((${k_base}**3))  ;;
-        T)  faktor=$((${k_base}**4))  ;;
-        P)  faktor=$((${k_base}**5))  ;;
-        *)  echo "Shit: Unknown Umrechnungsfaktor '${temp_einheit:0:1}'"
+        S|H) faktor=1                  ;;
+        k)   faktor=${k_base}          ;;
+        M)   faktor=$((${k_base}**2))  ;;
+        G)   faktor=$((${k_base}**3))  ;;
+        T)   faktor=$((${k_base}**4))  ;;
+        P)   faktor=$((${k_base}**5))  ;;
+        *)   echo "Shit: Unknown Umrechnungsfaktor '${temp_einheit:0:1}'"
     esac
 
     avgHASH=$(echo "${avgHASH} * $faktor" | bc)
@@ -266,7 +266,8 @@ function _On_Exit () {
     fi
     # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
     if [ -f ${BENCHLOGFILE} ]; then
-        cp ${BENCHLOGFILE} ${LOGPATH}/benchmark_$(date "+%Y%m%d_%H%M%S").log
+        sed -e 's/\x1B[[][[:digit:]]*m//g' ${BENCHLOGFILE} \
+            >${LOGPATH}/benchmark_$(date "+%Y%m%d_%H%M%S").log
     fi
     if [ -f ${TWEAKLOGFILE} ]; then
         if [ ${#TWEAK_MSGs[@]} -gt 0 ]; then
@@ -406,9 +407,12 @@ echo "${miner_name}#${miner_version}" >benching_${gpu_idx}_miner
 # Wir holen hier mal der Bequemlichkeit halber die aus einer eventuell vorhandenen ALGO_NAMES.json
 # Müssen aber dennoch checken, ob sie gültig ist!
 
+#                       GLOBALE VARIABLEN für spätere Implementierung
 # Diese Variablen sind Kandidaten, um als Globale Variablen in einem "source" file überall integriert zu werden.
 # Sie wird dann nicht mehr an dieser Stelle stehen, sondern über "source GLOBAL_VARIABLES.inc" eingelesen
+
 NH_DOMAIN="nicehash.com"
+export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
 ALGO_NAMES_WEB="ALGO_NAMES.json"
 ALGO_PORTS_WEB="MULTI_ALGO_INFO.json"
 
@@ -500,10 +504,15 @@ echo "${algo}" >benching_${gpu_idx}_algo
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle gleich ist.
 source ../miners/${miner_name}#${miner_version}.starts
+
 # ---> Die folgenden Variablen müssen noch vollständig implementiert werden! <---
 continent="eu"        # Noch nicht vollständig implementiert!      <--------------------------------------
 algo_port="3357"      # Momentan der vom equihash, weil der auch beim Benching gebraucht wird <-----------
 worker="1060"         # Noch nicht vollständig implementiert!      <--------------------------------------
+
+# Equihash Logile Entfernung der Farben-Escape-Sequenzen:
+#sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log
+
 
 rm -f ${BENCHLOGFILE}
 # Jetzt bauen wir den Benchmakaufruf zusammen, der in dem .inc entsprechend vorbereitet ist.
@@ -531,7 +540,12 @@ if [ ! $NoCards ]; then
     sleep 3
 else
     if [ ! -f "${BENCHLOGFILE}" ]; then
-        cp test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
+        if [ "${miner_name}" == "miner" ]; then
+            #sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log >${BENCHLOGFILE}
+            cp -f equihash.log ${BENCHLOGFILE}
+        else
+            cp test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
+        fi
     fi
 fi  ## $NoCards
 
@@ -580,7 +594,9 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
     echo $COUNTER > COUNTER
 
     ### Hashwerte nachsehen und zählen
-    hashCount=$(cat ${BENCHLOGFILE} | grep -c "/s$")
+    hashCount=$(cat ${BENCHLOGFILE} \
+                       | sed -e 's/\x1B[[][[:digit:]]*m//g' \
+                       | grep -c "/s$")
     if [ $hashCount -ge $MIN_HASH_COUNT ]; then countHashes=0; fi
 
     if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
@@ -619,6 +635,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
         if [ ${#tweak_msg} -gt 0 ]; then
             # Calculate only the values after the last command
             hashCount=$(cat ${BENCHLOGFILE} \
+                      | sed -e 's/\x1B[[][[:digit:]]*m//g' \
                       | tail -n +$hash_line \
                       | grep -e "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
@@ -634,6 +651,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             # Nimm alle Werte aus der BenchLog und der WattLog Datei, um den lfd. Durchschnitt zu errechnen
             # zuerst die BenchLog...
             hashCount=$(cat ${BENCHLOGFILE} \
+                      | sed -e 's/\x1B[[][[:digit:]]*m//g' \
                       | grep "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum )\
@@ -734,6 +752,10 @@ printf " Max WATT Wert: %12s\n" $MAXWATT
 # Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
 # die Werte werden in zwei schritten herausgefiltert und in eine hash temp datei zusammengepakt, so dass jeder hash
 # wert erfasst werden kann
+
+# Ausfiltern von Farben Escape-Sequenzen
+sed -i -e 's/\x1B[[][[:digit:]]*m//g' ${BENCHLOGFILE}
+
 rm -f temp_hash
 cat ${BENCHLOGFILE} | grep "/s$" \
     | gawk -e '{hash=NF-1; print $hash }' >>temp_hash

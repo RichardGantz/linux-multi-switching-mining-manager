@@ -176,3 +176,7 @@ benchmarking/benching_0_miner
 benchmarking/ALGO_PORTS\.in
 
 benchmarking/tweak_commands\.log
+
+*.log~
+
+benchmarking/equihash\.log
