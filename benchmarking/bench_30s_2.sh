@@ -280,10 +280,11 @@ function _On_Exit () {
                 fi
             done
         fi
-        # Es sind ja wenigstens avgHASH und avgWATT ermittelt worden.
-        _edit_BENCHMARK_JSON_and_put_in_the_new_values
+
         cp ${TWEAKLOGFILE} ${LOGPATH}/tweak_$(date "+%Y%m%d_%H%M%S").log
     fi
+    # Es sind ja wenigstens avgHASH und avgWATT ermittelt worden.
+    _edit_BENCHMARK_JSON_and_put_in_the_new_values
     rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
@@ -722,6 +723,7 @@ WATT=$(cat "watt_bensh_30s.out")
 MAXWATT=$(cat "watt_bensh_30s_max.out")
 
 sum=0
+unset i
 for i in $WATT ; do  
     sum=$(echo "$sum + $i" | bc) 
 done 
@@ -774,5 +776,5 @@ avgHASH=$(echo "scale=9; $sum / $HASHCOUNTER" | bc)
 printf " Summe        : %12.2f; Messwerte: %5s\n" ${sum/\./,} $HASHCOUNTER
 printf " Durchschnitt : %12.2f %6s\n" ${avgHASH/\./,} ${temp_einheit}
 
-_edit_BENCHMARK_JSON_and_put_in_the_new_values
-
+#_edit_BENCHMARK_JSON_and_put_in_the_new_values
+#kill -15 $(< $(basename $0 .sh).pid)

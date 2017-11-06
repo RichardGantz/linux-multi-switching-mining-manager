@@ -18,7 +18,10 @@ function _read_in_ALGO_NAMES () {
                                | tee ${ALGO_NAMES_WEB} \
                                | grep -c -e "$searchPattern" )
         fi
-        if [ ${jsonValid} -eq 0 ]; then sleep 1; fi
+        if [ ${jsonValid} -eq 0 ]; then 
+            echo ${ALGO_NAMES_WEB}
+            sleep 10; 
+        fi
     done
 
     # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach READARR
@@ -46,7 +49,7 @@ function _read_in_ALGO_NAMES () {
 
 function _read_in_ALGO_PORTS () {
     declare -i jsonValid=0
-    searchPattern='^[{]"result":[{]"multialgo":\['
+    searchPattern='^[{]"result":[{]"simplemultialgo":\['
     while [ ${jsonValid} -eq 0 ]; do
         if [ -s "${ALGO_PORTS_WEB}" ]; then
             jsonValid=$(cat ${ALGO_PORTS_WEB} | grep -c -e "$searchPattern" )
