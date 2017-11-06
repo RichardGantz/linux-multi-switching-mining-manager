@@ -776,5 +776,6 @@ avgHASH=$(echo "scale=9; $sum / $HASHCOUNTER" | bc)
 printf " Summe        : %12.2f; Messwerte: %5s\n" ${sum/\./,} $HASHCOUNTER
 printf " Durchschnitt : %12.2f %6s\n" ${avgHASH/\./,} ${temp_einheit}
 
-#_edit_BENCHMARK_JSON_and_put_in_the_new_values
-#kill -15 $(< $(basename $0 .sh).pid)
+# Es folgt zum Schluss die On_Exit-Routine, die diese Funktion aufruft!
+# _edit_BENCHMARK_JSON_and_put_in_the_new_values
+

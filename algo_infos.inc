@@ -18,10 +18,10 @@ function _read_in_ALGO_NAMES () {
                                | tee ${ALGO_NAMES_WEB} \
                                | grep -c -e "$searchPattern" )
         fi
-        if [ ${jsonValid} -eq 0 ]; then 
-            echo ${ALGO_NAMES_WEB}
-            sleep 10; 
-        fi
+        if [ ${jsonValid} -eq 0 ]; then
+	    echo "Waiting for valid File ${ALGO_NAMES_WEB} from the Web..."
+	    sleep 1
+	fi
     done
 
     # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach READARR
