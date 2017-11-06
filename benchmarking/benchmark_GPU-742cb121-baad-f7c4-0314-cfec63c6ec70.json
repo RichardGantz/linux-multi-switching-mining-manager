@@ -104,12 +104,12 @@
     },
 {
       "Name": "skunk",
-      "NiceHashID": 25,
+      "NiceHashID": 29,
       "MinerBaseType": 9,
       "MinerName": "skunk",
-      "BenchmarkSpeed": 28000000,
+      "BenchmarkSpeed": 27106213.888000000,
       "ExtraLaunchParameters": "",
-      "WATT": 245,
+      "WATT": 234,
       "LessThreads": 0
     },
 {
@@ -234,12 +234,12 @@
     },
 {
       "Name": "blake256r8vnl",
-      "NiceHashID": 25,
+      "NiceHashID": 18,
       "MinerBaseType": 9,
       "MinerName": "blake256r8vnl",
-      "BenchmarkSpeed": 6933000000,
+      "BenchmarkSpeed": 6841263411.384287232,
       "ExtraLaunchParameters": "",
-      "WATT": 278,
+      "WATT": 269,
       "LessThreads": 0
     }
   ]
