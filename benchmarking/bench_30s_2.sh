@@ -108,7 +108,7 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
         d                                                # d(elete) pattern-space, read next line and start from beginning
         :version
         N                                                # append N(ext) line to pattern-space, "MinerVersion"
-        /"MinerVersion": "'${miner_version}'/ b matched  # if found ${miner_version} b(ranch) to :matched
+        /"MinerVersion": "'${miner_version}'"/ b matched  # if found ${miner_version} b(ranch) to :matched
         d                                                # d(elete) pattern space, read next line and start from beginning
         :matched
         N                                                # append N(ext) line to pattern-space, here "BenchmarkSpeed"
