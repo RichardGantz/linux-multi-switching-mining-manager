@@ -100,19 +100,19 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # Das folgende Kommando funktioniert exakt wie das gut dokumentierte:
     #sed -n -e '/"Name": "'${algo}'",/{N;N;N;/"MinerName": "'${miner_name}'",/bversion;d;:version;N;/"MinerVersion": "'${miner_version}'/bmatched;d;:matched;N;=}' \
 
-    sed -n -e '/"Name": "'${algo}'",/ {                  # if found...
-        N                                                # append N(ext) line to pattern-space, here "NiceHashID"
-        N                                                # append N(ext) line to pattern-space, "MinerBaseType"
-        N                                                # append N(ext) line to pattern-space, "MinerName"
-        /"MinerName": "'${miner_name}'",/ b version      # if found ${miner_name} b(ranch) to :version
-        d                                                # d(elete) pattern-space, read next line and start from beginning
+    sed -n -e '/"Name": "'${algo}'",/ {                   # if found...
+        N                                                 # append N(ext) line to pattern-space, here "NiceHashID"
+        N                                                 # append N(ext) line to pattern-space, "MinerBaseType"
+        N                                                 # append N(ext) line to pattern-space, "MinerName"
+        /"MinerName": "'${miner_name}'",/ b version       # if found ${miner_name} b(ranch) to :version
+        d                                                 # d(elete) pattern-space, read next line and start from beginning
         :version
-        N                                                # append N(ext) line to pattern-space, "MinerVersion"
-        /"MinerVersion": "'${miner_version}'/ b matched  # if found ${miner_version} b(ranch) to :matched
-        d                                                # d(elete) pattern space, read next line and start from beginning
+        N                                                 # append N(ext) line to pattern-space, "MinerVersion"
+        /"MinerVersion": "'${miner_version}'"/ b matched  # if found ${miner_version} b(ranch) to :matched
+        d                                                 # d(elete) pattern space, read next line and start from beginning
         :matched
-        N                                                # append N(ext) line to pattern-space, here "BenchmarkSpeed"
-        =                                                # print line number, here line of "BenchmarkSpeed"
+        N                                                 # append N(ext) line to pattern-space, here "BenchmarkSpeed"
+        =                                                 # print line number, here line of "BenchmarkSpeed"
         }' \
         ${IMPORTANT_BENCHMARK_JSON} \
         > tempazb
@@ -280,11 +280,12 @@ function _On_Exit () {
                 fi
             done
         fi
-
         cp ${TWEAKLOGFILE} ${LOGPATH}/tweak_$(date "+%Y%m%d_%H%M%S").log
     fi
+
     # Es sind ja wenigstens avgHASH und avgWATT ermittelt worden.
     _edit_BENCHMARK_JSON_and_put_in_the_new_values
+
     rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
@@ -722,13 +723,13 @@ sort watt_bensh_30s.out |tail -1 > watt_bensh_30s_max.out
 WATT=$(cat "watt_bensh_30s.out")
 MAXWATT=$(cat "watt_bensh_30s_max.out")
 
-sum=0
-unset i
-for i in $WATT ; do  
-    sum=$(echo "$sum + $i" | bc) 
-done 
-
-avgWATT=$(echo "$sum / $COUNTER" | bc) 
+sum_str='0'
+for w in $WATT ; do
+    sum_str+="+$w"
+done
+read sum avgWATT <<<$(echo "sum = ${sum_str};\
+     print sum, \" \", sum / $COUNTER"\
+    | bc)
 
 printf " Summe        : %12s; Messwerte: %5s\n" $sum $COUNTER
 printf " Durchschnitt : %12s\n" $avgWATT
@@ -747,34 +748,28 @@ printf " Max WATT Wert: %12s\n" $MAXWATT
 # die Werte werden in zwei schritten herausgefiltert und in eine hash temp datei zusammengepakt, so dass jeder hash
 # wert erfasst werden kann
 
-# Ausfiltern von Farben Escape-Sequenzen
+# Ausfiltern von Farben Escape-Sequenzen, damit grep das "/s$" auch finden kann.
 sed -i -e 's/\x1B[[][[:digit:]]*m//g' ${BENCHLOGFILE}
 
 rm -f temp_hash
 cat ${BENCHLOGFILE} | grep "/s$" \
+    | tee >(grep -m1 "/s$" | gawk -e '{print $NF}' > temp_einheit) \
     | gawk -e '{hash=NF-1; print $hash }' >>temp_hash
-
-# herrausfiltern ob KH,MH ....
-cat ${BENCHLOGFILE} | grep -m1 "/s$" \
-    | gawk -e '{print $NF}' > temp_einheit
-temp_einheit=$(< "temp_einheit")
-
-
-HASHCOUNTER=0 
-
 HASH_temp=$(< "temp_hash")
-sum=0
+
+sum_str='0'
+declare -i HASHCOUNTER=0 
 for float in $HASH_temp ; do  
- 
-  sum=$(echo "scale=9; $sum + $float" | bc)
-  let HASHCOUNTER=HASHCOUNTER+1
-  echo $HASHCOUNTER > HASHCOUNTER
-done 
- 
-avgHASH=$(echo "scale=9; $sum / $HASHCOUNTER" | bc) 
- 
+    sum_str+="+${float}"
+    let HASHCOUNTER++
+done
+echo $HASHCOUNTER > HASHCOUNTER
+read sum avgHASH <<<$(echo "scale=9; sum = ${sum_str};\
+     print sum, \" \", sum / $HASHCOUNTER"\
+    | bc)
+
 printf " Summe        : %12.2f; Messwerte: %5s\n" ${sum/\./,} $HASHCOUNTER
-printf " Durchschnitt : %12.2f %6s\n" ${avgHASH/\./,} ${temp_einheit}
+printf " Durchschnitt : %12.2f %6s\n" ${avgHASH/\./,} $(< temp_einheit)
 
 # Es folgt zum Schluss die On_Exit-Routine, die diese Funktion aufruft!
 # _edit_BENCHMARK_JSON_and_put_in_the_new_values
