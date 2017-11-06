@@ -16,11 +16,11 @@ minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/xmrMiner"
 #    "NH_DOMAIN"
 #    "algo_port"
 #    "worker"
-#    "TestAlgos[${algo}]"
+#    "InternalAlgos[${algo}]"
 #)
 #
 #function PREP_LIVE_PARAMETERSTACK () {
-#    LIVE_PARAMETERSTACK[-1]="TestAlgos[${algo}]"
+#    LIVE_PARAMETERSTACK[-1]="InternalAlgos[${algo}]"
 #}
 
 BENCH_START_CMD='%s/%s -d %s --benchmark'
@@ -29,3 +29,8 @@ BENCH_PARAMETERSTACK=(
     "miner_name"
     "gpu_idx"
 )
+
+#function PREP_BENCH_PARAMETERSTACK () {
+#    BENCH_PARAMETERSTACK[-1]="InternalAlgos[${algo}]"
+#}
+

@@ -17,11 +17,11 @@ LIVE_PARAMETERSTACK=(
     "NH_DOMAIN"
     "algo_port"
     "worker"
-    "TestAlgos[${algo}]"
+    "InternalAlgos[${algo}]"
 )
 
 function PREP_LIVE_PARAMETERSTACK () {
-    LIVE_PARAMETERSTACK[-1]="TestAlgos[${algo}]"
+    LIVE_PARAMETERSTACK[-1]="InternalAlgos[${algo}]"
 }
 
 BENCH_START_CMD='%s/%s --devices %s -a %s --no-color --benchmark'
@@ -29,10 +29,10 @@ BENCH_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
     "gpu_idx"
-    "TestAlgos[${algo}]"
+    "InternalAlgos[${algo}]"
 )
 
 function PREP_BENCH_PARAMETERSTACK () {
-    LIVE_PARAMETERSTACK[-1]="TestAlgos[${algo}]"
+    BENCH_PARAMETERSTACK[-1]="InternalAlgos[${algo}]"
 }
 

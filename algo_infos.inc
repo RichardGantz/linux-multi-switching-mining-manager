@@ -19,9 +19,9 @@ function _read_in_ALGO_NAMES () {
                                | grep -c -e "$searchPattern" )
         fi
         if [ ${jsonValid} -eq 0 ]; then
-	    echo "Waiting for valid File ${ALGO_NAMES_WEB} from the Web..."
-	    sleep 1
-	fi
+            echo "Waiting for valid File ${ALGO_NAMES_WEB} from the Web..."
+            sleep 1
+        fi
     done
 
     # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach READARR
@@ -59,7 +59,10 @@ function _read_in_ALGO_PORTS () {
                                | tee ${ALGO_PORTS_WEB} \
                                | grep -c -e "$searchPattern" )
         fi
-        if [ ${jsonValid} -eq 0 ]; then sleep 1; fi
+        if [ ${jsonValid} -eq 0 ]; then
+            echo "Waiting for valid File ${ALGO_PORTS_WEB} from the Web..."
+            sleep 1
+        fi
     done
 
     # Algoname:Algo-ID:Algo-Port Paare extrahieren nach READARR
