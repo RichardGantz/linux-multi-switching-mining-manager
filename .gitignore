@@ -180,3 +180,5 @@ benchmarking/tweak_commands\.log
 *.log~
 
 benchmarking/equihash\.log
+
+*.starts~
