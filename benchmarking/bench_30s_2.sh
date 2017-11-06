@@ -95,14 +95,6 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
                } \
            {print}' ${IMPORTANT_BENCHMARK_JSON}.BAK >${IMPORTANT_BENCHMARK_JSON}
 
-    # ---> WICHTIGE ANPASSUNG NÖTIG, WENN "MinerName" endlich wirklich den "Miner" <---
-    # --->           und nicht den Algorithemnnamen enthält!!!
-    # (05.11.2017) Erledigt durch sed im Anschluss
-    #cat ${IMPORTANT_BENCHMARK_JSON} |grep -m1 -n -A 6 -e '\"Name.*\"'${algo}'\"' \
-    #    | tee >(grep BenchmarkSpeed | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazb ) \
-    #          >(grep NiceHashID     | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazI ) \
-    #    |       grep WATT           | gawk -e 'BEGIN {FS="-"} {print $1}' > tempazw
-
     # Den EXAKTEN Textblock für ${algo} && ${miner_name} && ${miner_version} raussuchen
     # Zeilennummern in temporärer Datei merken
     # Das folgende Kommando funktioniert exakt wie das gut dokumentierte:
@@ -197,6 +189,8 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
     declare -i tempazb=$(< "tempazb") 
 
+    avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
+
     if [ ${tempazb} -gt 1 ] ; then
         echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
         sed -i -e "$((tempazb-4))s/[0-9]\+/${ALGO_IDs[${algo}]}/" ${IMPORTANT_BENCHMARK_JSON}
@@ -275,7 +269,7 @@ function _On_Exit () {
             for tweak_msg in "${!TWEAK_MSGs[@]}"; do
                 echo "${TWEAK_MSGs[${tweak_msg}]}" >>${TWEAKLOGFILE}
                 value=$(echo "${TWEAK_MSGs[${tweak_msg}]}" | grep -o -e '[[:digit:]]\+$')
-                if [ "${tweak_msg}" == "nvidia-smi --id" ]; then
+                if [ "${tweak_msg}" == "./nvidia-befehle/smi --id" ]; then
                     power_limit=${value}
                 elif [ "${tweak_msg}" == "nvidia-settings --assign [fan:${gpu_idx}]/GPUTargetFanSpeed" ]; then
                     fan_speed=${value}
@@ -357,9 +351,9 @@ if [ ! $NoCards ]; then
  
 else
     # Sync mit tweak_command.sh
-    echo "GPU-742cb121-baad-f7c4-0314-cfec63c6ec70" >uuid
+    echo "GPU-84f7ca95-d215-185d-7b27-a7f017e776fb" >uuid
     # Sync mit tweak_command.sh
-    echo 0 > bensh_gpu_30s_.index
+    echo 1 > bensh_gpu_30s_.index
 fi
 gpu_uuid=$(cat "uuid")
 gpu_idx=$(cat "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
@@ -507,12 +501,9 @@ source ../miners/${miner_name}#${miner_version}.starts
 
 # ---> Die folgenden Variablen müssen noch vollständig implementiert werden! <---
 continent="eu"        # Noch nicht vollständig implementiert!      <--------------------------------------
-algo_port="3357"      # Momentan der vom equihash, weil der auch beim Benching gebraucht wird <-----------
 worker="1060"         # Noch nicht vollständig implementiert!      <--------------------------------------
 
-# Equihash Logile Entfernung der Farben-Escape-Sequenzen:
-#sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log
-
+algo_port=${PORTs[${algo}]}
 
 rm -f ${BENCHLOGFILE}
 # Jetzt bauen wir den Benchmakaufruf zusammen, der in dem .inc entsprechend vorbereitet ist.
@@ -611,6 +602,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             TWEAK_MSGs["${tweak_msg/=[[:digit:]]*/}"]="${tweak_msg}"
             tweak_pat="${tweak_msg//[[]/\\[}"
             tweak_pat="${tweak_pat//[\]]/\\]}"
+            tweak_pat="${tweak_pat//[.]/\.}"
             if [ $NoCards ]; then
                 # Hänge ein paar andere Werte an die Logdateien - zum Testen
                 cat test/more_hash_values.fake >>${BENCHLOGFILE}

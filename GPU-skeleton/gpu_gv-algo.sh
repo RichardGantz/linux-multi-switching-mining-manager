@@ -165,15 +165,51 @@ _read_BENCHFILE_in()
     # 2. IN DIESER .json DATEI SIND <CR> DRIN !!!!!!!!!!!!!!!!!!!!!!!
     # 3. Array $bENCH[] in Datei bENCH.in pipen
     # 4. Anschließend einlesen und Array mit Werten aufbauen
-    # Die begehrten Zeilen:
-    #      "MinerName":      "neoscrypt",
+    # Die begehrten Zeilen...
+    #      "Name":           "neoscrypt",
+    #      "MinerName":      "ccminer",
+    #      "MinerVersion":   "2.2",
     #      "BenchmarkSpeed": 896513.0,
     #      "WATT":           320,
+    #
+    #      "Name": "%s",
+    #      "NiceHashID": %i,
+    #      "MinerBaseType": %i,
+    #      "MinerName": "%s",
+    #      "MinerVersion": "%s",
+    #      "BenchmarkSpeed": %i,
+    #      "ExtraLaunchParameters": "%s",
+    #      "WATT": %i,
+    #      "GPUGraphicsClockOffset[3]": %i,
+    #      "GPUMemoryTransferRateOffset[3]": %i,
+    #      "GPUTargetFanSpeed": %i,
+    #      "PowerLimit": %i,
+    #      "LessThreads": %i
+    #
+    #      ... werden zu den 3 Zeilen
+    #
+    #      neoscrypt#ccminer#2.2
+    #      896513.0
+    #      320
+    #      
     sed -e 's/\r//g' $BENCHFILE  \
-        | gawk -e ' \
-            $1 ~ /MinerName/      { print substr( tolower($2), 2, length($2)-3 ); next } \
-            $1 ~ /BenchmarkSpeed/ { print substr( $2, 1, length($2)-1 ); next } \
-            $1 ~ /WATT/           { print substr( $2, 1, length($2)-1 ) }' \
+        | gawk -e '$1 ~ /"Name":/ \
+                 { algo          = substr( tolower($2), 2, length($2)-3 ); \
+                   getline;       # NiceHashID    \
+                   getline;       # MinerBaseType \
+                   getline;       # MinerName \
+                   miner_name    = substr( $2, 2, length($2)-3 ); \
+                   getline;       # MinerVersion \
+                   miner_version = substr( $2, 2, length($2)-3 ); \
+                   getline;       # BenchmarkSpeed \
+                   benchspeed    = substr( $2, 1, length($2)-1 ); \
+                   getline;       # ExtraLaunchParameters \
+                   getline;       # WATT \
+                   print algo "#" miner_name "#" miner_version; \
+                   print benchspeed; \
+                   print substr( $2, 1, length($2)-1 ); \
+                   next \
+                 }' \
         | tee $bENCH_SRC \
         | readarray -n 0 -O 0 -t READARR
     # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
@@ -409,17 +445,17 @@ while [ 1 -eq 1 ] ; do
     #     Das "Alter" der Datei ALGO_WATTS_MINES.in Sekunden ist Hinweis für multi_mining_calc.sh,
     #     ob mit der Gesamtsystem-Gewinn-Verlust-Berechnung begonnen werden kann.
     rm -f ALGO_WATTS_MINES.in
-    for algo in ${!ALGOs[@]}; do
-        algorithm=${ALGOs[$algo]}
+    for algorithm in "${!bENCH[@]}"; do
+        read algo miner_name miner_version <<<${algorithm//#/ }
         if [[          ${#bENCH[$algorithm]} -gt 0   \
-                    && ${#kMGTP[$algorithm]} -gt 0   \
-                    && ${#KURSE[$algorithm]} -gt 0   \
+                    && ${#kMGTP[$algo]}      -gt 0   \
+                    && ${#KURSE[$algo]}      -gt 0   \
                     && ${WATTS[$algorithm]}  -lt 1000 \
             ]]; then
             # "Mines" in BTC berechnen
             algoMines=$(echo "scale=8;   ${bENCH[$algorithm]}  \
-                                       * ${KURSE[$algorithm]}  \
-                                       / ${kMGTP[$algorithm]}  \
+                                       * ${KURSE[$algo]}  \
+                                       / ${kMGTP[$algo]}  \
                              " | bc )
             printf "$algorithm\n${WATTS[$algorithm]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
         else
