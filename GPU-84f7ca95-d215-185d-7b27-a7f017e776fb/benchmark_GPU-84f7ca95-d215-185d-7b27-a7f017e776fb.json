@@ -385,7 +385,7 @@
       "MinerVersion": "2.2.2",
       "BenchmarkSpeed": ,
       "ExtraLaunchParameters": "1",
-      "WATT": 0,
+      "WATT": 223,
       "GPUGraphicsClockOffset[3]": 0,
       "GPUMemoryTransferRateOffset[3]": 0,
       "GPUTargetFanSpeed": 0,
