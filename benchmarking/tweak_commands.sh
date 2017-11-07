@@ -24,9 +24,15 @@ fi
 read OWN_LOGFILE WATT_LOGFILE HASH_LOGFILE <<<$(< tweak_to_these_logs)
 gpu_idx=$(< bensh_gpu_30s_.index)
 gpu_uuid=$(< uuid)
-algo=$(< benching_${gpu_idx}_algo)
-miner=$(<benching_${gpu_idx}_miner)
-LOGPATH="../${gpu_uuid}/benchmarking/${algo}/${miner}"
+algorithm=$(< benching_${gpu_idx}_algo)
+read algo miner_name miner_version <<<"${algorithm//#/ }"
+LOGPATH="../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version}"
+
+# Jetz haben wir gleich alle Daten für den $algorithm !
+IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
+bENCH_SRC="../${gpu_uuid}/bENCH.in"
+source ../gpu-bENCH.inc
+_read_IMPORTANT_BENCHMARK_JSON_in
 
 # Fan-Kontrolle ermöglichen. Heisst: MANUELL. GPUFanControlState=0 heisst AUTOMATIC
 if [ ! $NoCards ]; then
@@ -42,7 +48,13 @@ nvidiaCmd[0]="nvidia-settings --assign [gpu:%i]/GPUGraphicsClockOffset[3]=%i"
 nvidiaCmd[1]="nvidia-settings --assign [gpu:%i]/GPUMemoryTransferRateOffset[3]=%i"
 nvidiaCmd[2]="nvidia-settings --assign [fan:%i]/GPUTargetFanSpeed=%i"
 nvidiaCmd[3]="./nvidia-befehle/smi --id=%i -pl %i"
-declare -a nvidiaPara=( 0 0 0 0 )
+#declare -a nvidiaPara=( 0 0 0 0 )
+declare -a nvidiaPara=(
+    ${GRAFIK_CLOCK[${algorithm}]}
+    ${MEMORY_CLOCK[${algorithm}]}
+    ${FAN_SPEED[${algorithm}]}
+    ${POWER_LIMIT[${algorithm}]}
+)
 
 echo "Die gewünschte Logdatei für die Tweaking-Kommandos lautet: $OWN_LOGFILE"
 echo "Zusätzlich muss das Kommando in die folgenden Dateien geschrieben werden:"
@@ -51,8 +63,8 @@ echo "Wattwerte: $WATT_LOGFILE und Hashwerte: $HASH_LOGFILE"
 declare -i lfdCmd cmdNr para
 while :; do
 
-    clear
     if [ ${DoIt} ]; then
+        clear
         printf -v cmd "${nvidiaCmd[$((${cmdNr}-1))]}" ${gpu_idx} ${para}
 
         echo "---> DAS FOLGENDE KOMMANDO WIRD JETZT ABGESETZT: <---"

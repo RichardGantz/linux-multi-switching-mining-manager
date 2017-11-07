@@ -57,11 +57,12 @@ trap _On_Exit EXIT
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
 RUNNING_STATE="GLOBAL_GPU_ALGO_RUNNING_STATE"
 
-SYNCFILE="you_can_read_now.sync"
-
 GRID[0]="netz"
 GRID[1]="solar"
 GRID[2]="solar_akku"
+
+SYNCFILE="you_can_read_now.sync"
+rm -f $SYNCFILE
 
 # Funktionen Definitionen ausgelagert
 source ./multi_mining_calc.inc

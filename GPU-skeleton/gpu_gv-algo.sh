@@ -10,11 +10,11 @@
 #  5. Schreibt seine PID in eine gleichnamige Datei mit der Endung .pid
 #  6. Prüft, ob die Benchmarkdatei jemals bearbeitet wurde und bricht ab, wenn nicht.
 #     Dann gibt es nämlich keine Benchmark- und Wattangaben zu den einzelnen Algorithmen.
-#  7. Definiert _read_BENCHFILE_in(), welches Benchmark- und Wattangaben pro Algorithmus
+#  7. Definiert _read_IMPORTANT_BENCHMARK_JSON_in(), welches Benchmark- und Wattangaben pro Algorithmus
 #     aus der Datei benchmark_${GPU_DIR}.json
 #     in die Assoziativen Arrays bENCH["AlgoName"] und WATTS["AlgoName"] aufnimmt
-#  8. Ruft _read_BENCHFILE_in() und hat jetzt die beiden Arrays zur Verfügung und kennt das "Alter"
-#     der Benchmarkdatei zum Zeitpunkt des Einlesens in der Variablen ${BENCHFILE_last_age_in_seconds}
+#  8. Ruft _read_IMPORTANT_BENCHMARK_JSON_in() und hat jetzt die beiden Arrays zur Verfügung und kennt das "Alter"
+#     der Benchmarkdatei zum Zeitpunkt des Einlesens in der Variablen ${IMPORTANT_BENCHMARK_JSON_last_age_in_seconds}
 #  9. Definiert _read_ALGOs_in(), welches nur dann etwas im Arbeitsspeicher ändert, wenn die Datei
 #     ../ALGO_NAMES.in existiert und nicht leer ist:
 #     Dann liest sie die Datei in die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] ein
@@ -38,7 +38,7 @@
 # 14. EINTRITT IN DIE ENDLOSSCHLEIFE. Die folgenden Aktionen werden immer und immer wieder durchgeführt,
 #                                     solange dieser Prozess läuft.
 #  1. Ruft _update_SELF_if_necessary
-#  2. Ruft _read_BENCHFILE_in falls die Quelldatei upgedated wurde.
+#  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
 #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
 #  3. Ruft _read_ALGOs_in     falls die Quelldatei upgedated wurde.
 #                             => Aktuelle Arrays kMGTP["AlgoName"] und ALGOs["algoID"]
@@ -120,14 +120,14 @@ trap _On_Exit EXIT
 # Die Quelldaten Miner- bzw. AlgoName, BenchmarkSpeed und WATT für diese GraKa
 #  6. Prüft, ob die Benchmarkdatei jemals bearbeitet wurde und bricht ab, wenn nicht.
 #     Dann gibt es nämlich keine Benchmark- und Wattangaben zu den einzelnen Algorithmen.
-BENCHFILE_SRC=../${SRC_DIR}/benchmark_skeleton.json
-BENCHFILE="benchmark_${GPU_DIR}.json"
-diff -q $BENCHFILE $BENCHFILE_SRC &>/dev/null
+IMPORTANT_BENCHMARK_JSON_SRC=../${SRC_DIR}/benchmark_skeleton.json
+IMPORTANT_BENCHMARK_JSON="benchmark_${GPU_DIR}.json"
+diff -q $IMPORTANT_BENCHMARK_JSON $IMPORTANT_BENCHMARK_JSON_SRC &>/dev/null
 if [ $? == 0 ]; then
     echo "-------------------------------------------"
     echo "---        FATAL ERROR GPU #$(< gpu_index.in)           ---"
     echo "-------------------------------------------"
-    echo "File '$BENCHFILE' not yet edited!!!"
+    echo "File '$IMPORTANT_BENCHMARK_JSON' not yet edited!!!"
     echo "Please edit and fill in valid data!"
     echo "Execution stopped."
     echo "-------------------------------------------"
@@ -140,9 +140,17 @@ fi
 #
 ######################################
 
-#  7. Definiert _read_BENCHFILE_in(), welches Benchmark- und Wattangaben pro Algorithmus
+#  7. Definiert _read_IMPORTANT_BENCHMARK_JSON_in(), welches Benchmark- und Wattangaben
+#     und überhaupt alle Daten pro Algorithmus
 #     aus der Datei benchmark_${GPU_DIR}.json
-#     in die Assoziativen Arrays bENCH["AlgoName"] und WATTS["AlgoName"] aufnimmt
+#     in die Assoziativen Arrays bENCH["AlgoName"] und WATTS["AlgoName"] und
+#     EXTRA_PARAMS["AlgoName"]
+#     GRAFIK_CLOCK["AlgoName"]
+#     MEMORY_CLOCK["AlgoName"]
+#     FAN_SPEED["AlgoName"]
+#     POWER_LIMIT["AlgoName"]
+#     LESS_THREADS["AlgoName"]
+#     aufnimmt
 bENCH_SRC="bENCH.in"
 # Ein bisschen Hygiene bei Änderung von Dateinamen
 bENCH_SRC_OLD=""; if [ -f "$bENCH_SRC_OLD" ]; then rm "$bENCH_SRC_OLD"; fi
@@ -150,86 +158,13 @@ bENCH_SRC_OLD=""; if [ -f "$bENCH_SRC_OLD" ]; then rm "$bENCH_SRC_OLD"; fi
 # Damit readarray als letzter Prozess in einer Pipeline nicht in einer subshell
 # ausgeführt wird und diese beim Austriit gleich wieder seine Variablen verwirft
 shopt -s lastpipe
-_read_BENCHFILE_in()
-{
-    unset bENCH; declare -Ag bENCH
-    unset WATTS; declare -Ag WATTS
-    unset READARR
+source ../gpu-bENCH.inc
 
-    # Dateialter zum Zeitpunkt des Array-Aufbaus festhalten
-    BENCHFILE_last_age_in_seconds=$(date --utc --reference=$BENCHFILE +%s)
-
-    # Einlesen der Benchmarkdatei nach READARR
-    #
-    # 1. Datei benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json erstellen
-    # 2. IN DIESER .json DATEI SIND <CR> DRIN !!!!!!!!!!!!!!!!!!!!!!!
-    # 3. Array $bENCH[] in Datei bENCH.in pipen
-    # 4. Anschließend einlesen und Array mit Werten aufbauen
-    # Die begehrten Zeilen...
-    #      "Name":           "neoscrypt",
-    #      "MinerName":      "ccminer",
-    #      "MinerVersion":   "2.2",
-    #      "BenchmarkSpeed": 896513.0,
-    #      "WATT":           320,
-    #
-    #      "Name": "%s",
-    #      "NiceHashID": %i,
-    #      "MinerBaseType": %i,
-    #      "MinerName": "%s",
-    #      "MinerVersion": "%s",
-    #      "BenchmarkSpeed": %i,
-    #      "ExtraLaunchParameters": "%s",
-    #      "WATT": %i,
-    #      "GPUGraphicsClockOffset[3]": %i,
-    #      "GPUMemoryTransferRateOffset[3]": %i,
-    #      "GPUTargetFanSpeed": %i,
-    #      "PowerLimit": %i,
-    #      "LessThreads": %i
-    #
-    #      ... werden zu den 3 Zeilen
-    #
-    #      neoscrypt#ccminer#2.2
-    #      896513.0
-    #      320
-    #      
-    sed -e 's/\r//g' $BENCHFILE  \
-        | gawk -e '$1 ~ /"Name":/ \
-                 { algo          = substr( tolower($2), 2, length($2)-3 ); \
-                   getline;       # NiceHashID    \
-                   getline;       # MinerBaseType \
-                   getline;       # MinerName \
-                   miner_name    = substr( $2, 2, length($2)-3 ); \
-                   getline;       # MinerVersion \
-                   miner_version = substr( $2, 2, length($2)-3 ); \
-                   getline;       # BenchmarkSpeed \
-                   benchspeed    = substr( $2, 1, length($2)-1 ); \
-                   getline;       # ExtraLaunchParameters \
-                   getline;       # WATT \
-                   print algo "#" miner_name "#" miner_version; \
-                   print benchspeed; \
-                   print substr( $2, 1, length($2)-1 ); \
-                   next \
-                 }' \
-        | tee $bENCH_SRC \
-        | readarray -n 0 -O 0 -t READARR
-    # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
-    for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
-        bENCH[${READARR[$i]}]=${READARR[$i+1]}
-        declare -ig WATTS[${READARR[$i]}]=${READARR[$i+2]}
-        if [[ ${#READARR[$i+1]} -gt 0 && (${#READARR[$i+2]} == 0 || ${READARR[$i+2]} == 0) ]]; then
-           WATTS[${READARR[$i]}]=1000
-           notify-send -t 10000 -u critical "### Fehler in Benchmarkdatei ###" \
-                 "GPU-Dir: ${GPU_DIR} \n Algoname: ${READARR[$i]} \n KEINE WATT ANGEGEBEN. Verwende 1000"
-        fi
-        #echo ${READARR[$i]} : ${bENCH[${READARR[$i]}]}
-        #echo ${READARR[$i]} : ${WATTS[${READARR[$i]}]}
-    done
-}
 # Auf jeden Fall beim Starten das Array bENCH[] und WATTS[] aufbauen
 # Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
-#  8. Ruft _read_BENCHFILE_in() und hat jetzt die beiden Arrays zur Verfügung und kennt das "Alter"
-#     der Benchmarkdatei zum Zeitpunkt des Einlesens in der Variablen ${BENCHFILE_last_age_in_seconds}
-_read_BENCHFILE_in
+#  8. Ruft _read_IMPORTANT_BENCHMARK_JSON_in() und hat jetzt die beiden Arrays zur Verfügung und kennt das "Alter"
+#     der Benchmarkdatei zum Zeitpunkt des Einlesens in der Variablen ${IMPORTANT_BENCHMARK_JSON_last_age_in_seconds}
+_read_IMPORTANT_BENCHMARK_JSON_in
 
 ###############################################################################
 #
@@ -396,11 +331,11 @@ while [ 1 -eq 1 ] ; do
     _update_SELF_if_necessary
 
     # Ist die Benchmarkdatei mit einer aktuellen Version überschrieben worden?
-    #  2. Ruft _read_BENCHFILE_in falls die Quelldatei upgedated wurde.
+    #  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
     #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
-    if [[ $BENCHFILE_last_age_in_seconds < $(date --utc --reference=$BENCHFILE +%s) ]]; then
-        echo "GPU #$(< gpu_index.in): ###---> Updating Arrays bENCH[] und WATTs[] from $BENCHFILE"
-        _read_BENCHFILE_in
+    if [[ $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds < $(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s) ]]; then
+        echo "GPU #$(< gpu_index.in): ###---> Updating Arrays bENCH[] und WATTs[] from $IMPORTANT_BENCHMARK_JSON"
+        _read_IMPORTANT_BENCHMARK_JSON_in
     fi
 
     # Die Reihenfolge der Dateierstellungen durch ../algo_multi_abfrage.sh ist:

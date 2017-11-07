@@ -198,3 +198,5 @@ GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/benchmark_GPU-84f7ca95-d215-185d-7b27-a
 benchmarking/watt_gpu\.sh
 
 miners/minerstarts
+
+benchmarking/sed_insert_on_different_lines_cmd
