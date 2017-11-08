@@ -172,22 +172,6 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     #
     # Einfügen des Hash wertes in die Original bench*.json datei
 
-    BLOCK_FORMAT=(
-        '      \"Name\": \"%s\",\n'
-        '      \"NiceHashID\": %s,\n'
-        '      \"MinerBaseType\": %s,\n'
-        '      \"MinerName\": \"%s\",\n'
-        '      \"MinerVersion\": \"%s\",\n'
-        '      \"BenchmarkSpeed\": %s,\n'
-        '      \"ExtraLaunchParameters\": \"%s\",\n'
-        '      \"WATT\": %s,\n'
-        '      \"GPUGraphicsClockOffset[3]\": %s,\n'
-        '      \"GPUMemoryTransferRateOffset[3]\": %s,\n'
-        '      \"GPUTargetFanSpeed\": %s,\n'
-        '      \"PowerLimit\": %s,\n'
-        '      \"LessThreads\": %s\n'
-    )
-
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
     declare -i tempazb=$(< "tempazb") 
 
@@ -195,33 +179,53 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
     if [ ${tempazb} -gt 1 ] ; then
         echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
-        sed -i -e "$((tempazb-4))s/[0-9]\+/${ALGO_IDs[${algo}]}/" ${IMPORTANT_BENCHMARK_JSON}
         echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
-        sed -i -e "${tempazb}s/[0-9.]\+/$avgHASH/" ${IMPORTANT_BENCHMARK_JSON}
         echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+2)) eingefügt"
-        sed -i -e "$((tempazb+2))s/[0-9.]\+/$avgWATT/" ${IMPORTANT_BENCHMARK_JSON}
+        echo "$((tempazb-4))s/: [0-9.]*,$/: ${ALGO_IDs[${algo}]},/"  >sed_insert_on_different_lines_cmd
+        echo "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"               >>sed_insert_on_different_lines_cmd
+        echo "$((tempazb+2))s/: [0-9.]*,$/: ${avgWATT},/"           >>sed_insert_on_different_lines_cmd
         if [ ${#grafik_clock} -ne 0 ]; then
             echo "der GraphicClock Wert ${grafik_clock} wird nun in der Zeile $((tempazb+3)) eingefügt"
-            sed -i -e "$((tempazb+3))s/[0-9]\+,/${grafik_clock}/" ${IMPORTANT_BENCHMARK_JSON}
+            echo "$((tempazb+3))s/: [0-9]*,$/: ${grafik_clock},/"   >>sed_insert_on_different_lines_cmd
         fi
         if [ ${#memory_clock} -ne 0 ]; then
             echo "der MemoryClock Wert ${memory_clock} wird nun in der Zeile $((tempazb+4)) eingefügt"
-            sed -i -e "$((tempazb+4))s/[0-9]\+,/${memory_clock}/" ${IMPORTANT_BENCHMARK_JSON}
+            echo "$((tempazb+4))s/: [0-9]*,$/: ${memory_clock},/"   >>sed_insert_on_different_lines_cmd
         fi
         if [ ${#fan_speed}    -ne 0 ]; then
             echo "der FanSpeed Wert ${fan_speed} wird nun in der Zeile $((tempazb+5)) eingefügt"
-            sed -i -e "$((tempazb+5))s/[0-9]\+,/${fan_speed}/" ${IMPORTANT_BENCHMARK_JSON}
+            echo "$((tempazb+5))s/: [0-9]*,$/: ${fan_speed},/"      >>sed_insert_on_different_lines_cmd
         fi
         if [ ${#power_limit}  -ne 0 ]; then
-            echo "der PowerLimit Wert ${powerlimit} wird nun in der Zeile $((tempazb+6)) eingefügt"
-            sed -i -e "$((tempazb+6))s/[0-9]\+,/${powerlimit}/" ${IMPORTANT_BENCHMARK_JSON}
+            echo "der PowerLimit Wert ${power_limit} wird nun in der Zeile $((tempazb+6)) eingefügt"
+            echo "$((tempazb+6))s/: [0-9]*,$/: ${power_limit},/"    >>sed_insert_on_different_lines_cmd
         fi
+        if [ ${#less_threads}  -ne 0 ]; then
+            echo "der LessThreads Wert ${less_threads} wird nun in der Zeile $((tempazb+7)) eingefügt"
+            echo "$((tempazb+7))s/: [0-9]*$/: ${less_threads}/"     >>sed_insert_on_different_lines_cmd
+        fi
+        sed -i -f sed_insert_on_different_lines_cmd ${IMPORTANT_BENCHMARK_JSON}
     else
+        BLOCK_FORMAT=(
+            '      \"Name\": \"%s\",\n'
+            '      \"NiceHashID\": %s,\n'
+            '      \"MinerBaseType\": %s,\n'
+            '      \"MinerName\": \"%s\",\n'
+            '      \"MinerVersion\": \"%s\",\n'
+            '      \"BenchmarkSpeed\": %s,\n'
+            '      \"ExtraLaunchParameters\": \"%s\",\n'
+            '      \"WATT\": %s,\n'
+            '      \"GPUGraphicsClockOffset[3]\": %s,\n'
+            '      \"GPUMemoryTransferRateOffset[3]\": %s,\n'
+            '      \"GPUTargetFanSpeed\": %s,\n'
+            '      \"PowerLimit\": %s,\n'
+            '      \"LessThreads\": %s\n'
+        )
         if [ ${#miner_base_type} -eq 0 ]; then miner_base_type=9; fi
         if [ ${#grafik_clock}    -eq 0 ]; then grafik_clock=0;    fi
         if [ ${#memory_clock}    -eq 0 ]; then memory_clock=0;    fi
         if [ ${#fan_speed}       -eq 0 ]; then fan_speed=0;       fi
-        if [ ${#power_limit}     -eq 0 ]; then powerlimit=0;      fi
+        if [ ${#power_limit}     -eq 0 ]; then power_limit=0;     fi
         if [ ${#less_threads}    -eq 0 ]; then less_threads=0;    fi
         BLOCK_VALUES=(
             ${algo}
@@ -239,7 +243,7 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             ${less_threads}
         )
         echo "Der Algo wird zur Benchmark Datei hinzugefügt"
-        sed -i -e '/ ]/,/}$/d'     ${IMPORTANT_BENCHMARK_JSON}
+        sed -i -e '/^ \+]/,/}$/d'     ${IMPORTANT_BENCHMARK_JSON}
         printf ",   {\n"         >>${IMPORTANT_BENCHMARK_JSON}
         for (( i=0; $i<${#BLOCK_FORMAT[@]}; i++ )); do
             printf "${BLOCK_FORMAT[$i]}" "${BLOCK_VALUES[$i]}" \
@@ -258,7 +262,7 @@ function _On_Exit () {
     if [ $debug -eq 0 ]; then
         rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
            temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb temp_hash temp_einheit \
-           HASHCOUNTER benching_${gpu_idx}_algo benching_${gpu_idx}_miner
+           HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on different_lines_cmd
     fi
 
     # Als wichtiges Kennzeichen für den Ausstieg, denn da werden die Logdateien gesichert
@@ -398,8 +402,6 @@ read -p "Welchen Miner möchtest Du benchmarken/tweaken ? " choice
 
 miner_name=${minerChoice[$(($choice-1))]}
 miner_version=${minerVersion[$(($choice-1))]}
-# Sync mit tweak_command.sh
-echo "${miner_name}#${miner_version}" >benching_${gpu_idx}_miner
 
 ################################################################################
 ###
@@ -534,7 +536,7 @@ BENCHLOGFILE="test/benchmark_${algo}_${gpu_uuid}.log"
 TWEAKLOGFILE="test/tweak_${algo}_${gpu_uuid}.log"
 
 # Sync mit tweak_command.sh
-echo "${algo}" >benching_${gpu_idx}_algo
+echo "${algo}#${miner_name}#${miner_version}" >benching_${gpu_idx}_algo
 
 
 ####################################################################################
@@ -653,31 +655,36 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             new_TweakCommand_available=${TWEAK_CMD_LOG_AGE}
             # Ermittle das gerade gegebene Tweaking-Kommando
             tweak_msg="$(tail -n 1 ${TWEAK_CMD_LOG})"
-            TWEAK_MSGs["${tweak_msg/=[[:digit:]]*/}"]="${tweak_msg}"
-            tweak_pat="${tweak_msg//[[]/\\[}"
-            tweak_pat="${tweak_pat//[\]]/\\]}"
-            tweak_pat="${tweak_pat//[.]/\.}"
-            if [ $NoCards ]; then
-                # Hänge ein paar andere Werte an die Logdateien - zum Testen
-                cat test/more_hash_values.fake >>${BENCHLOGFILE}
-                cat more_watt_values.fake >>watt_bensh_30s.out
+            if [ ${#tweak_msg} -gt 0 ]; then
+                TWEAK_MSGs["${tweak_msg/=[[:digit:]]*/}"]="${tweak_msg}"
+                tweak_pat="${tweak_msg//[[]/\\[}"
+                tweak_pat="${tweak_pat//[\]]/\\]}"
+                tweak_pat="${tweak_pat//[.]/\.}"
+                if [ $NoCards ]; then
+                    # Hänge ein paar andere Werte an die Logdateien - zum Testen
+                    cat test/more_hash_values.fake >>${BENCHLOGFILE}
+                    cat more_watt_values.fake >>watt_bensh_30s.out
+                fi
+                hash_line=$(cat ${BENCHLOGFILE} \
+                          | grep -n -e "${tweak_pat}" \
+                          | tail -n 1 \
+                          | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+                         )
+                watt_line=$(cat "watt_bensh_30s.out" \
+                          | grep -n -e "${tweak_pat}" \
+                          | tail -n 1 \
+                          | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+                         )
+                printf "${tweak_msg}\n" \
+                    | tee -a ${TWEAKLOGFILE}
+                printf "Hashwerte ab jetzt ab Zeile $hash_line und Wattwerte ab Zeile $watt_line\n" \
+                    | tee -a ${TWEAKLOGFILE}
             fi
-            hash_line=$(cat ${BENCHLOGFILE} \
-                      | grep -n -e "${tweak_pat}" \
-                      | tail -n 1 \
-                      | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
-                     )
-            watt_line=$(cat "watt_bensh_30s.out" \
-                      | grep -n -e "${tweak_pat}" \
-                      | tail -n 1 \
-                      | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
-                     )
-            printf "${tweak_msg}\n" \
-                | tee -a ${TWEAKLOGFILE}
-            printf "Hashwerte ab jetzt ab Zeile $hash_line und Wattwerte ab Zeile $watt_line\n" \
-                | tee -a ${TWEAKLOGFILE}
-        fi
-        # Suche die Zeile in der Logdatei
+        fi  ## if [ $new_TweakCommand_available -lt ${TWEAK_CMD_LOG_AGE} ]
+        
+        # Suche das Tweak-Kommando in der Logdatei.
+        # Wenn noch kein Tweak-Kommando gegeben wurde, was durch ${#tweak_msg} == 0 ausgedrückt wird,
+        #      dann nimm alle Zeilen ab dem Dateianfang.
         if [ ${#tweak_msg} -gt 0 ]; then
             # Calculate only the values after the last command
             hashCount=$(cat ${BENCHLOGFILE} \
@@ -727,15 +734,18 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             _query_actual_Power_Temp_and_Clocks
             # Möglich sind: ( "Graphics" "SM" "Memory" "Video" )
             # ("Power Draw" "Power Limit" "Default Power Limit" "Enforced Power Limit" "Min Power Limit" "Max Power Limit")
-            printf "%5iMHz/%5iMHz %5iMHz/%5iMHz %7.2fW/%7.2fW %3i°C\n" \
+            printf "%5iMHz/%5iMHz %5iMHz/%5iMHz %7sW/%7sW %3i°C\n" \
                    ${actClocks["Graphics"]} ${maxClocks["Graphics"]} \
                    ${actClocks["Memory"]}   ${maxClocks["Memory"]} \
-                   ${actPowers["Power Limit"]/\./,} ${actPowers["Max Power Limit"]/\./,} \
+                   ${actPowers["Power Limit"]:0:$(($(expr index ${actPowers["Power Limit"]} ".")+2))} \
+                   ${actPowers["Max Power Limit"]:0:$(($(expr index ${actPowers["Max Power Limit"]} ".")+2))} \
                    ${actTemp} \
                 | tee -a ${TWEAKLOGFILE}
         fi
-        printf "%12s H; %#12.2f W; %#10.2f H/W\n" \
-               ${avgHASH/\./,} ${avgWATT/\./,} ${quotient/\./,} \
+        printf "%12s H; %#12s W; %#10s H/W\n" \
+               ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} \
+               ${avgWATT:0:$(($(expr index "${avgWATT}" ".")+2))} \
+               ${quotient:0:$(($(expr index "${quotient}" ".")+2))} \
             | tee -a ${TWEAKLOGFILE}
     else
         ###
@@ -825,8 +835,8 @@ read sum avgHASH <<<$(echo "scale=9; sum = ${sum_str};\
      print sum, \" \", sum / $HASHCOUNTER"\
     | bc)
 
-printf " Summe        : %12.2f; Messwerte: %5s\n" ${sum/\./,} $HASHCOUNTER
-printf " Durchschnitt : %12.2f %6s\n" ${avgHASH/\./,} $(< temp_einheit)
+printf " Summe        : %12s; Messwerte: %5s\n" ${sum:0:$(($(expr index "$sum" ".")+2))} $HASHCOUNTER
+printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} $(< temp_einheit)
 
 # Es folgt zum Schluss die On_Exit-Routine, die diese Funktion aufruft!
 # _edit_BENCHMARK_JSON_and_put_in_the_new_values
