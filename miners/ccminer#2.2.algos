@@ -1,6 +1,3 @@
-scrypt
-sha256
-scryptnf
 x11
 x13
 keccak
@@ -11,19 +8,15 @@ lyra2re
 whirlpoolx
 qubit
 quark
-axiom
 lyra2rev2
 scryptjanenf16
 blake256r8
 blake256r14
 blake256r8vnl
-hodl
-daggerhashimoto
 decred
 cryptonight
 lbry
 equihash
-pascal
 x11gost
 sia
 blake2s
