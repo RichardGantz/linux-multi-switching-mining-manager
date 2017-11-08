@@ -8,7 +8,7 @@
 
 minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ewbf-eq"
 
-LIVE_START_CMD='%s/%s --cuda_devices %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --solver 0 --intensity 64'
+LIVE_START_CMD='%s/%s --cuda_devices %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --solver 0 --intensity 64 --log 2 --logfile %s'
 LIVE_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
@@ -18,9 +18,10 @@ LIVE_PARAMETERSTACK=(
     "NH_DOMAIN"
     "algo_port"
     "worker"
+    "BENCHLOGFILE"
 )
 
-BENCH_START_CMD='%s/%s --cuda_devices %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --solver 0 --intensity 64'
+BENCH_START_CMD='%s/%s --cuda_devices %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --solver 0 --intensity 64 --log 2 --logfile %s'
 BENCH_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
@@ -30,4 +31,5 @@ BENCH_PARAMETERSTACK=(
     "NH_DOMAIN"
     "algo_port"
     "worker"
+    "BENCHLOGFILE"
 )
