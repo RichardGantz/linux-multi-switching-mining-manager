@@ -1,9 +1,0 @@
-*** ccminer 2.2.2 for nVidia GPUs by tpruvot@github ***
-    Built with the nVidia CUDA Toolkit 8.0 64-bits
-
-  Originally based on Christian Buchner and Christian H. project
-  Include some kernels from alexis78, djm34, djEzo, tsiv and krnlx.
-
-BTC donation address: 1AJdfCpLWPNoAMDfHF1wD5y8VgKSSTHxPo (tpruvot)
-
-[2017-11-07 10:12:56][31m Unknown algo parameter 'hodl'[0m
