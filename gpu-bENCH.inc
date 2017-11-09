@@ -3,17 +3,23 @@
 #
 # Die Variablen   $IMPORTANT_BENCHMARK_JSON,
 #                 $bENCH_SRC   (=="bENCH.in")
+#                 $gpu_idx
+#                 $LINUX_MULTI_MINING_ROOT
 #     müssen gesetzt sein.
 #
 # Erzeugt werden die Variablen
 #                 $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds
 #     und jede Menge Assoziativer Arrays, die über
-#     $algorithm   (==algo#miner_name#miner_version)
+#     $algorithm   (== algo#miner_name#miner_version)
 #     angesprochen werden können.
 #
+if [ ${#_MINERFUNC_INCLUDED} -eq 0 ];then
+    source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+fi
 
 _read_IMPORTANT_BENCHMARK_JSON_in()
 {
+    # Das sind die Werte zu jedem einzelnen "${algorithm}" == "${algo}#${miner_name}#${miner_version}"
     unset bENCH       ; declare -Ag bENCH
     unset WATTS       ; declare -Ag WATTS
     unset EXTRA_PARAMS; declare -Ag EXTRA_PARAMS
@@ -26,6 +32,12 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
 
     # Dateialter zum Zeitpunkt des Array-Aufbaus festhalten
     IMPORTANT_BENCHMARK_JSON_last_age_in_seconds=$(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s)
+
+    ################################################################################
+    #
+    # Einlesen aller Algorithmen aus der IMPORTANT_BENCHMARK_JSON in die Arrays
+    #
+    #################################################################################
 
     # Einlesen der Benchmarkdatei nach READARR
     #
@@ -114,5 +126,37 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
         FAN_SPEED[${READARR[$i]}]=${READARR[$i+6]}
         POWER_LIMIT[${READARR[$i]}]=${READARR[$i+7]}
         LESS_THREADS[${READARR[$i]}]=${READARR[$i+8]}
+    done
+
+    ################################################################################
+    #
+    # Vergleich der eingelesenen Algorithmen mit der Menge an Algorithmen,
+    # die insgesamt im System möglich sind und auf eventuell fehlende Hinweisen.
+    #
+    #################################################################################
+
+    # Einlesen aller Dateien NiceHash#${miner_name}.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
+    # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
+    # in ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
+    #
+    # Das Verzeichnis, das alle diese Informationen bereit hält ist:
+    # ${LINUX_MULTI_MINING_ROOT}/miners
+
+    _set_ALLE_MINER_from_path ${LINUX_MULTI_MINING_ROOT}/miners
+
+    # Dann alle Minerversionen und die entsprechenden Algos durchgehen und schauen, ob diese
+    # Algos gerade aus der IMPORTANT_BENCHMARK_JSON eingelesen wurden.
+    # Wenn nicht, Ausgabe einer entsprechenden Meldung
+
+    for minerName in ${ALLE_MINER}; do
+        read miner_name miner_version <<<"${minerName//#/ }"
+        miner_version=${miner_version%.algos}
+        declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
+        for algo in ${!actInternalAlgos[@]}; do
+            if [ ${#bENCH["${algo}#${miner_name}#${miner_version}"]} -eq 0 ]; then
+                printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
+                       ${gpu_idx} "${algo}#${miner_name}#${miner_version}"
+            fi
+        done
     done
 }

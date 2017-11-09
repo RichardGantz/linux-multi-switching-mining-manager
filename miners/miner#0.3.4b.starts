@@ -18,7 +18,7 @@ LIVE_PARAMETERSTACK=(
     "NH_DOMAIN"
     "algo_port"
     "worker"
-    "BENCHLOGFILE"
+    "LIVE_LOGFILE"
 )
 
 BENCH_START_CMD='%s/%s --cuda_devices %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --solver 0 --intensity 64 --log 2 --logfile %s'

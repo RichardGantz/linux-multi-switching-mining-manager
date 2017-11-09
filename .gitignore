@@ -1,9 +1,11 @@
 
-benchmarking/test/*
+*~
 
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/bENCH\.in
+\#.*#
 
-*.pid
+*\.BAK
+
+*\.pid
 
 ALGO_NAMES\.in
 
@@ -12,32 +14,6 @@ ALGO_NAMES\.json
 BTCEURkurs
 
 BTC_EUR_kurs\.in
-
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/benchmarking/*
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/benchmarking/*
-
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/ALGO_WATTS_MINES\.in
-
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/best_algo_netz\.out
-
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/best_algo_solar\.out
-
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/best_algo_solar_akku\.out
-
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/gpu_index\.in
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/ALGO_WATTS_MINES\.in
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/bENCH\.in
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/best_algo_netz\.out
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/best_algo_solar\.out
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/best_algo_solar_akku\.out
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/gpu_index\.in
 
 KURSE\.in
 
@@ -53,35 +29,13 @@ kWh_solar_akku_Kosten_BTC\.in
 
 you_can_read_now\.sync
 
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/gpu_gv-algo\.sh
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/gpu_gv-algo\.sh
-
 GLOBAL_GPU_ALGO_STATE
-
-GLOBAL_GPU_ALGO_STATE\.BAK
 
 gpu_system_state\.in
 
-gpu_system_state\.in\.BAK
-
 GLOBAL_GPU_ALGO_RUNNING_STATE
 
-GLOBAL_GPU_ALGO_RUNNING_STATE\.BAK
-
-GLOBAL_GPU_SYSTEM_STATE\.BAK
-
 GLOBAL_GPU_SYSTEM_STATE\.in
-
-*.in~
-
-*.inc~
-
-*.json~
-
-*.sh~
-
-BTCEURkurs~
 
 FATAL_ERRORS\.log
 
@@ -93,29 +47,23 @@ smartmeter\.original
 
 bENCH\.in
 
-\#smartmeter#
+MULTI_ALGO_INFO\.json
 
-smartmeter~
+GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/*
 
-benchmarking/HASHCOUNTER
+GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/*
+
+benchmarking/test/*
 
 benchmarking/temp/*
+
+benchmarking/benchmark_.*\.log
 
 benchmarking/benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.json
 
 benchmarking/benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.original\.json
 
-benchmarking/benchmark_blake256r8_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.log
-
-benchmarking/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.log
-
-benchmarking/benchmark_lyra2rev2_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.log
-
-benchmarking/benchmark_scryptjanenf16_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.log
-
-benchmarking/benchmark_whirlpoolx_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.log
-
-benchmarking/benchmark_x11gost_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.log
+benchmarking/HASHCOUNTER
 
 benchmarking/temp_einheit
 
@@ -126,8 +74,6 @@ benchmarking/tempazb
 benchmarking/tempazw
 
 benchmarking/temp_hash_sum_bc
-
-*.fake~
 
 benchmarking/more_watt_values\.fake
 
@@ -163,14 +109,6 @@ benchmarking/nvidia-befehle/smi
 
 benchmarking/tweak_.*\.log
 
-MULTI_ALGO_INFO\.json
-
-*.sh#
-
-*.BAK
-
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.json\.original
-
 benchmarking/benching_0_algo
 
 benchmarking/benching_0_miner
@@ -179,11 +117,7 @@ benchmarking/ALGO_PORTS\.in
 
 benchmarking/tweak_commands\.log
 
-*.log~
-
 benchmarking/equihash\.log
-
-*.starts~
 
 benchmarking/benching_1_algo
 
@@ -191,12 +125,8 @@ benchmarking/benching_1_miner
 
 benchmarking/correct_benchmark_json\.sh
 
-GPU-742cb121-baad-f7c4-0314-cfec63c6ec70/benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70\.json
-
-GPU-84f7ca95-d215-185d-7b27-a7f017e776fb/benchmark_GPU-84f7ca95-d215-185d-7b27-a7f017e776fb\.json
+benchmarking/sed_insert_on_different_lines_cmd
 
 benchmarking/watt_gpu\.sh
 
 miners/minerstarts
-
-benchmarking/sed_insert_on_different_lines_cmd
