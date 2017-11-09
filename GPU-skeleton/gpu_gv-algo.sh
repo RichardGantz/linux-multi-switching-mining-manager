@@ -94,13 +94,35 @@ _update_SELF_if_necessary()
     else
         echo "Exiting in the not-to-be-run $SRC_DIR directory"
         echo "This directory doesn't represent a valid GPU"
-        exit
+        exit 2
     fi
 }
 # Beim Neustart des Skripts gleich schauen, ob es eine aktuellere Version gibt
 # und mit der neuen Version neu starten.
 #  4. Ruft update_SELF_if_necessary()
 _update_SELF_if_necessary
+
+# ---> An dieser Stelle sollte wohl das Include "source" der GLOBALEN VARIABLEN stattfinden <---
+# ---> An dieser Stelle sollte wohl das Include "source" der GLOBALEN VARIABLEN stattfinden <---
+# ---> An dieser Stelle sollte wohl das Include "source" der GLOBALEN VARIABLEN stattfinden <---
+# Mehr und mehr setzt sich die Systemweite Verwendung dieser Variablen durch:
+gpu_idx=$(< gpu_index.in)
+if [ ${#gpu_idx} -eq 0 ]; then
+    declare -i i=0
+    declare -i n=5
+    for (( ; i<n; i++ )); do
+        clear
+        echo "---===###>>> MISSING IDENTITY:"
+        echo "---===###>>> Ist gpu-abfrage.sh nicht gelaufen?"
+        echo "---===###>>> Mir fehlt die Datei gpu_index.in, die mir sagt,"
+        echo "---===###>>> welchen GPU-Index ich als UUID"
+        echo "---===###>>> ${GPU_DIR}"
+        echo "---===###>>> gerade habe."
+        echo "---===###>>> Der Aufruf wird in $((n-i)) Sekunden gestoppt und beendet!"
+        sleep 1
+    done
+    exit 1
+fi    
 
 # Diese Prozess-ID ändert sich durch den Selbst-Update NICHT!!!
 # Sie ist auch nach dem Selbst-Update noch die Selbe.
@@ -113,7 +135,8 @@ echo $$ >$(basename $0 .sh).pid
 # Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
 #
 function _On_Exit () {
-    rm -f $(basename $0 .sh).pid
+    rm -f LINUX_MULTI_MINING_ROOT \
+       $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
 
@@ -125,7 +148,7 @@ IMPORTANT_BENCHMARK_JSON="benchmark_${GPU_DIR}.json"
 diff -q $IMPORTANT_BENCHMARK_JSON $IMPORTANT_BENCHMARK_JSON_SRC &>/dev/null
 if [ $? == 0 ]; then
     echo "-------------------------------------------"
-    echo "---        FATAL ERROR GPU #$(< gpu_index.in)           ---"
+    echo "---        FATAL ERROR GPU #${gpu_idx}           ---"
     echo "-------------------------------------------"
     echo "File '$IMPORTANT_BENCHMARK_JSON' not yet edited!!!"
     echo "Please edit and fill in valid data!"
@@ -133,6 +156,24 @@ if [ $? == 0 ]; then
     echo "-------------------------------------------"
     exit
 fi
+
+##################################################################################################################
+#                       GLOBALE VARIABLEN für spätere Implementierung
+# Diese Variablen sind Kandidaten, um als Globale Variablen in einem "source" file überall integriert zu werden.
+# Sie wird dann nicht mehr an dieser Stelle stehen, sondern über "source GLOBAL_VARIABLES.inc" eingelesen
+#
+# Diese Variable ist besonders wichtig für die über "source" includierten Dateien, die teilweise wissen müssen,
+# wo sie aufegerufen wurden und wo ihr eigentliches "Home" ist.
+# Gleich wird die
+#     ../gpu-bENCH.inc gerufen,                               die ihrerseits eingangs sogar die
+#     source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+# ruft und welche natürlich das ../miners Verzeichnis finden können muss, um Auskunft über Miner geben zu können.
+#
+
+LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ ) {out = out "/" $i }; \
+                   print substr(out,2) }')
+
+
 
 ###############################################################################
 #
@@ -151,6 +192,20 @@ fi
 #     POWER_LIMIT["AlgoName"]
 #     LESS_THREADS["AlgoName"]
 #     aufnimmt
+#
+#     (09.11.2017)
+#     Nach jedem Einlesen der Algorithmen aus der IMPORTANT_BENCHMARK_JSON prüft diese Funktion ebenfalls,
+#     wie viele Miner in wieviel verschiedenen Versionen insgesamt im System bekannt sind
+#         und welche Algorithmen sie können,
+#     DAMIT bekannt ist, wie viele Algorithmen es insgesamt im System gibt, die alle miteinander verglichen werden können.
+#
+#     Algorithmen, die MÖGLICH, aber noch nicht in der IMPORTANT_BENCHMARK_JSON enthalten sind,
+#         werden durch eine entsprechende Meldung "angemeckert".
+#
+#     ---> Natürlich muss noch überlegt werden,                                     <---
+#     ---> an welcher Stelle eine routinemäßige Prüfung aller möglichen Algorithmen <---
+#     ---> stattfinden soll, um keine Änderung im System zu verpassen.              <---
+#     
 bENCH_SRC="bENCH.in"
 # Ein bisschen Hygiene bei Änderung von Dateinamen
 bENCH_SRC_OLD=""; if [ -f "$bENCH_SRC_OLD" ]; then rm "$bENCH_SRC_OLD"; fi
@@ -257,7 +312,7 @@ _read_KURSE_in()
 #                         und merkt sich dessen "Alter" in der Variable ${new_Data_available}
 SYNCFILE="../you_can_read_now.sync"
 while [ ! -f ${SYNCFILE} ]; do
-    echo "GPU #$(< gpu_index.in): ###---> Waiting for ${SYNCFILE} to become available..."; sleep 1
+    echo "GPU #${gpu_idx}: ###---> Waiting for ${SYNCFILE} to become available..."; sleep 1
 done
 new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
 
@@ -265,7 +320,7 @@ new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
 # Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
 # 12. ###WARTET### jetzt, bis die Datei ALGO_NAMES="../ALGO_NAMES.in" vorhanden und NICHT LEER ist.
 while [ ! -s $ALGO_NAMES ]; do
-    echo "GPU #$(< gpu_index.in): ###---> Waiting for $ALGO_NAMES to become available..."; sleep 1
+    echo "GPU #${gpu_idx}: ###---> Waiting for $ALGO_NAMES to become available..."; sleep 1
 done
 # 13. Ruft _read_ALGOs_in und hat jetzt die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] zur Verfügung,
 #     FALLS die Datei ../ALGO_NAMES.in existiert und nicht leer ist!
@@ -334,7 +389,7 @@ while [ 1 -eq 1 ] ; do
     #  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
     #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
     if [[ $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds < $(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s) ]]; then
-        echo "GPU #$(< gpu_index.in): ###---> Updating Arrays bENCH[] und WATTs[] from $IMPORTANT_BENCHMARK_JSON"
+        echo "GPU #${gpu_idx}: ###---> Updating Arrays bENCH[] und WATTs[] from $IMPORTANT_BENCHMARK_JSON"
         _read_IMPORTANT_BENCHMARK_JSON_in
     fi
 
@@ -348,14 +403,14 @@ while [ 1 -eq 1 ] ; do
     #  3. Ruft _read_ALGOs_in     falls die Quelldatei upgedated wurde.
     #                             => Aktuelle Arrays kMGTP["AlgoName"] und ALGOs["algoID"]
     if [[ $ALGO_NAMES_last_age_in_seconds < $(date --utc --reference=$ALGO_NAMES +%s) ]]; then
-        echo "GPU #$(< gpu_index.in): ###---> Updating Arrays ALGOs[] und kMGTP[] from $ALGO_NAMES"
+        echo "GPU #${gpu_idx}: ###---> Updating Arrays ALGOs[] und kMGTP[] from $ALGO_NAMES"
         _read_ALGOs_in
     fi
 
     # Einlesen und verarbeiten der aktuellen Kurse, sobald die Datei vorhanden und nicht leer ist
     #  4. ###WARTET### jetzt, bis die Datei "../KURSE.in" vorhanden und NICHT LEER ist.
     while [ ! -s $KURSE_in ]; do
-        echo "GPU #$(< gpu_index.in): ###---> Waiting for $KURSE_in to become available..."
+        echo "GPU #${gpu_idx}: ###---> Waiting for $KURSE_in to become available..."
         sleep 1
     done
     #  5. Ruft _read_KURSE_in     => Array KURSE["AlgoName"] verfügbar
@@ -395,7 +450,7 @@ while [ 1 -eq 1 ] ; do
             printf "$algorithm\n${WATTS[$algorithm]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
         else
             # ---> MUSS VIELLEICHT AKTIVIERT WERDEN, WENN UNTEN DER BEST-OF TEIL WEGFÄLLT <---
-            echo "GPU #$(< gpu_index.in): KEIN Hash WERT bei $algorithm !!! \<------------------------"
+            echo "GPU #${gpu_idx}: KEINE BTC \"Mines\" BERECHNUNG möglich bei $algorithm !!! \<---------------"
         fi
     done
     rm -f ALGO_WATTS_MINES.lock
@@ -417,10 +472,10 @@ while [ 1 -eq 1 ] ; do
     #     ###WARTET### jetzt, bis das "Alter" der Datei ${SYNCFILE} aktueller ist als ${new_Data_available}
     #                         mit der Meldung "Waiting for new actual Pricing Data from the Web..."
     while [ ! -f ${SYNCFILE} ]; do
-        echo "GPU #$(< gpu_index.in): ###---> Waiting for ${SYNCFILE} to become available..."
+        echo "GPU #${gpu_idx}: ###---> Waiting for ${SYNCFILE} to become available..."
         sleep 1
     done
-    echo "GPU #$(< gpu_index.in): Waiting for new actual Pricing Data from the Web..."
+    echo "GPU #${gpu_idx}: Waiting for new actual Pricing Data from the Web..."
     while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
         sleep 1
     done

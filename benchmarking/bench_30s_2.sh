@@ -182,7 +182,7 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
         echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
         echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+2)) eingefügt"
         echo "$((tempazb-4))s/: [0-9.]*,$/: ${ALGO_IDs[${algo}]},/"  >sed_insert_on_different_lines_cmd
-        echo "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"               >>sed_insert_on_different_lines_cmd
+        echo     "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"           >>sed_insert_on_different_lines_cmd
         echo "$((tempazb+2))s/: [0-9.]*,$/: ${avgWATT},/"           >>sed_insert_on_different_lines_cmd
         if [ ${#grafik_clock} -ne 0 ]; then
             echo "der GraphicClock Wert ${grafik_clock} wird nun in der Zeile $((tempazb+3)) eingefügt"
@@ -335,14 +335,62 @@ if [ $HOME == "/home/richard" ]; then NoCards=true; fi
 #
 source nvidia-befehle/nvidia-query.inc
 source ../algo_infos.inc
+if [ ${#_MINERFUNC_INCLUDED} -eq 0 ];then
+    source ../miner-func.inc
+fi
 
 # Aktuelle eigene PID merken
 echo $$ >$(basename $0 .sh).pid
 if [ ! -d test ]; then mkdir test; fi
 
 ################################################################################
+################################################################################
 ###
-###                     1. Auswahl der GPU
+###                     1. Bereitstellung globaler Daten im Arbeisspeicher
+###
+################################################################################
+################################################################################
+
+################################################################################
+###
+###          1.1. Infos über Algos und Ports aus dem Web in Arbeitsspeicher
+###
+################################################################################
+
+# Einlesen der Algorithmusinformationen, wenn sie schon vorhanden sind oder Abruf aus dem Web
+# Eigentlich sollten wir erst den Abruf so oder so aus dem Netz machen, um die AlgoNames zu erfahren.
+# Wir holen hier mal der Bequemlichkeit halber die aus einer eventuell vorhandenen ALGO_NAMES.json
+# Müssen aber dennoch checken, ob sie gültig ist!
+
+#                       GLOBALE VARIABLEN für spätere Implementierung
+# Diese Variablen sind Kandidaten, um als Globale Variablen in einem "source" file überall integriert zu werden.
+# Sie wird dann nicht mehr an dieser Stelle stehen, sondern über "source GLOBAL_VARIABLES.inc" eingelesen
+
+NH_DOMAIN="nicehash.com"
+export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
+ALGO_NAMES_WEB="ALGO_NAMES.json"
+ALGO_PORTS_WEB="MULTI_ALGO_INFO.json"
+
+# Da manche Skripts in Unterverzeichnissen laufen, müssen diese Skripts die Globale Variable für sich intern anpassen
+# ---> Wir könnten auch mit Symbolischen Links arbeiten, die in den Unterverzeichnissen angelegt werden und auf die
+# ---> gleichnamigen Dateien darüber zeigen.
+ALGO_NAMES_WEB="../${ALGO_NAMES_WEB}"
+ALGO_PORTS_WEB="../${ALGO_PORTS_WEB}"
+
+_read_in_ALGO_NAMES
+_read_in_ALGO_PORTS
+
+################################################################################
+################################################################################
+###
+###                     2. Auswahl der GPU
+###
+################################################################################
+################################################################################
+
+################################################################################
+###
+###          2.1. Nach der GPU-Abfrage die manuelle Auswahl durch den Benutzer
 ###
 ################################################################################
 
@@ -377,21 +425,45 @@ IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 
 ################################################################################
 ###
-###                     2. Auswahl des Miners
+###          2.2. Einlesen ALLER verfügbaren Miner und deren Algos
 ###
 ################################################################################
 
+# Gibt es eine ALGO-NAMEN - KONVERTIERUNGSTABELLEN von NiceHash Algonamen zu $miner_name Algonamen?
+# ---> Datei NiceHash#${miner_name}.names <---
+#      Diese Datei zu pflegen ist wichtig!
+# Einlesen der Datei NiceHash#${miner_name}.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
+# Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
+# In ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
+
+_set_ALLE_MINER_from_path "../miners"
+
+# Dann gleich Bereitstellung zweier Arrays mit AvailableAlgos und MissingAlgos.
+# Die MissingAlgos könnte man in einer automatischen Schleife benchmarken lassen,
+# bis es keine MissingAlgos mehr gibt.
+
+for minerName in ${ALLE_MINER}; do
+    read miner_name miner_version <<<"${minerName//#/ }"
+    miner_version=${miner_version%.algos}
+    declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
+    _split_into_Available_and_Missing_Miner_Algo_Arrays
+done
+
+
+################################################################################
+################################################################################
+###
+###                     3. Auswahl des Miners
+###
+################################################################################
+################################################################################
+
 declare -a minerChoice minerVersion
-
-cd ../miners
-minerNames=$(ls *.algos)
-cd - >/dev/null
-
 echo ""
 echo " Die folgenden Miner können getestet werden:"
 echo ""
 unset i;   declare -i i=0
-for minerName in ${minerNames}; do
+for minerName in ${ALLE_MINER}; do
     read minerChoice[$i] minerVersion[$i] <<<"${minerName//#/ }"
     minerVersion[$i]=${minerVersion[$i]%.algos}
     printf " %2i : %s V. %s\n" $((i+1)) ${minerChoice[$i]} ${minerVersion[$i]}
@@ -403,98 +475,44 @@ read -p "Welchen Miner möchtest Du benchmarken/tweaken ? " choice
 miner_name=${minerChoice[$(($choice-1))]}
 miner_version=${minerVersion[$(($choice-1))]}
 
-################################################################################
-###
-###                     3. Infos über Algos in Arbeitsspeicher
-###
-################################################################################
-
-# Einlesen der Algorithmusinformationen, wenn sie schon vorhanden sind oder Abruf aus dem Web
-# Eigentlich sollten wir erst den Abruf so oder so aus dem Netz machen, um die AlgoNames zu erfahren.
-# Wir holen hier mal der Bequemlichkeit halber die aus einer eventuell vorhandenen ALGO_NAMES.json
-# Müssen aber dennoch checken, ob sie gültig ist!
-
-#                       GLOBALE VARIABLEN für spätere Implementierung
-# Diese Variablen sind Kandidaten, um als Globale Variablen in einem "source" file überall integriert zu werden.
-# Sie wird dann nicht mehr an dieser Stelle stehen, sondern über "source GLOBAL_VARIABLES.inc" eingelesen
-
-NH_DOMAIN="nicehash.com"
-export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
-ALGO_NAMES_WEB="ALGO_NAMES.json"
-ALGO_PORTS_WEB="MULTI_ALGO_INFO.json"
-
-# Da manche Skripts in Unterverzeichnissen laufen, müssen diese Skripts die Globale Variable für sich intern anpassen
-# ---> Wir könnten auch mit Symbolischen Links arbeiten, die in den Unterverzeichnissen angelegt werden und auf die
-# ---> gleichnamigen Dateien darüber zeigen.
-ALGO_NAMES_WEB="../${ALGO_NAMES_WEB}"
-ALGO_PORTS_WEB="../${ALGO_PORTS_WEB}"
-
-_read_in_ALGO_NAMES
-_read_in_ALGO_PORTS
-
 
 ####################################################################################
+################################################################################
 ###
 ###                     4. Auswahl des zu benchmarkenden Algos
 ###
+################################################################################
 ####################################################################################
 
-# Gibt es eine ALGO-NAMEN - KONVERTIERUNGSTABELLE von NiceHash Algonamen zu $miner_name Algonamen?
-# ---> Datei NiceHash#ccminer.names <---
-# Diese Datei zu pflegen ist wichtig!
-# Einlesen der Datei NiceHash#ccminer.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
-unset NH_CC_Algos
-unset InternalAlgos; declare -A InternalAlgos
-
-# InternalAlgos wird zuerst mit eventuell vorhandenen Internen Algonamen
-# aus der Datei ../miners/NiceHash#${miner_name}.names gefüllt
-cd ../miners/
-internalAlgoNames=$(ls NiceHash#${miner_name}.names 2>/dev/null)
-if [ ${#internalAlgoNames} -gt 0 ]; then
-    cat ${internalAlgoNames} | grep -v -e '^#' | readarray -n 0 -O 0 -t NH_CC_Algos
-
-    # Aufbau des Arrays InternalAlgos, damit der ccminer mit '-a ${InternalAlgos[${algo}]} gerufen werden kann.
-    for algoPair in "${NH_CC_Algos[@]}"; do
-        read           algo      cc_algo        <<<"${algoPair}"
-        InternalAlgos[${algo}]="${cc_algo}"
+# Checken, ob wir für alle Algos auch schon Werte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json haben
+# Diejenigen Algos anzeigen, zu denen es noch keine Eintragsmöglichkeit gibt.
+# Das wurde nach dem Einlesen in ALLE_MINER gemacht und es wurden auch die beiden Arrays
+#     "Missing_${miner_name}_${miner_version//\./_}_Algos" und
+#     "Available_${miner_name}_${miner_version//\./_}_Algos" erstellt,
+#     die die Namen der entsprechenden algos als Werte haben.
+declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
+if [ ${#actMissingAlgos[@]} -gt 0 ]; then
+    for algo in ${actMissingAlgos[@]}; do
+        printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${algo}
     done
 fi
-cd - >/dev/null
-
-# .. dann kommen die restlichen NiceHash-Algonamen dazu,
-#    falls es noch welche gibt, die nicht schon erfasst wurden.
-miner_algos=$(< ../miners/${miner_name}#${miner_version}.algos)
-for algo in ${miner_algos}; do
-    if [ "${InternalAlgos[${algo}]}" == "" ]; then
-        InternalAlgos[${algo}]="${algo}"
-    fi
-done
 
 # Auswahl des Algos durch den Benutzer...
-declare -a menuItems=( "${!InternalAlgos[@]}" )
-numAlgos=${#menuItems[@]}
 
-# Checken, ob wir für alle Algos auch schon Werte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json haben
-# Diejenigen Algos anzeigen, zu denen es noch keine Eintragsmöglichkeit gibt
-if [ $numAlgos -gt 0 ]; then
-    for algo in ${menuItems[@]}; do
-        sed -n -e '/"Name": "'${algo}'",/{
-             N;N;N;/"MinerName": "'${miner_name}'",/{
-                 N;/"MinerVersion": "'${miner_version}'"/{
-                     h;b}}}
-             ${x;/./{x;Q100};x;Q99}' \
-                ${IMPORTANT_BENCHMARK_JSON}
-        found=$?
-        if [ $found -eq 99 ]; then
-            printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${algo}
-        fi
-    done
-fi
+# Wegen des Startparameters die Miner... oder sollen wir das auch auf eine glatte Variable umstellen,
+# die man ohne Funktion rufen kann? Könnte man sich einen Funktionsaufruf sparen.
+unset InternalAlgos
+declare -A InternalAlgos
+declare -n                 actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
+declare -a menuItems=( "${!actInternalAlgos[@]}" )
+numAlgos=${#menuItems[@]}
 
 if [ $numAlgos -gt 1 ]; then
     for i in ${!menuItems[@]}; do
         printf "%10s=%17s" "a$i" "\"${menuItems[$i]}\""
         if [ $(((i+1) % 3)) -eq 0 ]; then printf "\n"; fi
+        # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
+        InternalAlgos[${menuItems[$i]}]=${actInternalAlgos[${menuItems[$i]}]}
     done
     printf "\n"
 
@@ -502,6 +520,8 @@ if [ $numAlgos -gt 1 ]; then
 elif [ $numAlgos -eq 1 ]; then
     # ... oder angenommener einziger Algo aus der Datei für die Algos.
     algonr=a0
+    # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
+    InternalAlgos[${menuItems[0]}]=${actInternalAlgos[${menuItems[0]}]}
 else
     # Au weia, ... noch gar keine Algos einlesen können.
     error_msg="Sorry, dieser Miner weiss nicht, welche Algos er minen kann.\n"
@@ -510,15 +530,16 @@ else
     error_msg+="ODER die Dateien sind vorhanden, aber leer."
     error_msg+="Bitte erst eine oder beide dieser Dateien erstellen.\n"
     printf ${error_msg}
-    read -p "Das Programm wird nach <ENTER> mit den selben \"$*\" neu gestartet..." restart
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"$*\" neu gestartet..." restart
     exec $0 "$*"
 fi
 algo=${menuItems[${algonr:1}]}
-    
+
 echo "das ist der Algo den du ausgewählt hast : ${algo}"
 if [ "$algo" = "scrypt" ] ; then
     echo "Dieser Algo ist nicht mehr mit Grafikkarten lohnenswert. Dafür ermitteln wir keine Werte mehr."
-    exit
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"$*\" neu gestartet..." restart
+    exec $0 "$*"
 fi
 
 # Ein paar Standardverzeichnisse zur Verbesserung der Übersicht:
@@ -540,9 +561,11 @@ echo "${algo}#${miner_name}#${miner_version}" >benching_${gpu_idx}_algo
 
 
 ####################################################################################
+################################################################################
 ###
 ###                        5. START DES BENCHMARKING
 ###
+################################################################################
 ####################################################################################
 
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
