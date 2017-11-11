@@ -13,21 +13,99 @@
 #     $algorithm   (== algo#miner_name#miner_version)
 #     angesprochen werden können.
 #
+
 if [ ${#_MINERFUNC_INCLUDED} -eq 0 ];then
     source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 fi
 
+# Extrem wichtige Funktion zur Erweiterung der JSON, falls notwendig.
+#
+# Diese Funktion soll die Automatische Anpassung der eingestellten IMPORTANT_BENCHMARK_JSON
+# oder der als Parameter übergebenen .JSON durchführen:
+# 1. Backup Datei erstellen
+# 2. Änderungslauf Erweiterung um Minerversion und Korrektur der Eigenschaft MinerName
+# 3. Aufnahme der neuen Eigenschaften/Felder "MAX_WATT" bis "MinerFee"
+#
+# Folgende Varablen MÜSSEN eingestellt sein:
+#     IMPORTANT_BENCHMARK_JSON 
+#         ("../${gpu_uuid}/benchmark_${gpu_uuid}.json")
+#         ("../GPU-skeleton/benchmark_skeleton.json")
+# Der benchmark_skeleton.json kommt dabei eine besondere Rolle bei der Synchronisation der Verteilung zu:
+#     Wenn sie verändert wurde und neuer oder wenigstens gleich alt ist wie die sie ändernde Datei (hier),
+#     dann ist das das Zeichen, dass alles für die Verteilung vorbereitet ist:
+#     - gpu-bench.sh
+#     - gpu-bENCH.inc
+#     - bench_30s_2.sh
+#     - tweak_commands.sh
+# Zweite Session:
+#     - multi_mining_cals.sh muss zusammen mit gpu_gv-algo.sh die ALGO_WATTS_MINES.in abstimmen!
+#     sind ale vorbereitet, dass jeder Prozess die neue Struktur vorfindet.
+
+function _expand_IMPORTANT_BENCHMARK_JSON ()
+{
+    #
+    # Zu 1. Backup Datei erstellen
+    #
+    # IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
+    cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.BAK
+
+    #
+    # Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um MinerVersion, etc.
+    # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien gibt
+    #
+    grep -m1 -c "\"MinerVersion\": \"" ${IMPORTANT_BENCHMARK_JSON}.BAK &>/dev/null \
+        || gawk -e 'BEGIN {FS=":"} \
+           match( $0, /"MinerName": "[[:alnum:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); miner=tolower( substr(M, index(M,":")+3 ) ); \
+                 if ( miner == "equihash" ) { miner="miner"; version="0.3.4b" } else { miner="ccminer"; version="2.2" } \
+                 print "      \"MinerName\": \"" miner "\","; \
+                 print "      \"MinerVersion\": \"" version "\","; \
+                 next } \
+           match( $0, /"LessThreads": [[:digit:]]*/ )\
+               { print "      \"GPUGraphicsClockOffset[3]\": 0,"; \
+                 print "      \"GPUMemoryTransferRateOffset[3]\": 0,"; \
+                 print "      \"GPUTargetFanSpeed\": 0,"; \
+                 print "      \"PowerLimit\": 0," \
+               } \
+           {print}' ${IMPORTANT_BENCHMARK_JSON}.BAK >${IMPORTANT_BENCHMARK_JSON}
+
+    #
+    # 2. Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um die Felder
+    #    MAX_WATT, HASHCOUNT, HASH_DURATION, BENCH_DATE, BENCH_KIND, MinerFee
+    # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien mehr gibt.
+    #
+    grep -m1 -c "\"MAX_WATT\": " ${IMPORTANT_BENCHMARK_JSON}.BAK &>/dev/null \
+        || gawk -e 'BEGIN {FS=":"} \
+           match( $0, /"WATT": / )\
+               { print $0;        \
+                 print "      \"MAX_WATT\": 0,";   \
+                 print "      \"HASHCOUNT\": 0,";  \
+                 print "      \"HASH_DURATION\": 0,";  \
+                 print "      \"BENCH_DATE\": 0,"; \
+                 print "      \"BENCH_KIND\": 0,"; \
+                 print "      \"MinerFee\": 0,";   \
+                 next } \
+           {print}' ${IMPORTANT_BENCHMARK_JSON}.BAK >${IMPORTANT_BENCHMARK_JSON}
+
+}
+
 _read_IMPORTANT_BENCHMARK_JSON_in()
 {
     # Das sind die Werte zu jedem einzelnen "${algorithm}" == "${algo}#${miner_name}#${miner_version}"
-    unset bENCH       ; declare -Ag bENCH
-    unset WATTS       ; declare -Ag WATTS
-    unset EXTRA_PARAMS; declare -Ag EXTRA_PARAMS
-    unset GRAFIK_CLOCK; declare -Ag GRAFIK_CLOCK
-    unset MEMORY_CLOCK; declare -Ag MEMORY_CLOCK
-    unset FAN_SPEED   ; declare -Ag FAN_SPEED
-    unset POWER_LIMIT ; declare -Ag POWER_LIMIT
-    unset LESS_THREADS; declare -Ag LESS_THREADS
+    unset bENCH         ; declare -Ag bENCH
+    unset WATTS         ; declare -Ag WATTS
+    unset MAX_WATT      ; declare -Ag MAX_WATT
+    unset HASHCOUNT     ; declare -Ag HASHCOUNT
+    unset HASH_DURATION ; declare -Ag HASH_DURATION
+    unset BENCH_DATE    ; declare -Ag BENCH_DATE
+    unset BENCH_KIND    ; declare -Ag BENCH_KIND
+    unset MinerFee      ; declare -Ag MinerFee
+    unset EXTRA_PARAMS  ; declare -Ag EXTRA_PARAMS
+    unset GRAFIK_CLOCK  ; declare -Ag GRAFIK_CLOCK
+    unset MEMORY_CLOCK  ; declare -Ag MEMORY_CLOCK
+    unset FAN_SPEED     ; declare -Ag FAN_SPEED
+    unset POWER_LIMIT   ; declare -Ag POWER_LIMIT
+    unset LESS_THREADS  ; declare -Ag LESS_THREADS
     unset READARR
 
     # Dateialter zum Zeitpunkt des Array-Aufbaus festhalten
@@ -88,6 +166,18 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
                    extra_params  = substr( $2, 2, length($2)-3 ); \
                    getline;                                       # WATT \
                    watt          = substr( $2, 1, length($2)-1 ); \
+                   getline;                                       # MAX_WATT \
+                   MAX_WATT      = substr( $2, 1, length($2)-1 ); \
+                   getline;                                       # HASHCOUNT \
+                   HASHCOUNT     = substr( $2, 1, length($2)-1 ); \
+                   getline;                                       # HASH_DURATION \
+                   HASH_DURATION = substr( $2, 1, length($2)-1 ); \
+                   getline;                                       # BENCH_DATE \
+                   BENCH_DATE    = substr( $2, 1, length($2)-1 ); \
+                   getline;                                       # BENCH_KIND \
+                   BENCH_KIND    = substr( $2, 1, length($2)-1 ); \
+                   getline;                                       # MinerFee \
+                   MinerFee      = substr( $2, 1, length($2)-1 ); \
                    getline;                                       # GRAFIK_CLOCK \
                    grafik_clock  = substr( $2, 1, length($2)-1 ); \
                    getline;                                       # MEMORY_CLOCK \
@@ -99,20 +189,26 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
                    getline;                                       # LESS_THREADS \
                    less_threads  = substr( $2, 1, length($2)-0 ); \
                    print algo "#" miner_name "#" miner_version; \
-                   print benchspeed;   \
-                   print watt;         \
-                   print extra_params; \
-                   print grafik_clock; \
-                   print memory_clock; \
-                   print fan_speed;    \
-                   print power_limit;  \
-                   print less_threads; \
+                   print benchspeed;    \
+                   print watt;          \
+                   print MAX_WATT;      \
+                   print HASHCOUNT;     \
+                   print HASH_DURATION; \
+                   print BENCH_DATE;    \
+                   print BENCH_KIND;    \
+                   print MinerFee;      \
+                   print extra_params;  \
+                   print grafik_clock;  \
+                   print memory_clock;  \
+                   print fan_speed;     \
+                   print power_limit;   \
+                   print less_threads;  \
                    next \
                  }' ${IMPORTANT_BENCHMARK_JSON} \
         | tee $bENCH_SRC \
         | readarray -n 0 -O 0 -t READARR
     # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
-    for ((i=0; $i<${#READARR[@]}; i+=9)) ; do
+    for ((i=0; $i<${#READARR[@]}; i+=15)) ; do
         bENCH[${READARR[$i]}]=${READARR[$i+1]}
         declare -ig WATTS[${READARR[$i]}]=${READARR[$i+2]}
         if [[ ${#READARR[$i+1]} -gt 0 && (${#READARR[$i+2]} == 0 || ${READARR[$i+2]} == 0) ]]; then
@@ -120,12 +216,18 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
            notify-send -t 10000 -u critical "### Fehler in Benchmarkdatei ###" \
                  "GPU-Dir: ${GPU_DIR} \n Algoname: ${READARR[$i]} \n KEINE WATT ANGEGEBEN. Verwende 1000"
         fi
-        EXTRA_PARAMS[${READARR[$i]}]=${READARR[$i+3]}
-        GRAFIK_CLOCK[${READARR[$i]}]=${READARR[$i+4]}
-        MEMORY_CLOCK[${READARR[$i]}]=${READARR[$i+5]}
-        FAN_SPEED[${READARR[$i]}]=${READARR[$i+6]}
-        POWER_LIMIT[${READARR[$i]}]=${READARR[$i+7]}
-        LESS_THREADS[${READARR[$i]}]=${READARR[$i+8]}
+        MAX_WATT[${READARR[$i]}]=${READARR[$i+3]}
+        HASHCOUNT[${READARR[$i]}]=${READARR[$i+4]}
+        HASH_DURATION[${READARR[$i]}]=${READARR[$i+5]}
+        BENCH_DATE[${READARR[$i]}]=${READARR[$i+6]}
+        BENCH_KIND[${READARR[$i]}]=${READARR[$i+7]}
+        MinerFee[${READARR[$i]}]=${READARR[$i+8]}
+        EXTRA_PARAMS[${READARR[$i]}]=${READARR[$i+9]}
+        GRAFIK_CLOCK[${READARR[$i]}]=${READARR[$i+10]}
+        MEMORY_CLOCK[${READARR[$i]}]=${READARR[$i+11]}
+        FAN_SPEED[${READARR[$i]}]=${READARR[$i+12]}
+        POWER_LIMIT[${READARR[$i]}]=${READARR[$i+13]}
+        LESS_THREADS[${READARR[$i]}]=${READARR[$i+14]}
     done
 
     ################################################################################

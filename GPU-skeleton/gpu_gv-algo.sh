@@ -185,6 +185,12 @@ LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ )
 #     und überhaupt alle Daten pro Algorithmus
 #     aus der Datei benchmark_${GPU_DIR}.json
 #     in die Assoziativen Arrays bENCH["AlgoName"] und WATTS["AlgoName"] und
+#     MAX_WATT["AlgoName"]
+#     HASHCOUNT["AlgoName"]
+#     HASH_DURATION["AlgoName"]
+#     BENCH_DATE["AlgoName"]
+#     BENCH_KIND["AlgoName"]
+#     MinerFee["AlgoName"]
 #     EXTRA_PARAMS["AlgoName"]
 #     GRAFIK_CLOCK["AlgoName"]
 #     MEMORY_CLOCK["AlgoName"]
@@ -213,7 +219,7 @@ bENCH_SRC_OLD=""; if [ -f "$bENCH_SRC_OLD" ]; then rm "$bENCH_SRC_OLD"; fi
 # Damit readarray als letzter Prozess in einer Pipeline nicht in einer subshell
 # ausgeführt wird und diese beim Austriit gleich wieder seine Variablen verwirft
 shopt -s lastpipe
-source ../gpu-bENCH.inc
+source gpu-bENCH.sh
 
 # Auf jeden Fall beim Starten das Array bENCH[] und WATTS[] aufbauen
 # Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
