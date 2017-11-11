@@ -130,3 +130,9 @@ benchmarking/sed_insert_on_different_lines_cmd
 benchmarking/watt_gpu\.sh
 
 miners/minerstarts
+
+benchmarking/tweak_commands_killing_loop_counter
+
+multi_mining_calc_bad\.log
+
+benchmarking/benchmarker_ready_for_kill_signal

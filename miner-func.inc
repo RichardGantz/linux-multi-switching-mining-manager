@@ -8,7 +8,7 @@
 # Hier muss das Verzeichnis zu miners mitgegeben werden, z.B. ../miners
 #
 # Dabei sind auch Miner, zu denen es keine Versionsinformationen gibt.
-# Das ist eientlich nicht, was wir wollen.
+# Das ist eigentlich nicht, was wir wollen.
 
 _MINERFUNC_INCLUDED=1
 
@@ -17,6 +17,7 @@ _MINERFUNC_INCLUDED=1
 # Alle Algos aller Miner- und Versionsnummern werden in alle Internal_${m_name}_${m_version//\./_}_Algos eingelesen
 #
 _set_ALLE_MINER_from_path () {
+    local workdir=$(pwd)
     cd $1
     ALLE_MINER=$(ls *.algos)
 
@@ -70,7 +71,7 @@ _set_ALLE_MINER_from_path () {
 
         i+=1
     done  ## for minerName in ${ALLE_MINER}
-    cd - >/dev/null
+    cd ${workdir} >/dev/null
 }
 
 # Hat eine bestimmte Berechtigung, aber es könnten Miner ohne Versionsangabe dabei "übrig" bleiben.

@@ -93,7 +93,11 @@ _terminate_all_processes_of_script "algo_multi_abfrage.sh"
 # gpu_gv-algos's zu starten, die erst mal auf SYNCFILE warten
 # und dann algo_multi_abfrage.sh
 
+# Besteht nun hauptsächlich aus der Funktion _func_gpu_abfrage_sh
+source ./gpu-abfrage.sh
 
+# Das gibt Informationen der gpu-abfrage.sh aus
+ATTENTION_FOR_USER_INPUT=1
 while : ; do
 
 # Diese Abfrage erzeugt die beiden Dateien "gpu_system.out" und "GLOBAL_GPU_SYSTEM_STATE.in"
@@ -102,7 +106,7 @@ while : ; do
 #       von GPUs und Algorithmen.
 #       GPUs könen als ENABLED (1) oder DISABLED (0) gesetzt werden
 #       Algorithmen können ebenfalls als "Disabled" geführt werden mit einem Eintrag "AlgoDisabled:$algoName"
-source ./gpu-abfrage.sh
+_func_gpu_abfrage_sh
 
 #
 # Wir schalten jetzt die GPU-Abfragen ein, wenn sie nicht schon laufen...
@@ -110,10 +114,11 @@ source ./gpu-abfrage.sh
 for lfdUuid in "${!uuidEnabledSOLL[@]}"; do
     if [ ${uuidEnabledSOLL[${lfdUuid}]} -eq 1 ]; then
         if [ ! -f ${lfdUuid}/gpu_gv-algo.pid ]; then
+            workdir=$(pwd)
             cd ${lfdUuid}
             echo "GPU #$(< gpu_index.in): Starting process in the background..."
             ./gpu_gv-algo.sh &
-            cd -
+            cd ${workdir} >/dev/null
         fi
     fi
 done
@@ -410,6 +415,8 @@ printf "                 Verfügbare SolarPower: %5dW\n" ${SolarWattAvailable}
 
 MAX_PROFIT=".0"
 MAX_PROFIT_GPU_Algo_Combination=''
+declare -ig GLOBAL_GPU_COMBINATION_LOOP_COUNTER=0
+declare -ig GLOBAL_MAX_PROFIT_CALL_COUNTER=0
 
 echo "=========  GPU Einzelberechnungen  ========="
 echo "Ermittlung aller gewinnbringenden Algorithmen durch Berechnung:"
@@ -615,6 +622,8 @@ fi  # if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
 ################################################################################
 
 printf "=========       Endergebnis        =========\n"
+echo "\$GLOBAL_GPU_COMBINATION_LOOP_COUNTER: $GLOBAL_GPU_COMBINATION_LOOP_COUNTER"
+echo "\$GLOBAL_MAX_PROFIT_CALL_COUNTER: $GLOBAL_MAX_PROFIT_CALL_COUNTER"
 
 # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
 while [ -f ${RUNNING_STATE}.lock ]; do

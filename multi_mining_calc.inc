@@ -113,6 +113,7 @@ function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
     #   | tee bc_DEBUG_STRING.log \
     #   | tee bc_ERGEBNIS.log \
     #   | tee bc_NACH_sed.log \
+    let GLOBAL_MAX_PROFIT_CALL_COUNTER++
 }
 
 ########################################################################
@@ -200,6 +201,9 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
                 echo "${echoString%%?}"
             fi  ## if [ ${verbose} == 1 ]
         fi
+
+	# Für Statistik-Zwecke. Dieser Zähler sollte über die 31s-Intervalle ziemlich gleich bleiben
+	let GLOBAL_GPU_COMBINATION_LOOP_COUNTER++
         
         # Hier ist der Testlauf beendet und der nächste kann eingeleitet werden, sofern es noch einen gibt
     
