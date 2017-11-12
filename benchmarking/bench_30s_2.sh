@@ -95,6 +95,11 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # 
     # bechchmarkfile="benchmark_${gpu_uuid}.json"
     # gpu index uuid in "../${gpu_uuid}/benchmark_${gpu_uuid}.json" 
+    #
+    # Zu 1. Backup Datei erstellen
+    #
+    # IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
+    cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.BAK
 
     # Den EXAKTEN Textblock für ${algo} && ${miner_name} && ${miner_version} raussuchen
     # Zeilennummern in temporärer Datei merken
@@ -114,6 +119,7 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
         :matched
         N                                                 # append N(ext) line to pattern-space, here "BenchmarkSpeed"
         =                                                 # print line number, here line of "BenchmarkSpeed"
+        Q100                                              # Quit immediately with exit-Status 100
         }' \
         ${IMPORTANT_BENCHMARK_JSON} \
         > tempazb
@@ -346,8 +352,13 @@ function _On_Exit () {
         BENCH_OR_TWEAK_END=$(date --utc +%s)
         # Das stimmt im Falle des Tweakens nicht so genau.
         # Hier sollten wir nur die Dauer seit der letzten Parameteränderung messen, ODER ???
+        #
         # --->   IST EVENTUELL NOCH ZU KORRIGIEREN   <---
-        HASH_DURATION=$((${BENCH_OR_TWEAK_END}-${BENCH_DATE}))
+        # HASH_DURATION=$((${BENCH_OR_TWEAK_END}-${BENCH_DATE}))
+        #
+        # Wir korrigieren das jetzt mal:
+        # Die Wattwerte werden auf jeden Fall sekündlich ermittelt!
+        HASH_DURATION=${wattCount}
 
         # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
         if [ -f ${BENCHLOGFILE} ]; then
@@ -546,7 +557,9 @@ _read_in_ALGO_PORTS
 # auswahl des devices "eingabe wartend"
 echo ""
 read -p "Für welches GPU device soll ein Benchmark druchgeführt werden: " gpu_idx
+
 gpu_uuid=${uuid[${gpu_idx}]}
+echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
 
 # Sync mit tweak_command.sh
 echo ${gpu_idx}  >bensh_gpu_30s_.index
@@ -769,9 +782,9 @@ if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
     echo "$TWEAK_CMD_LOG"                          >tweak_to_these_logs
     echo "watt_bensh_30s.out"                     >>tweak_to_these_logs
     echo "${BENCHLOGFILE}" >>tweak_to_these_logs
-    declare -i wattCount=0
     declare -i queryCnt=0
 fi
+declare -i wattCount=0
 
 rm -f COUNTER watt_bensh_30s.out watt_bensh_30s_max.out
 countWatts=1

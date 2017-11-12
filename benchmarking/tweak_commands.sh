@@ -40,7 +40,7 @@ algorithm=$(< benching_${gpu_idx}_algo)
 read algo miner_name miner_version <<<"${algorithm//#/ }"
 LOGPATH="../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version}"
 
-# Jetz haben wir gleich alle Daten für den $algorithm !
+# Jetzt haben wir gleich alle Daten für den $algorithm !
 IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 bENCH_SRC="../${gpu_uuid}/bENCH.in"
 # für das folgende "source"
@@ -105,7 +105,8 @@ while :; do
 
     echo ""
     echo "Benchmark is actually running for the following GPU:"
-    echo "GPU #${gpu_idx} with UUID: ${uuid}"
+    echo "GPU #${gpu_idx} with UUID: ${gpu_uuid}"
+    echo ""
 
     for (( lfdCmd=0; $lfdCmd<${#nvidiaCmd[@]}; lfdCmd++ )); do
         printf "%3i : ${nvidiaCmd[${lfdCmd}]}\n" $((${lfdCmd}+1)) ${gpu_idx} ${nvidiaPara[${lfdCmd}]}

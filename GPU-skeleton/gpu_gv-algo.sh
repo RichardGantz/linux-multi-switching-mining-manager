@@ -135,7 +135,7 @@ echo $$ >$(basename $0 .sh).pid
 # Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
 #
 function _On_Exit () {
-    rm -f LINUX_MULTI_MINING_ROOT \
+    rm -f LINUX_MULTI_MINING_ROOT ALGO_WATTS_MINES.lock \
        $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
