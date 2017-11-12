@@ -77,15 +77,16 @@ _update_SYSTEM_STATEin_if_necessary () {
     # Im Moment keine Echo's, wenn mit Parameter gerufen...
     local verbose=$1
 
-    printf 'Über diese Datei schalten wir GPUs MANUELL gezielt ein oder aus.\n'                   >${SYSTEM_STATE}.out
-    printf '1 (== EIN == ENABLED)  ist der Default für jede GPU, die noch nicht erfasst war.\n'  >>${SYSTEM_STATE}.out
-    printf '0 (== AUS == DISABLED) können wir manuell editieren und nach dem Abspeichern wird\n' >>${SYSTEM_STATE}.out
-    printf '                       diese Karte dann abgestellt, falls sie noch laufen sollte,\n' >>${SYSTEM_STATE}.out
-    printf '                       wird nicht mehr in den Berechnungen berücksichtigt\n'         >>${SYSTEM_STATE}.out
-    printf '                       und wird als GloballyDisabled geführt...\n'                   >>${SYSTEM_STATE}.out
-    printf '... bis sie MANUELL wieder auf 1 (== EIN == ENABLED) gesetzt wird.\n\n'              >>${SYSTEM_STATE}.out
-    printf 'UUID : GrakaName : 1/0 (Enabled/Disabled)\n'                                         >>${SYSTEM_STATE}.out
-    printf '=========================================\n'                                         >>${SYSTEM_STATE}.out
+    echo '# Über diese Datei schalten wir GPUs MANUELL gezielt ein oder aus.'                   >${SYSTEM_STATE}.out
+    echo '# 1 (== EIN == ENABLED)  ist der Default für jede GPU, die noch nicht erfasst war.'  >>${SYSTEM_STATE}.out
+    echo '# 0 (== AUS == DISABLED) können wir manuell editieren und nach dem Abspeichern wird' >>${SYSTEM_STATE}.out
+    echo '#                        diese Karte dann abgestellt, falls sie noch laufen sollte,' >>${SYSTEM_STATE}.out
+    echo '#                        wird nicht mehr in den Berechnungen berücksichtigt'         >>${SYSTEM_STATE}.out
+    echo '#                        und wird als GloballyDisabled geführt...'                   >>${SYSTEM_STATE}.out
+    echo '# ... bis sie MANUELL wieder auf 1 (== EIN == ENABLED) gesetzt wird.\n'              >>${SYSTEM_STATE}.out
+    echo ''                                                                                    >>${SYSTEM_STATE}.out
+    echo 'UUID : GrakaName : 1/0 (Enabled/Disabled)'                                           >>${SYSTEM_STATE}.out
+    echo '========================================='                                           >>${SYSTEM_STATE}.out
 
     if [ ${#verbose} -gt 0 ]; then
         echo "Diese GPU's gibt es:"
@@ -102,14 +103,30 @@ _update_SYSTEM_STATEin_if_necessary () {
         if [ -n "${uuidEnabledSOLL[${uuid[${index[$i]}]}]}" ]; then
             enabledState=${uuidEnabledSOLL[${uuid[${index[$i]}]}]}
         fi
-        printf "${uuid[${index[$i]}]}:${name[${index[$i]}]}:${enabledState}\n"                   >>${SYSTEM_STATE}.out
+        echo "${uuid[${index[$i]}]}:${name[${index[$i]}]}:${enabledState}"                    >>${SYSTEM_STATE}.out
     done
 
-    # Wir pflegen tatsächlich die AlgoDisabled hier drin (MANUELL wie AUTOMATISCH) und deshalb
+    # Wir pflegen AlgoDisabled hier drin MANUELL und deshalb
     # müssen wir diejenigen auch wieder mit ausgeben, die wir eingelesen haben.
     # Bei jeder Neuerzeugung der Datei SYSTEM_STATE müssen die hinten angehängt werden.
+    echo ''                                                                                    >>${SYSTEM_STATE}.out
+    echo '# Algorithmen können hier MANUELL ausgeschaltet werden, was gefährlich sein kann,' >>${SYSTEM_STATE}.out
+    echo '#    wenn man vergisst, dass man sie hier ausgeschaltet hat!'                      >>${SYSTEM_STATE}.out
+    echo '# Für jeden disabled Algorithmus gibt es NUR 1 ZEILE!'                             >>${SYSTEM_STATE}.out
+    echo '# Die einzelnen FELDER sind durch DOPPELPUNKTE getrennt.'                          >>${SYSTEM_STATE}.out
+    echo '# Das 1. Feld MUSS IMMER lauten: "AlgoDisabled" (ohne Anführungsstriche)'          >>${SYSTEM_STATE}.out
+    echo '# Das 2. Feld MUSS IMMER der ALGONAME sein.'                                       >>${SYSTEM_STATE}.out
+    echo '# Dann folgen die GPU-UUIDs und/oder "*" (ohne Anführungsstriche) für ALLE'        >>${SYSTEM_STATE}.out
+    echo '# Der "*" kann auch zusammen mit GPUs gelistet sein.'                              >>${SYSTEM_STATE}.out
+    echo '# Der "*" kommt ins Spiel, wenn ein Algorithmus generell nicht abgeliefert werden kann'>>${SYSTEM_STATE}.out
+    echo '# Er sollte hier also nur drin sein, wenn man ihn generell nicht mehr minen möchte'>>${SYSTEM_STATE}.out
+    echo '# Ein Beispiel:'                                                                   >>${SYSTEM_STATE}.out
+    echo '# AlgoDisabled:scrypt:GPU-84f7ca95-d215-185d-7b27-a7f017e776fb'                    >>${SYSTEM_STATE}.out
+    echo ''                                                                                    >>${SYSTEM_STATE}.out
+    echo '"AlgoDisabled" : AlgoName : * oder GPU-UUID : * oder GPU-UUID : * oder GPU-UUID'   >>${SYSTEM_STATE}.out
+    echo '============================================================================='     >>${SYSTEM_STATE}.out
     for algoName in ${!AlgoDisabled[@]}; do
-        printf "${AlgoDisabled[$algoName]}\n"                                                    >>${SYSTEM_STATE}.out
+        echo "${AlgoDisabled[$algoName]}"                                                    >>${SYSTEM_STATE}.out
     done
 
     # Sollten die Dateien ${SYSTEM_STATE}.out und ${SYSTEM_STATE}.in sich jetzt unterscheiden,

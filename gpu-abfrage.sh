@@ -115,7 +115,7 @@ function _func_gpu_abfrage_sh () {
         declare -ag "GPU${index[$j]}Mines"
     done
 
-    # Die folgende Datei gpu_system_state.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
+    # Die folgende Datei GLOBAL_GPU_SYSTEM_STATE.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
     # Sie wird, wenn nicht vorhanden vom Skript erstellt, damit wir die UUID's und Namen haben.
     # Und wenn sie vorhanden ist, merken wir uns die manuell gesetzten Enabled-Zustände,
     #     BEVOR wir die Datei neu schreiben.
@@ -126,7 +126,7 @@ function _func_gpu_abfrage_sh () {
     # Eventuell können wir hier auch die temporär disabelten Algos (automatisch?) eintragen lassen
     #     und durchschleifen. DARUM KÜMMERN WIR UNS ABER, WENN ES SOWEIT IST.
     #     (Hier ist erst mal nur das Einlesen mitgemacht, weil der Code schon im multi_mining_calc.sh so drin war.)
-    unset ENABLED_UUIDs
+    unset SYSTEM_STATE_CONTENT
     unset uuidEnabledSOLL;  declare -Ag uuidEnabledSOLL
     unset AlgoDisabled;     declare -Ag AlgoDisabled
     unset NumEnabledGPUs;   declare -ig NumEnabledGPUs
@@ -134,21 +134,27 @@ function _func_gpu_abfrage_sh () {
         cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
         shopt_cmd_before=$(shopt -p lastpipe)
         shopt -s lastpipe
-        cat ${SYSTEM_STATE}.in \
+        cat ${SYSTEM_STATE}.in               \
+            | grep -v "^#"                   \
             | grep -e "^GPU-\|^AlgoDisabled" \
-            | readarray -n 0 -O 0 -t ENABLED_UUIDs
+            | readarray -n 0 -O 0 -t SYSTEM_STATE_CONTENT
 
-        for (( i=0; $i<${#ENABLED_UUIDs[@]}; i++ )); do
-            if [ "${ENABLED_UUIDs[$i]:0:4}" == "GPU-" ]; then
-                echo ${ENABLED_UUIDs[$i]} \
+        for (( i=0; $i<${#SYSTEM_STATE_CONTENT[@]}; i++ )); do
+            if [ "${SYSTEM_STATE_CONTENT[$i]:0:4}" == "GPU-" ]; then
+                echo ${SYSTEM_STATE_CONTENT[$i]} \
                     | cut -d':' --output-delimiter=' ' -f1,3 \
                     | read UUID GenerallyEnabled
                 declare -ig uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
                 NumEnabledGPUs+=${GenerallyEnabled}
-            elif [ "${ENABLED_UUIDs[$i]:0:12}" == "AlgoDisabled" ]; then
+            elif [ "${SYSTEM_STATE_CONTENT[$i]:0:12}" == "AlgoDisabled" ]; then
                 unset AlgoName
-                read -a AlgoName <<<"${ENABLED_UUIDs[$i]//:/ }"
-                AlgoDisabled[${AlgoName[1]}]="${ENABLED_UUIDs[$i]}"
+                read -a AlgoName <<<"${SYSTEM_STATE_CONTENT[$i]//:/ }"
+                if [ ${#AlgoName[@]} -eq 2 ] && [ "${AlgoName[0]}" == "AlgoDisabled" ]; then
+                    # Bestimmt den * vergessen oder nicht mal ein echter Algoname?
+                    AlgoDisabled[${AlgoName[1]}]="AlgoDisabled:${AlgoName[1]}:*"
+                else
+                    AlgoDisabled[${AlgoName[1]}]="${SYSTEM_STATE_CONTENT[$i]}"
+                fi
             fi
         done
         ${shopt_cmd_before}

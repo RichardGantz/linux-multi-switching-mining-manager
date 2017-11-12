@@ -156,7 +156,9 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
     declare -i finished=0
     while [[ $finished == 0 ]]; do
         # Der GV_COMBINATION key des assoziativen Arrays
+        unset algosCombinationKey
         algosCombinationKey=''
+        unset CombinationMines
         declare -i CombinationWatts=0
         CombinationMines=''
         
@@ -202,8 +204,8 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
             fi  ## if [ ${verbose} == 1 ]
         fi
 
-	# Für Statistik-Zwecke. Dieser Zähler sollte über die 31s-Intervalle ziemlich gleich bleiben
-	let GLOBAL_GPU_COMBINATION_LOOP_COUNTER++
+        # Für Statistik-Zwecke. Dieser Zähler sollte über die 31s-Intervalle ziemlich gleich bleiben
+        let GLOBAL_GPU_COMBINATION_LOOP_COUNTER++
         
         # Hier ist der Testlauf beendet und der nächste kann eingeleitet werden, sofern es noch einen gibt
     
@@ -345,7 +347,7 @@ function _read_in_actual_RUNNING_STATE () {
         shopt -s lastpipe
 
         unset RUNNING_STATE_CONTENT
-        unset AlgoDisabled; declare -Ag AlgoDisabled
+        #unset AlgoDisabled; declare -Ag AlgoDisabled
         unset RunningGPUid; declare -Ag RunningGPUid
         unset WasItEnabled; declare -Ag WasItEnabled
         unset RunningWatts; declare -Ag RunningWatts
@@ -361,9 +363,16 @@ function _read_in_actual_RUNNING_STATE () {
                 WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
                 RunningWatts[${RunningUUID}]=${Watt}
                 WhatsRunning[${RunningUUID}]=${RunningAlgo}
-            else
-                read muck AlgoName <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
-                AlgoDisabled[${AlgoName}]=1
+            elif [ "${RUNNING_STATE_CONTENT[$i]:0:12}" == "AlgoDisabled" ]; then
+                unset AlgoName sortThem allDisabled
+                read -a AlgoName <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
+                read -a sortThem <<<${AlgoDisabled[${AlgoName[1]}]//:/ }
+                sortThem=("${sortThem[@]:2}" "${AlgoName[@]:2}")
+                rm -f sortThem;        for sortIt in "${sortThem[@]}"; do echo "$sortIt" >>sortThem; done
+                rest=$(cat sortThem | sort -u )
+                rm -f sortThem
+                readarray -t allDisabled <<<${rest//\n/ }
+                AlgoDisabled[${AlgoName[1]}]="AlgoDisabled:${AlgoName[1]}:${allDisabled// /:}"
             fi
         done
 
@@ -382,7 +391,14 @@ function _read_in_actual_RUNNING_STATE () {
             fi
             if [[ ${#AlgoDisabled[@]} -gt 0 ]]; then
                 echo "---> Temporarily Disabled Algos"
-                for algoName in ${!AlgoDisabled[@]}; do echo $algoName; done
+                for algoName in ${!AlgoDisabled[@]}; do
+                    unset AlgoName
+                    read -a AlgoName <<<"${AlgoDisabled[$algoName]//:/ }"
+                    echo "$algoName:"
+                    for (( lfdAlgo=2; $lfdAlgo<${#AlgoName[@]}; lfdAlgo++ )); do
+                        echo "    ${AlgoName[$lfdAlgo]}"
+                    done
+                done
             fi
         fi
 
