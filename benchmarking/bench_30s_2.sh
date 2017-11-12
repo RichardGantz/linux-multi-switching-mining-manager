@@ -316,37 +316,39 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 function _delete_temporary_files () {
     rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
        temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb temp_hash temp_einheit \
-       HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on different_lines_cmd ccminer.pid
+       HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on_different_lines_cmd ccminer.pid \
+       ${READY_FOR_SIGNALS}
 }
+_delete_temporary_files
 
 function _On_Exit () {
-    # CCminer stoppen
-    echo "... Wattmessen ist beendet!!" 
-    echo "Beenden des Miners"
-    if [ ! $NoCards ]; then
-        ## Beenden des miners
-        #ccminer=$(cat "ccminer.pid")
-        kill -15 $(< "ccminer.pid")
-        sleep 2
-    fi  ## $NoCards
-    #
-    # Bis jetzt könnten Werte in das $BENCHLOGFILE hineingekommen sein.
-    # Das ist vor allem für den Tweak-Fall interessant, weil der das $BENCHLOGFILE nochmal
-    # durchgehen muss! Denn es könnte noch ein Wert dazu gekommen sein!
-    # ---> BITTE NOCHMAL NACHPROGRAMMIEREN!                      <---
-    # ---> MUSS DAS BENCHFILE UACH IM TWEAKMODE NOCHMAL SCANNEN! <---
-    #
-    BENCH_OR_TWEAK_END=$(date --utc +%s)
-    # Das stimmt im Falle des Tweakens nicht so genau.
-    # Hier sollten wir nur die Dauer seit der letzten Parameteränderung messen, ODER ???
-    # --->   IST EVENTUELL NOCH ZU KORRIGIEREN   <---
-    HASH_DURATION=$((${BENCH_OR_TWEAK_END}-${BENCH_DATE}))
-
     # Als wichtiges Kennzeichen für den Ausstieg, denn da werden die Logdateien gesichert
     # und die Werte in die .json Datei geschrieben.
     # Das darf nicht geschehen, wenn das Programm vorher abnormal beendet wurde und gar keine Daten erhoben wurden
     #
     if [ ${BENCHMARKING_WAS_STARTED} -eq 1 ]; then
+        # CCminer stoppen
+        echo "... Wattmessen ist beendet!!" 
+        echo "Beenden des Miners"
+        if [ ! $NoCards ]; then
+            ## Beenden des miners
+            #ccminer=$(cat "ccminer.pid")
+            kill -15 $(< "ccminer.pid")
+            sleep 2
+        fi  ## $NoCards
+        #
+        # Bis jetzt könnten Werte in das $BENCHLOGFILE hineingekommen sein.
+        # Das ist vor allem für den Tweak-Fall interessant, weil der das $BENCHLOGFILE nochmal
+        # durchgehen muss! Denn es könnte noch ein Wert dazu gekommen sein!
+        # ---> BITTE NOCHMAL NACHPROGRAMMIEREN!                      <---
+        # ---> MUSS DAS BENCHFILE UACH IM TWEAKMODE NOCHMAL SCANNEN! <---
+        #
+        BENCH_OR_TWEAK_END=$(date --utc +%s)
+        # Das stimmt im Falle des Tweakens nicht so genau.
+        # Hier sollten wir nur die Dauer seit der letzten Parameteränderung messen, ODER ???
+        # --->   IST EVENTUELL NOCH ZU KORRIGIEREN   <---
+        HASH_DURATION=$((${BENCH_OR_TWEAK_END}-${BENCH_DATE}))
+
         # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
         if [ -f ${BENCHLOGFILE} ]; then
             # Wir müssen vorläufig keine Escape-Sequenzen mehr ausfiltern
@@ -541,33 +543,15 @@ _read_in_ALGO_PORTS
 ###
 ################################################################################
 
-if [ ! $NoCards ]; then
-    # 
-    # Devices auflisten welches einen benchmark durchführen soll 
-    # list devices 
-    nvidia-smi --query-gpu=index,gpu_name,gpu_uuid --format=csv,noheader 
-    # 0, GeForce GTX 980 Ti, GPU-742cb121-baad-f7c4-0314-cfec63c6ec70 
-    # 1, GeForce GTX 1060 3GB, GPU-84f7ca95-d215-185d-7b27-a7f017e776fb 
- 
-    # auswahl des devices "eingabe wartend" 
-    read -p "Für welches GPU device soll ein Benchmark druchgeführt werden: " gpu_idx
+# auswahl des devices "eingabe wartend"
+echo ""
+read -p "Für welches GPU device soll ein Benchmark druchgeführt werden: " gpu_idx
+gpu_uuid=${uuid[${gpu_idx}]}
 
-    # Sync mit tweak_command.sh
-    echo ${gpu_idx} > bensh_gpu_30s_.index
+# Sync mit tweak_command.sh
+echo ${gpu_idx}  >bensh_gpu_30s_.index
+echo ${gpu_uuid} >uuid
 
-    # mit ausgewählten device fortfahren (mit der Index zahl die ausgewählt wurde) 
-    # Sync mit tweak_command.sh
-    nvidia-smi --id=${gpu_idx} --query-gpu=index,gpu_name,gpu_uuid --format=csv,noheader \
-        | gawk -e 'BEGIN {FS=", | %"} {print $3}' > uuid 
- 
-else
-    # Sync mit tweak_command.sh
-    echo "GPU-84f7ca95-d215-185d-7b27-a7f017e776fb" >uuid
-    # Sync mit tweak_command.sh
-    echo 1 > bensh_gpu_30s_.index
-fi
-gpu_uuid=$(< "uuid")
-gpu_idx=$(< "bensh_gpu_30s_.index")       #später indexnummer aus gpu folder einfügen !!!
 IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 
 ################################################################################
@@ -755,6 +739,7 @@ BENCH_DATE=$(date --utc +%s)
 if [ ! $NoCards ]; then
     ${minerstart} >>${BENCHLOGFILE} &
     echo $! > ccminer.pid
+    gnome-terminal -x bash -c "tail -f ${BENCHLOGFILE}"
     sleep 3
 else
     if [ ! -f "${BENCHLOGFILE}" ]; then
