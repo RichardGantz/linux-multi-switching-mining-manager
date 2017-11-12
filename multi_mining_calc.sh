@@ -104,13 +104,19 @@ while : ; do
     # Daten von "GLOBAL_GPU_SYSTEM_STATE.in", WELCHES MANUELL BEARBEITET WERDEN KANN,
     #       werden berücksichtigt, vor allem sind das die Daten über den generellen Beachtungszustand
     #       von GPUs und Algorithmen.
-    #       GPUs könen als ENABLED (1) oder DISABLED (0) gesetzt werden
-    #       Algorithmen können ebenfalls als "Disabled" geführt werden mit einem Eintrag "AlgoDisabled:$algoName"
+    #       GPUs können als ENABLED (1) oder DISABLED (0) gesetzt werden
+    #       Algorithmen können ebenfalls als "Disabled" geführt werden mit einem Eintrag "AlgoDisabled:$algoName:*"
+    # WARNUNG: Mit dem Eintrag "AlgoDisabled:$algoName:*" oder "AlgoDisabled:$algoName:$gpu_uuid" sollte
+    #          SEHR, SEHR vorsichtig umgegangen werden.
+    #          Diese Angaben hier werden in den RUNNING_STATE
+    #          mit aufgenommen und kommen da nur durch MANUELLEN EINGRIFF wieder raus,
+    #          wenn die AUTOMATISCHE Verwaltung nicht zufälligerweise den Algorithmus wieder einschalten.
+    #          Das passiert aber nur für die nächsten 31s, DANN IST DER EINTRAG WIEDER DRIN!
     _func_gpu_abfrage_sh
 
     #
     # Wir schalten jetzt die GPU-Abfragen ein, wenn sie nicht schon laufen...
-    # ---> Müssen auch dara denken, sie zu stoppen, wenn die GPU DISABLED wird <---
+    # ---> Müssen auch daran denken, sie zu stoppen, wenn die GPU DISABLED wird <---
     for lfdUuid in "${!uuidEnabledSOLL[@]}"; do
         if [ ${uuidEnabledSOLL[${lfdUuid}]} -eq 1 ]; then
             if [ ! -f ${lfdUuid}/gpu_gv-algo.pid ]; then
@@ -135,7 +141,7 @@ while : ; do
         ./algo_multi_abfrage.sh &
     fi
 
-###############################################################################################
+    ###############################################################################################
     #
     # Einlesen des bisherigen RUNNING Status
     #
@@ -145,12 +151,11 @@ while : ; do
         echo "Waiting for READ access to ${RUNNING_STATE}"
         sleep 1
     done
-    # Zum Lesen reservieren
+    # Zum Lesen reservieren...
     echo $$ >${RUNNING_STATE}.lock
-
+    # ... einlesen...
     _read_in_actual_RUNNING_STATE
-
-    # Und wieder freigeben
+    # ... und wieder freigeben
     rm -f ${RUNNING_STATE}.lock
 
     # Folgende Arrays stehen uns jetzt zur Verfügung, die uns sagen, welche GPU seit den
@@ -171,10 +176,21 @@ while : ; do
             fi
         done
     fi
-    # Ausgabe besser weiter unten, dass zusammen mit den anderen beiden Angaben sichtbar ist.
-    # Die Hintergrundprozesse posten ihren Output einfach frech dazwischen, so dass diese Zeilen,
-    # die über die momentanen Leistungsverhältnisse aufklären, nicht untereinander stehen könnten.
-    #printf "         Sum of actually running WATTS: %5dW\n" ${SUM_OF_RUNNING_WATTS}
+
+    ###############################################################################################
+    ###############################################################################################
+    ###
+    ###              WARTEN und TESTEN AUF GÜLTIGE DATEN AUS DEM NETZ
+    ###
+    ###############################################################################################
+    ###############################################################################################
+    while [ ! -f ${SYNCFILE} ]; do
+        echo "$(basename $0): ###---> Waiting for ${SYNCFILE} to become available..."
+        sleep 1
+    done
+    #  Das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available} merken für später.
+    #  Die GPUs haben schon losgelegt, das heisst, dass SYNCFILE da ist und in etwa 31s neu getouched wird
+    declare -i new_Data_available=$(stat -c %Y ${SYNCFILE})
 
     ###############################################################################################
     # (26.10.2017)
@@ -183,23 +199,20 @@ while : ; do
     # Darin enthalten sind die Watt-Angaben und die BTC "Mines", die sie produzieren würden,
     # wenn sie laufen würden.
     # Wir warten darauf, dass das Modification Date der Datei ALGO_WATTS_MINES.in größer oder gleich
-    # dem des SYNCFILE ist.
-    # Wir haben auch die Anzahl ENABLED GPUs und die UUIDs in dem Array uuidEnabledSOLL
+    # dem des SYNCFILE ist, weil die "alten" Dateien der letzten 31s noch rumliegen.
     #
-    # Erst, wenn alle Kurse bekannt sind und wir die optimale Konfiguration durchrechnen können,
-    # bestimmen wir den momentanen "Strompreis" anhand der Daten aus dem SMARTMETER
+    # Erst, wenn alle BTC "Mines" anhand der aktuellen Kurse berechnet wurden
+    #       und wir die optimale Konfiguration durchrechnen können,
+    #       bestimmen wir den momentanen "Strompreis" anhand der Daten aus dem SMARTMETER
+    #
+    # Zunächst also warten, bis die "MInes"-Berechnungen und die Wattangaben alle verfügbar sind.
 
-    while [ ! -f ${SYNCFILE} ]; do
-        echo "$(basename $0): ###---> Waiting for ${SYNCFILE} to become available..."
-        sleep 1
-    done
-    declare -i new_Data_available=$(stat -c %Y ${SYNCFILE})
     while [ 1 == 1 ]; do
         declare -i AWMTime=new_Data_available+3600
         for UUID in ${!uuidEnabledSOLL[@]}; do
             if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
-                declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in)
-                if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
+                declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in) 2>/dev/null \
+                    && if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
             fi
         done
         if [ $AWMTime -lt $new_Data_available ]; then
@@ -210,10 +223,6 @@ while : ; do
         fi
     done
 
-
-    #  Das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available} merken für später.
-    #  Die GPUs haben schon losgelegt, das heisst, dass SYNCFILE da ist und in etwa 31s neu getouched wird
-    # new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
 
     ###############################################################################################
     #
@@ -247,13 +256,16 @@ while : ; do
         declare -n actAlgoWatt="GPU${index[$idx]}Watts"
         declare -n actAlgoMines="GPU${index[$idx]}Mines"
 
+        # Damit ist sichergestellt, dass gpu_gv-algo.sh mit dem Schreiben ALLER Daten fertig ist.
+        while [ -f ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.lock ]; do echo "Waiting..." >/dev/null; done
         if [ -s ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in ]; then
             unset READARR
             readarray -n 0 -O 0 -t READARR <${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in
             for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
                 # Das ist eine sehr elegante Möglichkeit, einen neuen Wert auf ein Array zu pushen.
                 # Wir nehmen das jetzt aber alles mal raus und machen es anders und beobachten wieder
-                # die Durchlaufzeiten, ob die sich wieder mit der Zeit erhöhen
+                # die Durchlaufzeiten, ob die sich wieder mit der Zeit erhöhen UND ob sich
+                # der Speicherbedarf erhöht, OBWOHL alle Arrays immer erst durch UNSET zerstört werden
                 # ---> ARRAYPUSH 1 <---
                 #actGPUAlgos=(${actGPUAlgos[@]}   "${READARR[$i]}")
                 #actAlgoWatt=(${actAlgoWatt[@]}   "${READARR[$i+1]}")
@@ -354,61 +366,16 @@ while : ; do
     #             also z.B.  GPU3Mines[]
     #
 
-
-
-
-    # Voraussetzungen, die noch geklärt werden müssen:
-    # 1. Wir brauchen jetzt natürlich Informationen aus dem SMARTMETER
-    # 2. Und wir brauchen eine Datenstruktur, anhand der wir erkennen, welche GPU's gerade mit welchem Algo laufen.
-
     # Jetzt geht's los:
-    # Jetzt brauchen wir alle möglichen Kombinationen aus GPU-Konstellationen:
-    # Jeder mögliche Algo wird mit allen anderen möglichen Kombinationen berechnet.
+    # Jetzt brauchen wir ALLE möglichen Kombinationen aus GPU-Konstellationen:
+    # Jede GPU und mit jedem möglichen Algo, den sie kann, wird mit allen anderen möglichen
+    #      GPUs und deren Algos, und Kombinationen aus GPUs berechnet.
     # Wir errechnen die jeweilige max. BTC-Generierung pro Kombination
     #     und den entsprechenden Gesamtwattverbrauch.
     # Anhand des Gesamtwattverbrauchs der Kombination errechnen wir die Gesamtkosten dieser Kombination
     #     unter Berücksichtigung eines entsprechenden "solar" Anteils, wodurch die Kosten sinken.
-    # Die Kombination mit dem besten GV-Verhältnis merken wir uns jeweils in MAX_PROFIT und MAX_PROFIT_GPU_Algo_Combination
+    # Die Kombination mit dem besten GV-Verhältnis merken wir uns jeweils in MAX_PROFIT und MAX_PROFIT_GPU_Algo_Combination:
     
-    # Im Groben brauchen wir folgendes Datenfeld für angenommene 2 Algos pro GPU, die sinnvoll sind:
-    # (Die Routine ist natürlich so ausgelegt, dass beliebig viele Algos pro GPU möglich sind.
-    #  Die Anzahl der möglichen Kombinationen steigt mit jeder GPU und jedem weiteren Algo EXPONENTIELL an)
-    #
-    # GV-Kombi-0,0,0 ... 0:
-    # GPU#0:Algo[0]     GPU#1:Algo[0]     GPU#2:Algo[0] ...  GPU#10:Algo[0]
-    #       Watt[0]  +        Watt[0]  +        Watt[0] ... +       Watt[0]  =  Gesamtwatt-Kombi-0
-    #       BTCs[0]  +        BTCs[0]  +        BTCs[0] ... +       BTCs[0]  =  GesamtBTCs-Kombi-0
-    #
-    # GV-Kombi-0,0,0 ... 1:
-    # GPU#0:Algo[0]     GPU#1:Algo[0]     GPU#2:Algo[0] ...  GPU#10:Algo[1]
-    #       Watt[0]  +        Watt[0]  +        Watt[0] ... +       Watt[1]  =  Gesamtwatt-Kombi-1
-    #       BTCs[0]  +        BTCs[0]  +        BTCs[0] ... +       BTCs[1]  =  GesamtBTCs-Kombi-1
-    #
-    # GV-Kombi-0,0 ... 1,0:
-    # GPU#0:Algo[0]     GPU#1:Algo[0]     GPU#2:Algo[1] ...  GPU#10:Algo[0]
-    #       Watt[0]  +        Watt[0]  +        Watt[1] ... +       Watt[0]  =  Gesamtwatt-Kombi-2
-    #       BTCs[0]  +        BTCs[0]  +        BTCs[1] ... +       BTCs[0]  =  GesamtBTCs-Kombi-2
-    #
-    # GV-Kombi-0,0 ... 1,1:
-    # GPU#0:Algo[0]     GPU#1:Algo[0]     GPU#2:Algo[1] ...  GPU#10:Algo[1]
-    #       Watt[0]  +        Watt[0]  +        Watt[1] ... +       Watt[1]  =  Gesamtwatt-Kombi-3
-    #       BTCs[0]  +        BTCs[0]  +        BTCs[1] ... +       BTCs[1]  =  GesamtBTCs-Kombi-3
-    #
-    # ...
-    #
-    # GV-Kombi-1,1 ... 1,0:
-    # GPU#0:Algo[1]     GPU#1:Algo[1]     GPU#2:Algo[1] ...  GPU#10:Algo[0]
-    #       Watt[1]  +        Watt[1]  +        Watt[1] ... +       Watt[0]  =  Gesamtwatt-Kombi-2 hoch 11 - 1
-    #       BTCs[1]  +        BTCs[1]  +        BTCs[1] ... +       BTCs[0]  =  GesamtBTCs-Kombi-2 hoch 11 - 1
-    #
-    # GV-Kombi-1,1 ... 1,1:
-    # GPU#0:Algo[1]     GPU#1:Algo[1]     GPU#2:Algo[1] ...  GPU#10:Algo[1]
-    #       Watt[1]  +        Watt[1]  +        Watt[1] ... +       Watt[1]  =  Gesamtwatt-Kombi-2 hoch 11
-    #       BTCs[1]  +        BTCs[1]  +        BTCs[1] ... +       BTCs[1]  =  GesamtBTCs-Kombi-2 hoch 11
-    #
-    # Bei 11 GPUs und je 2 Algorithmen sind das 2 hoch 11 Kombinationen: 2048
-    #
-
     #####################################################################################################
     #
     #     DAS IST EIN EXTREM WICHTIGES VARIABLENPAAR:
@@ -507,8 +474,9 @@ while : ; do
         case "${numAlgos}" in
 
             "0")
-                # Karte ist auszuschalten. Kein (gewinnbringender) Algo im Moment
-                # (Noch haben wir die Gewinne nicht ausgerechnet!)
+                # Karte ist auszuschalten. Kein (gewinnbringender) Algo im Moment.
+                # Es kam offensichtlich nichts aus der Datei ALGO_WATTS_MINES.in.
+                # Vielleicht wegen einer Vorabfilterung durch gpu_gv-algo.sh (unwahrscheinlich aber machbar)
                 # ---> ARRAYPUSH 2 <---
                 #SwitchOffGPUs=(${SwitchOffGPUs[@]} ${index[$idx]})
                 SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${index[$idx]}
@@ -526,21 +494,25 @@ while : ; do
                 unset profitableAlgoIndexes; declare -a profitableAlgoIndexes
 
                 for (( algoIdx=0; $algoIdx<${numAlgos}; algoIdx++ )); do
+                    # Achtung: actGPUAlgos[$algoIdx] ist ein String und besteht aus 3 Teilen:
+                    #          "$algo#$miner_name#$miner_version"
+                    # Uns interessiert nur der NH-AlgoName $algo:
                     read actAlgoName muck <<<"${actGPUAlgos[$algoIdx]//#/ }"
                     # Ist der AlgoDisabled?
                     if [ ${#AlgoDisabled[${actAlgoName}]} -gt 0 ]; then
                         #echo "Untersuche Algo: ${actAlgoName}"
                         #echo "AlgoDisbled-STRING: " ${AlgoDisabled[${actAlgoName}]}
+                        # Ist ein "*" enthalten oder die aktuelle gpu_uuid?
                         if [[ "${AlgoDisabled[${actAlgoName}]}" =~ ^.*(\*) && ${#BASH_REMATCH[1]} -gt 0 ]] \
                         || [[ "${AlgoDisabled[${actAlgoName}]}" =~ ^.*(${uuid[${index[$idx]}]}) && ${#BASH_REMATCH[1]} -gt 0 ]]; then     
                             ACTUAL_REAL_PROFIT="-"
-                            echo "----------> Algo: ${actAlgoName} IST GERADE DISABLED !!!"
+                            echo "------------------------------> Algo: ${actAlgoName} IST GERADE DISABLED !!!"
                         fi
                     else
                         _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
                             ${SolarWattAvailable} ${actAlgoWatt[$algoIdx]} "${actAlgoMines[$algoIdx]}"
                     fi
-                    # Wenn das NEGATIV ist, muss die Karte übergangen werden. Uns interessieren nur diejenigen,
+                    # Wenn das NEGATIV ist, muss der Algo dieser Karte übergangen werden. Uns interessieren nur diejenigen,
                     # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
                     if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
                         # ---> ARRAYPUSH 3 <---
@@ -622,13 +594,12 @@ while : ; do
         # Deshalb werden wir auch noch Kombinationen mit weniger als der vollen Anzahl an gewinnbringenden GPUs
         #     durchrechnen.
         # Dazu entwickeln wir eine rekursive Funktion, die ALLE möglichen Kombinationen
-        #     angefangen mit jeweils EINER laufenden von MAX_GOOD_GPUs
-        #     über ZWEI laufende von MAX_GOOD_GPUs
+        #     angefangen mit jeweils ZWEI laufenden GPUs von MAX_GOOD_GPUs
+        #                           (EINE laufende GPU haben wir oben schon durchgerechnet)
+        #     über DREI laufende GPUs von MAX_GOOD_GPUs
         #     bis hin zu ALLEN laufenden MAX_GOOD_GPUs.
         #
-        # numGPUss:        Anzahl zu berechnender GPU-Kombinationen mit numGPUss GPU's
-        # Diese Zeile berechnet ALLE ÜBERHAUPT DENKBAREN MÖGLICHEN KOMBINATIONEN
-        # for (( numGPUs=1; $numGPUs<${MAX_GOOD_GPUs}; numGPUs++ )); do
+        # numGPUs:        Anzahl zu berechnender GPU-Kombinationen mit numGPUs GPU's
         #
         echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
         for (( numGPUs=2; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
@@ -637,8 +608,7 @@ while : ; do
             #            $3 = Ende letzter Pointer 5
             #            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
             #                 in der sie sich selbst gerade befindet.
-            endStr="GPU von ${MAX_GOOD_GPUs} läuft:"
-            if [[ ${numGPUs} -gt 1 ]]; then endStr="GPUs von ${MAX_GOOD_GPUs} laufen:"; fi
+            endStr="GPUs von ${MAX_GOOD_GPUs} laufen:"
             echo "Berechnung aller Kombinationen des Falles, dass nur ${numGPUs} ${endStr}"
             _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES \
                 ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))

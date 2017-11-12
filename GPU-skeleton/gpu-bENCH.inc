@@ -47,13 +47,13 @@ function _expand_IMPORTANT_BENCHMARK_JSON ()
     # Zu 1. Backup Datei erstellen
     #
     # IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
-    cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.BAK
+    cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK
 
     #
     # Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um MinerVersion, etc.
     # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien gibt
     #
-    grep -m1 -c "\"MinerVersion\": \"" ${IMPORTANT_BENCHMARK_JSON}.BAK &>/dev/null \
+    grep -m1 -c "\"MinerVersion\": \"" ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK &>/dev/null \
         || gawk -e 'BEGIN {FS=":"} \
            match( $0, /"MinerName": "[[:alnum:]]*/ )\
                { M=substr($0, RSTART, RLENGTH); miner=tolower( substr(M, index(M,":")+3 ) ); \
@@ -67,14 +67,14 @@ function _expand_IMPORTANT_BENCHMARK_JSON ()
                  print "      \"GPUTargetFanSpeed\": 0,"; \
                  print "      \"PowerLimit\": 0," \
                } \
-           {print}' ${IMPORTANT_BENCHMARK_JSON}.BAK >${IMPORTANT_BENCHMARK_JSON}
+           {print}' ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK >${IMPORTANT_BENCHMARK_JSON}
 
     #
     # 2. Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um die Felder
     #    MAX_WATT, HASHCOUNT, HASH_DURATION, BENCH_DATE, BENCH_KIND, MinerFee
     # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien mehr gibt.
     #
-    grep -m1 -c "\"MAX_WATT\": " ${IMPORTANT_BENCHMARK_JSON}.BAK &>/dev/null \
+    grep -m1 -c "\"MAX_WATT\": " ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK &>/dev/null \
         || gawk -e 'BEGIN {FS=":"} \
            match( $0, /"WATT": / )\
                { print $0;        \
@@ -85,7 +85,7 @@ function _expand_IMPORTANT_BENCHMARK_JSON ()
                  print "      \"BENCH_KIND\": 0,"; \
                  print "      \"MinerFee\": 0,";   \
                  next } \
-           {print}' ${IMPORTANT_BENCHMARK_JSON}.BAK >${IMPORTANT_BENCHMARK_JSON}
+           {print}' ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK >${IMPORTANT_BENCHMARK_JSON}
 
 }
 
