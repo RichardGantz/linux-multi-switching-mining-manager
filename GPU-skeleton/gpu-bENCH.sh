@@ -21,7 +21,12 @@ _UpdateIt_=0
 # Wo befinden wir uns eigentlich?
 PWD=$(pwd | gawk -e 'BEGIN {FS="/"} { print $NF }')
 if [ "$PWD" == "GPU-skeleton" ]; then
+    #
     echo "Befinde mich im Verteilungsverzeichnis" >/dev/null
+    # Hier drin machen wir den 
+    #     touch -r benchmark_skeleton.json gpu-bENCH.inc
+    # wenn das Skript gpu-bENCH.inc bzw. die Funktionen darin stabil funktionieren.
+    #
 elif [ "${PWD:0:4}" == "GPU-" ]; then
     #
     #echo "Befinde mich in einem GPU-Unterverzeichnis"
@@ -40,8 +45,13 @@ elif [ "${PWD:0:4}" == "GPU-" ]; then
     if [ ! $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc) -eq $(stat -c %Y gpu-bENCH.inc) ]; then
         #
         # Quell-bENCH ist seit dem Runterkopieren verändert worden, aber möglicherweise INKONSISTENT
+        # Deshalb haben wir vereinbart, dass dieser Zustand so lang als INKONSISTENT anzusehen ist,
+        # bis die beiden Dateien benchmark_skeleton.json und gpu-bENCH.inc absichtlich auf das selbe Datum gesetzt werden.
+        #     touch -r benchmark_skeleton.json gpu-bENCH.inc
+        # Das setzt das Editierungsdatum der gpu-bENCH.inc im letztlichen Erfolgsfall zwar VORAUS,
+        #     aber das spielt ja keine Rolle. Sie wäre so oder so der GPU-eigenen gpu-bENCH.inc voraus.
         #
-        if [ $(stat -c %Y ../GPU-skeleton/benchmark_skeleton.json) -gt $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc ) ]; then
+        if [ $(stat -c %Y ../GPU-skeleton/benchmark_skeleton.json) -eq $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc ) ]; then
             #
             # Quell-bENCH ist seit dem Runterkopieren verändert worden, aber jetzt als KONSISTENT signalisiert!
             # Diese Bedingung sagt aus, dass ein konsistenter gpu-bENCH.inc Zustand hergestellt wurde und
@@ -50,7 +60,7 @@ elif [ "${PWD:0:4}" == "GPU-" ]; then
             # UND dass die neue gpu-bENCH.inc nun ins eigene Verzeichnis geholt werden kann
             # UND dass die eigene benchmark_${gpu_uuid}.json nun angepasst werden kann.
             #
-            cp -f ../GPU-skeleton/gpu-bENCH.inc .
+            cp -f -p ../GPU-skeleton/gpu-bENCH.inc .   # Option -p ist WICHTIG, damit die Dateien die selbe Zeit haben.
             source gpu-bENCH.inc
             _expand_IMPORTANT_BENCHMARK_JSON
         else
