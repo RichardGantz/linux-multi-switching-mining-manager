@@ -198,7 +198,8 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     declare -i tempazb=$(< "tempazb") 
 
     avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
-    MAX_WATT=$(($(< "watt_bensh_30s_max.out")+1))
+    MAX_WATT=$(< "watt_bensh_30s_max.out")
+    MAX_WATT=$((${MAX_WATT/%[.][[:digit:]]*}+1))
     BENCH_DATE=$BENCH_OR_TWEAK_END
 
     if [ ${tempazb} -gt 1 ] ; then
@@ -350,15 +351,6 @@ function _On_Exit () {
         # ---> MUSS DAS BENCHFILE UACH IM TWEAKMODE NOCHMAL SCANNEN! <---
         #
         BENCH_OR_TWEAK_END=$(date --utc +%s)
-        # Das stimmt im Falle des Tweakens nicht so genau.
-        # Hier sollten wir nur die Dauer seit der letzten Parameteränderung messen, ODER ???
-        #
-        # --->   IST EVENTUELL NOCH ZU KORRIGIEREN   <---
-        # HASH_DURATION=$((${BENCH_OR_TWEAK_END}-${BENCH_DATE}))
-        #
-        # Wir korrigieren das jetzt mal:
-        # Die Wattwerte werden auf jeden Fall sekündlich ermittelt!
-        HASH_DURATION=${wattCount}
 
         # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
         if [ -f ${BENCHLOGFILE} ]; then
@@ -434,6 +426,16 @@ function _On_Exit () {
         printf " Max WATT Wert: %12s\n" $(< watt_bensh_30s_max.out)
         printf " Summe HASH   : %12s; Messwerte: %5s\n" ${hashSum:0:$(($(expr index "$hashSum" ".")+2))} $hashCount
         printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} ${temp_einheit}
+
+        # Das stimmt im Falle des Tweakens nicht so genau.
+        # Hier sollten wir nur die Dauer seit der letzten Parameteränderung messen, ODER ???
+        #
+        # --->   IST EVENTUELL NOCH ZU KORRIGIEREN   <---
+        # HASH_DURATION=$((${BENCH_OR_TWEAK_END}-${BENCH_DATE}))
+        #
+        # Wir korrigieren das jetzt mal:
+        # Die Wattwerte werden auf jeden Fall sekündlich ermittelt!
+        HASH_DURATION=${wattCount}
 
         # Es sind ja wenigstens avgHASH und avgWATT ermittelt worden.
         _edit_BENCHMARK_JSON_and_put_in_the_new_values
