@@ -14,10 +14,12 @@
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
 debug=0
+
 # Damit bei vorzeitigem Abbruch und nicht gültigem Variableninhalt/-zustand kein Mist in die .json geschrieen wird,
 # setzen wir dieses Flag erst genau dann, wenn das Benchmarking auch tatsächlich losgeht.
 # Schiefgehen kann dann natürlich immer noch was, aber die Benutzerabbrüche sind schon mal keine Problemquelle mehr.
 BENCHMARKING_WAS_STARTED=0
+
 # Um sicherzustellen, dass alle Werte in der Endlosschleife gültig berechnet und abgeschlossen wurden,
 # wird diese Datei kurz vor dem sleep 1 in der Endlosschleife erzeugt.
 # tweak_commands.sh setzt den kill -15 Befehl dann nur ab, wenn diese Datei existiert.
@@ -38,6 +40,7 @@ ATTENTION_FOR_USER_INPUT=1      # -a : setzt die Attention auf 0, übergeht mens
                                 #      ---------> MUSS ERST IMPLEMENTIERT WERDEN !!!!!!!!!       <---------
                                 #      ---------> IM MOMENT NUR DIE UNTERDRÜCKUNG VON AUSGABEN   <---------
 
+initialParameters="$*"
 #POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     parameter="$1"
@@ -88,48 +91,11 @@ done
 #set -- "${POSITIONAL[@]}" # restore positional parameters
 
 function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
-    ######################## 
-    # 
-    # Benschmarkspeeed HASH und WATT werte
-    # (original benchmakŕk.json) für herrausfinden wo an welcher stelle ersetzt werden muss  
-    # 
-    # bechchmarkfile="benchmark_${gpu_uuid}.json"
-    # gpu index uuid in "../${gpu_uuid}/benchmark_${gpu_uuid}.json" 
-    #
-    # Zu 1. Backup Datei erstellen
-    #
-    # IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
-    cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.BAK
-
-    # Den EXAKTEN Textblock für ${algo} && ${miner_name} && ${miner_version} raussuchen
-    # Zeilennummern in temporärer Datei merken
-    # Das folgende Kommando funktioniert exakt wie das gut dokumentierte:
-    #sed -n -e '/"Name": "'${algo}'",/{N;N;N;/"MinerName": "'${miner_name}'",/bversion;d;:version;N;/"MinerVersion": "'${miner_version}'/bmatched;d;:matched;N;=}' \
-
-    sed -n -e '/"Name": "'${algo}'",/ {                   # if found...
-        N                                                 # append N(ext) line to pattern-space, here "NiceHashID"
-        N                                                 # append N(ext) line to pattern-space, "MinerBaseType"
-        N                                                 # append N(ext) line to pattern-space, "MinerName"
-        /"MinerName": "'${miner_name}'",/ b version       # if found ${miner_name} b(ranch) to :version
-        d                                                 # d(elete) pattern-space, read next line and start from beginning
-        :version
-        N                                                 # append N(ext) line to pattern-space, "MinerVersion"
-        /"MinerVersion": "'${miner_version}'"/ b matched  # if found ${miner_version} b(ranch) to :matched
-        d                                                 # d(elete) pattern space, read next line and start from beginning
-        :matched
-        N                                                 # append N(ext) line to pattern-space, here "BenchmarkSpeed"
-        =                                                 # print line number, here line of "BenchmarkSpeed"
-        Q100                                              # Quit immediately with exit-Status 100
-        }' \
-        ${IMPORTANT_BENCHMARK_JSON} \
-        > tempazb
-
-    #" <-- wegen richtigem Highlightning in meinem proggi ... bitte nicht entfernen
-    ## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
-    # cat benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json |grep -n -A 4 equihash | grep BenchmarkSpeed 
-    # Zeilennummer ; Name ; HASH, 
-    # 80-      "BenchmarkSpeed": 469.765087, 
- 
+    ####################################################################################
+    ###
+    ###                        7. SCHREIBEN DER DATEN DES BENCHMARKING
+    ###
+    ####################################################################################
 
     # 
     # ccminer log vom algo test/benchmark_$algo_${gpu_uuid}.log 
@@ -156,7 +122,6 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
     #
     #######################################
-
     # herrausfiltern ob KH,MH ....
     case "${temp_einheit:0:1}" in
         S|H) faktor=1                  ;;
@@ -167,10 +132,42 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
         P)   faktor=$((${k_base}**5))  ;;
         *)   echo "Shit: Unknown Umrechnungsfaktor '${temp_einheit:0:1}'"
     esac
-
     avgHASH=$(echo "${avgHASH} * $faktor" | bc)
     echo "HASHWERT wurde in Einheit ${temp_einheit:1} umgerechnet: $avgHASH"
 
+    # Die WATT-Werte noch zu Integern machen und dabei aufrunden
+    avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
+    MAX_WATT=$((${MAX_WATT/%[.][[:digit:]]*}+1))
+
+    # Der Zeitstempel dieser Messung
+    BENCH_DATE=$BENCH_OR_TWEAK_END
+
+    # Den EXAKTEN Textblock für ${algo} && ${miner_name} && ${miner_version} raussuchen
+    # Zeilennummern in temporärer Datei merken
+    sed -n -e '/"Name": "'${algo}'",/{                     # if found ${algo}
+         N;N;N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 3 lines; if found ${miner_name}
+             N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
+         N;=;Q100}}};                                      # appe(N)d 1 line;  print line-number; Quit and set $?=100
+         ${Q99}                                            # on last line Quit and set $?=99 (NOT FOUND)
+         ' \
+        ${IMPORTANT_BENCHMARK_JSON} \
+        > tempazb
+
+    #" <-- wegen richtigem Highlightning in meinem proggi ... bitte nicht entfernen
+    ## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
+    # cat benchmark_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.json |grep -n -A 4 equihash | grep BenchmarkSpeed 
+    # Zeilennummer ; Name ; HASH, 
+    # 80-      "BenchmarkSpeed": 469.765087, 
+    # 
+    # Benschmarkspeeed HASH und WATT werte
+    # (original benchmakŕk.json) für herrausfinden wo an welcher stelle ersetzt werden muss  
+    # 
+    # bechchmarkfile="benchmark_${gpu_uuid}.json"
+    # gpu index uuid in "../${gpu_uuid}/benchmark_${gpu_uuid}.json" 
+    #
+    # Zu 1. Backup Datei erstellen
+    #
+    cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.BAK
 
     #########
     #
@@ -196,11 +193,6 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
     declare -i tempazb=$(< "tempazb") 
-
-    avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
-    MAX_WATT=$(< "watt_bensh_30s_max.out")
-    MAX_WATT=$((${MAX_WATT/%[.][[:digit:]]*}+1))
-    BENCH_DATE=$BENCH_OR_TWEAK_END
 
     if [ ${tempazb} -gt 1 ] ; then
         echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
@@ -309,12 +301,12 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             ${power_limit}
             ${less_threads}
         )
-        echo "Der Algo wird zur Benchmark Datei hinzugefügt"
-        sed -i -e '/^ \+]/,/}$/d'     ${IMPORTANT_BENCHMARK_JSON}
+        echo "Der Algo wird zur Datei ${IMPORTANT_BENCHMARK_JSON} hinzugefügt"
+        sed -i -e '/^ \+]/,/}$/d'  ${IMPORTANT_BENCHMARK_JSON}
         printf ",   {\n"         >>${IMPORTANT_BENCHMARK_JSON}
         for (( i=0; $i<${#BLOCK_FORMAT[@]}; i++ )); do
             printf "${BLOCK_FORMAT[$i]}" "${BLOCK_VALUES[$i]}" \
-                | tee -a ${IMPORTANT_BENCHMARK_JSON}
+                | tee -a           ${IMPORTANT_BENCHMARK_JSON}
         done
         printf "    }\n  ]\n}\n" >>${IMPORTANT_BENCHMARK_JSON}
     fi
@@ -323,12 +315,18 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 function _delete_temporary_files () {
     rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
        temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb temp_hash temp_einheit \
-       HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on_different_lines_cmd ccminer.pid \
+       HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on_different_lines_cmd* ccminer.pid \
        ${READY_FOR_SIGNALS}
 }
 _delete_temporary_files
 
 function _On_Exit () {
+    ####################################################################################
+    ###
+    ###                        6. AUSWERTUNG DES BENCHMARKING
+    ###
+    ####################################################################################
+
     # Als wichtiges Kennzeichen für den Ausstieg, denn da werden die Logdateien gesichert
     # und die Werte in die .json Datei geschrieben.
     # Das darf nicht geschehen, wenn das Programm vorher abnormal beendet wurde und gar keine Daten erhoben wurden
@@ -336,11 +334,20 @@ function _On_Exit () {
     if [ ${BENCHMARKING_WAS_STARTED} -eq 1 ]; then
         # CCminer stoppen
         echo "... Wattmessen ist beendet!!" 
-        echo "Beenden des Miners"
+        echo "Beenden des Miners..."
+        kill -15 $(< "ccminer.pid")
+
+        echo "Beenden des Logger-Terminals..."
+        kill_pids=$(ps -ef \
+           | grep -e "${Bench_Log_PTY_Cmd}" \
+           | grep -v 'grep -e ' \
+           | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
+        if [ ! "$kill_pids" == "" ]; then
+            printf "Killing all ${Bench_Log_PTY_Cmd} processes... "
+            kill $kill_pids
+            printf "done.\n"
+        fi
         if [ ! $NoCards ]; then
-            ## Beenden des miners
-            #ccminer=$(cat "ccminer.pid")
-            kill -15 $(< "ccminer.pid")
             sleep 2
         fi  ## $NoCards
         #
@@ -348,7 +355,7 @@ function _On_Exit () {
         # Das ist vor allem für den Tweak-Fall interessant, weil der das $BENCHLOGFILE nochmal
         # durchgehen muss! Denn es könnte noch ein Wert dazu gekommen sein!
         # ---> BITTE NOCHMAL NACHPROGRAMMIEREN!                      <---
-        # ---> MUSS DAS BENCHFILE UACH IM TWEAKMODE NOCHMAL SCANNEN! <---
+        # ---> MUSS DAS BENCHFILE AUCH IM TWEAKMODE NOCHMAL SCANNEN! <---
         #
         BENCH_OR_TWEAK_END=$(date --utc +%s)
 
@@ -420,10 +427,12 @@ function _On_Exit () {
             ### 
         fi
             
+        MAX_WATT=$(< "watt_bensh_30s_max.out")
+
         # Ist das wirklich noch nötig?
         printf " Summe WATT   : %12s; Messwerte: %5s\n" $wattSum $wattCount
         printf " Durchschnitt : %12s\n" $avgWATT
-        printf " Max WATT Wert: %12s\n" $(< watt_bensh_30s_max.out)
+        printf " Max WATT Wert: %12s\n" ${MAX_WATT}
         printf " Summe HASH   : %12s; Messwerte: %5s\n" ${hashSum:0:$(($(expr index "$hashSum" ".")+2))} $hashCount
         printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} ${temp_einheit}
 
@@ -630,6 +639,12 @@ miner_version=${minerVersion[$(($choice-1))]}
 ################################################################################
 ####################################################################################
 
+################################################################################
+###
+###          4.1. Anzeige aller fehlenden Algos, die möglich wären
+###
+################################################################################
+
 # Checken, ob wir für alle Algos auch schon Werte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json haben
 # Diejenigen Algos anzeigen, zu denen es noch keine Eintragsmöglichkeit gibt.
 # Das wurde nach dem Einlesen in ALLE_MINER gemacht und es wurden auch die beiden Arrays
@@ -643,7 +658,11 @@ if [ ${#actMissingAlgos[@]} -gt 0 ]; then
     done
 fi
 
-# Auswahl des Algos durch den Benutzer...
+################################################################################
+###
+###          4.2. Auswahl des Algos durch den Benutzer...
+###
+################################################################################
 
 # Wegen des Startparameters die Miner... oder sollen wir das auch auf eine glatte Variable umstellen,
 # die man ohne Funktion rufen kann? Könnte man sich einen Funktionsaufruf sparen.
@@ -676,17 +695,23 @@ else
     error_msg+="ODER die Dateien sind vorhanden, aber leer."
     error_msg+="Bitte erst eine oder beide dieser Dateien erstellen.\n"
     printf ${error_msg}
-    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"$*\" neu gestartet..." restart
-    exec $0 "$*"
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+    exec $0 ${initialParameters}
 fi
 algo=${menuItems[${algonr:1}]}
 
 echo "das ist der Algo den du ausgewählt hast : ${algo}"
 if [ "$algo" = "scrypt" ] ; then
     echo "Dieser Algo ist nicht mehr mit Grafikkarten lohnenswert. Dafür ermitteln wir keine Werte mehr."
-    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"$*\" neu gestartet..." restart
-    exec $0 "$*"
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+    exec $0 ${initialParameters}
 fi
+
+################################################################################
+###
+###          4.3. Vorbereitung aller benötigten Variablen
+###
+################################################################################
 
 # Ein paar Standardverzeichnisse zur Verbesserung der Übersicht:
 if   [ ! -d ../${gpu_uuid}/benchmarking ]; then
@@ -701,11 +726,34 @@ fi
 LOGPATH="../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version}"
 BENCHLOGFILE="test/benchmark_${algo}_${gpu_uuid}.log"
 TWEAKLOGFILE="test/tweak_${algo}_${gpu_uuid}.log"
-rm -f ${BENCHLOGFILE} ${TWEAKLOGFILE}
+rm -f ${BENCHLOGFILE} ${TWEAKLOGFILE} COUNTER watt_bensh_30s.out watt_bensh_30s_max.out
 
+algorithm="${algo}#${miner_name}#${miner_version}"
 # Sync mit tweak_command.sh
-echo "${algo}#${miner_name}#${miner_version}" >benching_${gpu_idx}_algo
+echo "${algorithm}" >benching_${gpu_idx}_algo
 
+if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
+    ###
+    ### Variablen für TWEAKING MODE 
+    ###
+    TWEAK_CMD_LOG=tweak_commands.log
+    rm -f ${TWEAK_CMD_LOG}
+    touch ${TWEAK_CMD_LOG}
+    declare -i TWEAK_CMD_LOG_AGE
+    declare -i new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
+    tweak_msg=''
+    declare -A TWEAK_MSGs
+    echo "$TWEAK_CMD_LOG"       >tweak_to_these_logs
+    echo "watt_bensh_30s.out"  >>tweak_to_these_logs
+    echo "${BENCHLOGFILE}"     >>tweak_to_these_logs
+    declare -i queryCnt=0
+fi
+countWatts=1
+countHashes=1
+declare -i COUNTER=0
+declare -i wattCount=0
+declare -i hashCount=0
+MAX_WATT=0
 
 ####################################################################################
 ################################################################################
@@ -714,6 +762,12 @@ echo "${algo}#${miner_name}#${miner_version}" >benching_${gpu_idx}_algo
 ###
 ################################################################################
 ####################################################################################
+
+################################################################################
+###
+###          5.1. Zusammensetzung des Startkommandos
+###
+################################################################################
 
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle gleich ist.
@@ -730,33 +784,34 @@ algo_port=${PORTs[${algo}]}
 
 # Diese Funktion musste leider erfunden werden wegen der internen anderen Algonamen,
 # die NiceHash willkürlich anders benannt hat.
-# Im Benchmaring-Fall braucht diese Funktion eigentlich sowieso nicht gerufen werden,
-# deshalb kommentieren wir sie hier zur Gedächtnisstütze aus, damit wir es im Live Fall nicht vergessen.
-
 # So rufen wir eine Funktion, wenn sie definiert wurde.
 declare -f PREP_BENCH_PARAMETERSTACK &>/dev/null && PREP_BENCH_PARAMETERSTACK
-paramlist=""
+PARAMETERSTACK=""
 for (( i=0; $i<${#BENCH_PARAMETERSTACK[@]}; i++ )); do
     declare -n param="${BENCH_PARAMETERSTACK[$i]}"
-    paramlist+="${param} "
+    PARAMETERSTACK+="${param} "
 done
-printf -v minerstart "${BENCH_START_CMD}" ${paramlist}
-echo "${minerstart} >>${BENCHLOGFILE} &"
 
+# JETZT KOMMT DAS KOMPLETTE KOMMANDO ZUM STARTEN DES MINERS IN DIE VARIABLE ${minerstart}
+printf -v minerstart "${BENCH_START_CMD}" ${PARAMETERSTACK}
 
-# Als wichtiges Kennzeichen für den Ausstieg, denn da werden die Logdateien gesichert
-# und die Werte in die .json Datei geschrieben.
-# Das darf nicht geschehen, wenn das Programm vorher abnormal beendet wurde und gar keine Daten erhoben wurden
-# 
-BENCHMARKING_WAS_STARTED=1
+################################################################################
+###
+###          5.2. Startschuss setzen und Startkommando absetzen
+###
+################################################################################
+
 BENCH_DATE=$(date --utc +%s)
+echo "${minerstart} >>${BENCHLOGFILE} &"
+BENCHMARKING_WAS_STARTED=1
 
-if [ ! $NoCards ]; then
-    ${minerstart} >>${BENCHLOGFILE} &
-    echo $! > ccminer.pid
-    gnome-terminal -x bash -c "tail -f ${BENCHLOGFILE}"
-    sleep 3
-else
+################################################################################
+###
+###          5.3. Miner Starten und Logausgabe in eigenes Terminal umleiten
+###
+################################################################################
+
+if [ $NoCards ]; then
     if [ ! -f "${BENCHLOGFILE}" ]; then
         if [ "${miner_name}" == "miner" ]; then
             #sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log >${BENCHLOGFILE}
@@ -767,35 +822,20 @@ else
     fi
 fi  ## $NoCards
 
-
-
-
-if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
-    ###
-    ### Variablen für TWEAKING MODE 
-    ###
-    TWEAK_CMD_LOG=tweak_commands.log
-    rm -f ${TWEAK_CMD_LOG}
-    touch ${TWEAK_CMD_LOG}
-    declare -i TWEAK_CMD_LOG_AGE
-    declare -i new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
-    tweak_msg=''
-    declare -A TWEAK_MSGs
-    echo "$TWEAK_CMD_LOG"                          >tweak_to_these_logs
-    echo "watt_bensh_30s.out"                     >>tweak_to_these_logs
-    echo "${BENCHLOGFILE}" >>tweak_to_these_logs
-    declare -i queryCnt=0
+${minerstart} >>${BENCHLOGFILE} &
+echo $! > ccminer.pid
+Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
+gnome-terminal -e "${Bench_Log_PTY_Cmd}"
+if [ ! $NoCards ]; then
+    sleep 3
 fi
-declare -i wattCount=0
-
-rm -f COUNTER watt_bensh_30s.out watt_bensh_30s_max.out
-countWatts=1
-countHashes=1
-declare -i COUNTER=0
-declare -i hashCount=0
-MAX_WATT=0
 
 
+################################################################################
+###
+###          5.4. Wattmessung starten (3 Sekunden nach dem Minerstart !? )
+###
+################################################################################
 
 echo "Starten des Wattmessens..."
 
@@ -964,13 +1004,6 @@ if [ ! $NoCards ]; then
     rm ccminer.pid
     sleep 2
 fi  ## $NoCards
-
-
-####################################################################################
-###
-###                        6. AUSWERTUNG DES BENCHMARKING
-###
-####################################################################################
 
 
 ###############################################################################

@@ -100,6 +100,7 @@ _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
 
 _create_ALGOS_in()
 {
+    echo "------------------   Algonames/ID und Speed   ----------------------"
     # Neue Algos aus dem Netz
     # Gültiges Ergebnis .json File fängt so an:
     # {"result":{"algorithms":[
@@ -112,6 +113,7 @@ _create_ALGOS_in()
     if [[ "${algoPageDown}" != "1" ]]; then
         _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${ALGO_NAMES_WEB}" "${ALGO_NAMES_ARR}" "$searchPattern"
     else
+        echo "--------------------------------------------------------------------"
         # Fehler scheint behoben, Benachrichtigung wieder scharf machen
         unset NoAlgoNames_notified NoAlgoNames_recorded
         # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach ALGO_NAMES.in
@@ -227,7 +229,7 @@ while [ 1 -eq 1 ] ; do
     #  We expect to be back in a couple minutes. Thanks for your patience.
     #  Stratum servers should be running as usual."
 
-    echo "---------------------Nicehash-Kurse---------------------------------"
+    echo "------------------   Nicehash-Kurse           ----------------------"
     # Neue Kurse aus dem Netz
     # Gültiges Ergebnis .json File fängt so an:
     # {"result":{"stats":[
@@ -268,7 +270,7 @@ while [ 1 -eq 1 ] ; do
 
     BTC_EUR_KURS_WEB="BTCEURkurs"
 
-    echo "-------------------------BTC-EUR-KURS-Abfrage-----------------------"
+    echo "------------------   BTC-EUR-KURS-Abfrage     ----------------------"
     curl "https://www.bitcoin.de/de" -o ${BTC_EUR_KURS_WEB}
     #
     # Folgende <title> der Webseite kennen wir bisher:

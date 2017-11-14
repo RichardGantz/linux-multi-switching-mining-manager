@@ -24,10 +24,26 @@ find . -depth -name \*.pid -delete
 
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
+ERRLOG=$(basename $0 .sh).err
+rm -f ${ERRLOG}
 
 #
 # Aufräumarbeiten beim ordungsgemäßen kill -15 Signal (SIGTERM)
 #
+function _terminate_all_log_ptys () {
+    for gpu_idx in ${!LOG_PTY_CMD[@]}; do
+        printf "Beenden des Logger-Terminals GPU #${gpu_idx} ... "
+        kill_pids=$(ps -ef \
+          | grep -e "${LOG_PTY_CMD[${gpu_idx}]}" \
+          | grep -v 'grep -e ' \
+          | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
+        if [ ! "$kill_pids" == "" ]; then
+            kill $kill_pids >/dev/null
+            printf "done.\n"
+        fi
+    done
+}
+
 function _terminate_all_processes_of_script () {
     kill_pids=$(ps -ef \
        | grep -e "/bin/bash.*$1" \
@@ -43,6 +59,8 @@ function _terminate_all_processes_of_script () {
 function _On_Exit () {
     _terminate_all_processes_of_script "gpu_gv-algo.sh"
     _terminate_all_processes_of_script "algo_multi_abfrage.sh"
+    _terminate_all_log_ptys
+    # Temporäre Dateien löschen
     rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
@@ -93,6 +111,19 @@ _terminate_all_processes_of_script "algo_multi_abfrage.sh"
 # gpu_gv-algos's zu starten, die erst mal auf SYNCFILE warten
 # und dann algo_multi_abfrage.sh
 
+# Error-Kanal in eigenes Terminal ausgeben
+unset ii; declare -i ii=0
+unset LOG_PTY_CMD; declare -ag LOG_PTY_CMD
+LOG_PTY_CMD[999]="tail -f ${ERRLOG}"
+exec 2>>${ERRLOG}
+ofsX=$((ii*60+50))
+ofsY=$((ii*30+50))
+let ii++
+gnome-terminal --hide-menubar \
+               --title="MultiMining Error Channel Output" \
+               --geometry="100x24+${ofsX}+${ofsY}" \
+               -e "${LOG_PTY_CMD[999]}"
+
 # Besteht nun hauptsächlich aus der Funktion _func_gpu_abfrage_sh
 source ./gpu-abfrage.sh
 
@@ -121,13 +152,25 @@ while : ; do
         if [ ${uuidEnabledSOLL[${lfdUuid}]} -eq 1 ]; then
             if [ ! -f ${lfdUuid}/gpu_gv-algo.pid ]; then
                 workdir=$(pwd)
+
+                # Ins GPU-Verzeichnis wechseln
                 cd ${lfdUuid}
-                echo "GPU #$(< gpu_index.in): Starting process in the background..."
-                #    Für die Logs in eigenem Terminalfenster:
-                #>>> rm -f gpu_gv-algo.log
-                #>>> ./gpu_gv-algo.sh >>gpu_gv-algo.log &
-                #>>> gnome-terminal -x bash -c "tail -f gpu_gv-algo.log"
-                ./gpu_gv-algo.sh &
+                lfd_gpu_idx=$(< gpu_index.in)
+                GPU_GV_LOG="gpu_gv-algo_${lfdUuid}.log"
+                rm -f ${GPU_GV_LOG}
+                echo "GPU #${lfd_gpu_idx}: Starting process in the background..."
+                ./gpu_gv-algo.sh >>${GPU_GV_LOG} &
+                # gnome-terminal -x ./abc.sh
+                #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
+                ofsX=$((ii*60+50))
+                ofsY=$((ii*30+50))
+                LOG_PTY_CMD[${lfd_gpu_idx}]="tail -f ${GPU_GV_LOG}"
+                gnome-terminal --hide-menubar \
+                               --title="GPU #${lfd_gpu_idx}  -  ${lfdUuid}" \
+                               --geometry="100x24+${ofsX}+${ofsY}" \
+                               -e "${LOG_PTY_CMD[${lfd_gpu_idx}]}"
+                let ii++
+
                 cd ${workdir} >/dev/null
             fi
         fi
@@ -137,8 +180,23 @@ while : ; do
     # Dann starten wir die algo_multi_abfrage.sh, wenn sie nicht schon läuft...
     #
     if [ ! -f algo_multi_abfrage.pid ]; then
-        echo "Starting algo_multi_abfrage.sh in the background..."
-        ./algo_multi_abfrage.sh &
+        if [ 1 -eq 1 ]; then
+            echo "Starting algo_multi_abfrage.sh in the background..."
+            ./algo_multi_abfrage.sh >>${ERRLOG} &
+        else
+            # Das lohnt sich erst, wenn wir den curl dazu gebracht haben, ebenfalls umzuleiten...
+            # gnome-terminal -x ./abc.sh
+            #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
+            ofsX=$((ii*60+50))
+            ofsY=$((ii*30+50))
+            rm -f algo_multi_abfrage.log
+            echo "Starting algo_multi_abfrage.sh in the background..."
+            ./algo_multi_abfrage.sh >>algo_multi_abfrage.log &
+            gnome-terminal --hide-menubar \
+                           --title="\"RealTime\" Algos und Kurse aus dem Web" \
+                           --geometry="100x24+${ofsX}+${ofsY}" \
+                           -e "tail -f algo_multi_abfrage.log"
+        fi
     fi
 
     ###############################################################################################
@@ -895,6 +953,7 @@ while : ; do
         fi
     fi
 
+    printf "=========     Ende des Zyklus      =========\n"
     while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
         sleep 1
     done
