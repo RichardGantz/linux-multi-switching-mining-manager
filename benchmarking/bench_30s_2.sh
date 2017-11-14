@@ -224,47 +224,47 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
         echo "$((tempazb-4))s/: [0-9.]*,$/: ${ALGO_IDs[${algo}]},/"  >sed_insert_on_different_lines_cmd
         echo     "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"           >>sed_insert_on_different_lines_cmd
         echo "$((tempazb+2))s/: [0-9.]*,$/: ${avgWATT},/"           >>sed_insert_on_different_lines_cmd
-        if [ ${#MAX_WATT} -ne 0 ]; then
+        if [[ ${#MAX_WATT} -ne 0 ]]; then
             echo "der MAX_WATT Wert ${MAX_WATT} wird nun in der Zeile $((tempazb+3)) eingefügt"
             echo "$((tempazb+3))s/: [0-9.]*,$/: ${MAX_WATT},/"      >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#hashCount} -ne 0 ]; then
+        if [[ ${#hashCount} -ne 0 ]]; then
             echo "der HASHCOUNT Wert ${hashCount} wird nun in der Zeile $((tempazb+4)) eingefügt"
             echo "$((tempazb+4))s/: [0-9]*,$/: ${hashCount},/"      >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#HASH_DURATION} -ne 0 ]; then
+        if [[ ${#HASH_DURATION} -ne 0 ]]; then
             echo "der HASH_DURATION Wert ${HASH_DURATION} wird nun in der Zeile $((tempazb+5)) eingefügt"
             echo "$((tempazb+5))s/: [0-9]*,$/: ${HASH_DURATION},/"  >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#BENCH_DATE} -ne 0 ]; then
+        if [[ ${#BENCH_DATE} -ne 0 ]]; then
             echo "der BENCH_DATE Wert ${BENCH_DATE} wird nun in der Zeile $((tempazb+6)) eingefügt"
             echo "$((tempazb+6))s/: [0-9]*,$/: ${BENCH_DATE},/"     >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#BENCH_KIND} -ne 0 ]; then
+        if [[ ${#BENCH_KIND} -ne 0 ]]; then
             echo "der BENCH_KIND Wert ${BENCH_KIND} wird nun in der Zeile $((tempazb+7)) eingefügt"
             echo "$((tempazb+7))s/: [0-9]*,$/: ${BENCH_KIND},/"     >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#MinerFee} -ne 0 ]; then
+        if [[ ${#MinerFee} -ne 0 ]]; then
             echo "der MinerFee Wert ${MinerFee} wird nun in der Zeile $((tempazb+8)) eingefügt"
             echo "$((tempazb+8))s/: [0-9]*,$/: ${MinerFee},/"       >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#grafik_clock} -ne 0 ]; then
+        if [[ ${#grafik_clock} -ne 0 ]]; then
             echo "der GraphicClock Wert ${grafik_clock} wird nun in der Zeile $((tempazb+9)) eingefügt"
             echo "$((tempazb+9))s/: [0-9]*,$/: ${grafik_clock},/"   >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#memory_clock} -ne 0 ]; then
+        if [[ ${#memory_clock} -ne 0 ]]; then
             echo "der MemoryClock Wert ${memory_clock} wird nun in der Zeile $((tempazb+10)) eingefügt"
             echo "$((tempazb+10))s/: [0-9]*,$/: ${memory_clock},/"  >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#fan_speed}    -ne 0 ]; then
+        if [[ ${#fan_speed}    -ne 0 ]]; then
             echo "der FanSpeed Wert ${fan_speed} wird nun in der Zeile $((tempazb+11)) eingefügt"
             echo "$((tempazb+11))s/: [0-9]*,$/: ${fan_speed},/"     >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#power_limit}  -ne 0 ]; then
+        if [[ ${#power_limit}  -ne 0 ]]; then
             echo "der PowerLimit Wert ${power_limit} wird nun in der Zeile $((tempazb+12)) eingefügt"
             echo "$((tempazb+12))s/: [0-9]*,$/: ${power_limit},/"   >>sed_insert_on_different_lines_cmd
         fi
-        if [ ${#less_threads}  -ne 0 ]; then
+        if [[ ${#less_threads}  -ne 0 ]]; then
             echo "der LessThreads Wert ${less_threads} wird nun in der Zeile $((tempazb+13)) eingefügt"
             echo "$((tempazb+13))s/: [0-9]*$/: ${less_threads}/"    >>sed_insert_on_different_lines_cmd
         fi
@@ -291,18 +291,18 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             '      \"PowerLimit\": %s,\n'
             '      \"LessThreads\": %s\n'
         )
-        if [ ${#MAX_WATT}            -eq 0 ]; then MAX_WATT=0;        fi
-        if [ ${#hashCount}           -eq 0 ]; then hashCount=0;       fi
-        if [ ${#HASH_DURATION}       -eq 0 ]; then HASH_DURATION=0;   fi
-        if [ ${#BENCH_DATE}          -eq 0 ]; then BENCH_DATE=0;      fi
-        if [ ${#BENCH_KIND}          -eq 0 ]; then BENCH_KIND=0;      fi
-        if [ ${#MinerFee}            -eq 0 ]; then MinerFee=0;        fi
-        if [ ${#miner_base_type}     -eq 0 ]; then miner_base_type=9; fi
-        if [ ${#grafik_clock}        -eq 0 ]; then grafik_clock=0;    fi
-        if [ ${#memory_clock}        -eq 0 ]; then memory_clock=0;    fi
-        if [ ${#fan_speed}           -eq 0 ]; then fan_speed=0;       fi
-        if [ ${#power_limit}         -eq 0 ]; then power_limit=0;     fi
-        if [ ${#less_threads}        -eq 0 ]; then less_threads=0;    fi
+        if [[ ${#MAX_WATT}            -eq 0 ]]; then MAX_WATT=0;        fi
+        if [[ ${#hashCount}           -eq 0 ]]; then hashCount=0;       fi
+        if [[ ${#HASH_DURATION}       -eq 0 ]]; then HASH_DURATION=0;   fi
+        if [[ ${#BENCH_DATE}          -eq 0 ]]; then BENCH_DATE=0;      fi
+        if [[ ${#BENCH_KIND}          -eq 0 ]]; then BENCH_KIND=0;      fi
+        if [[ ${#MinerFee}            -eq 0 ]]; then MinerFee=0;        fi
+        if [[ ${#miner_base_type}     -eq 0 ]]; then miner_base_type=9; fi
+        if [[ ${#grafik_clock}        -eq 0 ]]; then grafik_clock=0;    fi
+        if [[ ${#memory_clock}        -eq 0 ]]; then memory_clock=0;    fi
+        if [[ ${#fan_speed}           -eq 0 ]]; then fan_speed=0;       fi
+        if [[ ${#power_limit}         -eq 0 ]]; then power_limit=0;     fi
+        if [[ ${#less_threads}        -eq 0 ]]; then less_threads=0;    fi
         BLOCK_VALUES=(
             ${algo}
             ${ALGO_IDs[${algo}]}
@@ -354,7 +354,7 @@ function _On_Exit () {
     # und die Werte in die .json Datei geschrieben.
     # Das darf nicht geschehen, wenn das Programm vorher abnormal beendet wurde und gar keine Daten erhoben wurden
     #
-    if [ ${BENCHMARKING_WAS_STARTED} -eq 1 ]; then
+    if [[ ${BENCHMARKING_WAS_STARTED} -eq 1 ]]; then
         # CCminer stoppen
         echo "... Wattmessen ist beendet!!" 
         echo "Beenden des Miners..."
@@ -411,13 +411,13 @@ function _On_Exit () {
         ####################################################################
         #    Aufbereitung der Werte zum Schreiben in die benchmark_*.json
         #
-        temp_einheit=$(cat ${BENCHLOGFILE} | sed -e 's/ *yes!$//g' | grep -m1 "/s$" | gawk -e '{print $NF}')
+        temp_einheit=$(cat ${BENCHLOGFILE} | sed -e 's/ *(yes!)$//g' | grep -m1 "/s$" | gawk -e '{print $NF}')
         if [ ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
             ###
             ### BENCHMARKING MODE was invoked
             ###
             hashCount=$(cat ${BENCHLOGFILE}  \
-                      | sed -e 's/ *yes!$//g' \
+                      | sed -e 's/ *(yes!)$//g' \
                       | grep "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum )\
@@ -854,7 +854,7 @@ for (( i=0; $i<2; i++ )); do
 done
     
 # Fan-Kontrolle nach den Werten in der JSON setzen
-if [ ${FAN_SPEED[${algorithm}]} -eq 0 ]; then
+if [[ ${FAN_SPEED[${algorithm}]} -eq 0 ]]; then
     # Automatik einschalten. Entsprechendes Kommando ist das LETZTE auf dem nvidiaCmd-Array
     printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
 else
@@ -865,7 +865,7 @@ else
 fi
 
 # Power Limit nach den Werten in der JSON setzen
-if [ ${POWER_LIMIT[${algorithm}]} -gt 0 ]; then
+if [[ ${POWER_LIMIT[${algorithm}]} -gt 0 ]]; then
     printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
 fi
 
@@ -1001,7 +1001,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
     #   Wir müssen keine ESC-Sequenzen mehr rausfiltern!
     #       | sed -e 's/\x1B[[][[:digit:]]*m//g' \
     hashCount=$(cat ${BENCHLOGFILE} \
-                       | sed -e 's/ *yes!$//g' \
+                       | sed -e 's/ *(yes!)$//g' \
                        | grep -c "/s$")
     if [ $hashCount -ge $MIN_HASH_COUNT ]; then countHashes=0; fi
 
@@ -1050,7 +1050,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             #         | sed -e 's/\x1B[[][[:digit:]]*m//g' \
             hashCount=$(cat ${BENCHLOGFILE} \
                       | tail -n +$hash_line \
-                      | sed -e 's/ *yes!$//g' \
+                      | sed -e 's/ *(yes!)$//g' \
                       | grep -e "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum ) \
@@ -1068,7 +1068,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             # Farben Escape-Sequenzen müssen wir nicht mehr ausfiltern
             #         | sed -e 's/\x1B[[][[:digit:]]*m//g' \
             hashCount=$(cat ${BENCHLOGFILE} \
-                      | sed -e 's/ *yes!$//g' \
+                      | sed -e 's/ *(yes!)$//g' \
                       | grep "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum )\
@@ -1199,7 +1199,7 @@ printf " Max WATT Wert: %12s\n" $MAX_WATT
 #sed -i -e 's/\x1B[[][[:digit:]]*m//g' ${BENCHLOGFILE}
 
 rm -f temp_hash
-cat ${BENCHLOGFILE} | sed -e 's/ *yes!$//g' | grep "/s$" \
+cat ${BENCHLOGFILE} | sed -e 's/ *(yes!)$//g' | grep "/s$" \
     | tee >(grep -m1 "/s$" | gawk -e '{print $NF}' > temp_einheit) \
     | gawk -e '{hash=NF-1; print $hash }' >>temp_hash
 HASH_temp=$(< "temp_hash")
