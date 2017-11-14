@@ -611,5 +611,26 @@
       "PowerLimit": 75,
       "LessThreads": 0
     }
+,   {
+      "Name": "x11gost",
+      "NiceHashID": 26,
+      "MinerBaseType": 9,
+      "MinerName": "ccminer",
+      "MinerVersion": "2.2.2",
+      "BenchmarkSpeed": 5877760.00,
+      "ExtraLaunchParameters": "",
+      "WATT": 82,
+      "MAX_WATT": 100,
+      "HASHCOUNT": 20,
+      "HASH_DURATION": 412,
+      "BENCH_DATE": 1510692535,
+      "BENCH_KIND": 0,
+      "MinerFee": 0,
+      "GPUGraphicsClockOffset[3]": 0,
+      "GPUMemoryTransferRateOffset[3]": 0,
+      "GPUTargetFanSpeed": 0,
+      "PowerLimit": 0,
+      "LessThreads": 0
+    }
   ]
 }
