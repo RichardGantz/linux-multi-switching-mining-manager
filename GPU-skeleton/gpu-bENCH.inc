@@ -207,8 +207,9 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
                  }' ${IMPORTANT_BENCHMARK_JSON} \
         | tee $bENCH_SRC \
         | readarray -n 0 -O 0 -t READARR
+    constAnzahlParameter=15
     # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
-    for ((i=0; $i<${#READARR[@]}; i+=15)) ; do
+    for (( i=0; $i<${#READARR[@]}; i+=${constAnzahlParameter} )) ; do
         bENCH[${READARR[$i]}]=${READARR[$i+1]}
         declare -ig WATTS[${READARR[$i]}]=${READARR[$i+2]}
         if [[ ${#READARR[$i+1]} -gt 0 && (${#READARR[$i+2]} == 0 || ${READARR[$i+2]} == 0) ]]; then
@@ -251,13 +252,13 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     # Wenn nicht, Ausgabe einer entsprechenden Meldung
 
     for minerName in ${ALLE_MINER}; do
-        read miner_name miner_version <<<"${minerName//#/ }"
-        miner_version=${miner_version%.algos}
-        declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
-        for algo in ${!actInternalAlgos[@]}; do
-            if [ ${#bENCH["${algo}#${miner_name}#${miner_version}"]} -eq 0 ]; then
+        read m_name m_version <<<"${minerName//#/ }"
+        m_version=${m_version%.algos}
+        declare -n actInternalAlgos="Internal_${m_name}_${m_version//\./_}_Algos"
+        for lfdAlgo in ${!actInternalAlgos[@]}; do
+            if [ ${#bENCH["${lfdAlgo}#${m_name}#${m_version}"]} -eq 0 ]; then
                 printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
-                       ${gpu_idx} "${algo}#${miner_name}#${miner_version}"
+                       ${gpu_idx} "${lfdAlgo}#${m_name}#${m_version}"
             fi
         done
     done

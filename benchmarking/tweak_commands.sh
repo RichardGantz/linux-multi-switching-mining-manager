@@ -47,36 +47,39 @@ bENCH_SRC="../${gpu_uuid}/bENCH.in"
 LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ ) {out = out "/" $i }; \
                    print substr(out,2) }')
 
+# Stellt die 5 bekannten Befehle zur Verfügung:
+#nvidia-smi --id=${gpu_idx} -pl 82 (root powerconsumption)
+#nvidia-settings --assign [gpu:${gpu_idx}]/GPUGraphicsClockOffset[3]=170
+#nvidia-settings --assign [gpu:${gpu_idx}]/GPUMemoryTransferRateOffset[3]=360
+#nvidia-settings --assign [fan:${gpu_idx}]/GPUTargetFanSpeed=66
+# Fan-Kontrolle auf MANUELL = 1 oder 0 für AUTOMATISCH
+#nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
+source nvidia-befehle/nvidia-query.inc
+
 workdir=$(pwd)
 cd ../${gpu_uuid}
 # Ist schlechter Stil. Sollte keine Frage sein, dass diese Datei wirklich da ist.
 # Diese Abfrage Muss raus, sobald das sichergestellt ist.
 if [ ! -f gpu-bENCH.sh ]; then cp -f ../GPU-skeleton/gpu-bENCH.sh .; fi
 source gpu-bENCH.sh
-_read_IMPORTANT_BENCHMARK_JSON_in
 cd ${workdir} >/dev/null
+_read_IMPORTANT_BENCHMARK_JSON_in
 
-# Fan-Kontrolle ermöglichen. Heisst: MANUELL. GPUFanControlState=0 heisst AUTOMATIC
-if [ ! $NoCards ]; then
-    nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
-fi
-
-#nvidia-smi --id=${gpu_idx} -pl 82 (root powerconsumption)
-#nvidia-settings --assign [gpu:${gpu_idx}]/GPUGraphicsClockOffset[3]=170
-#nvidia-settings --assign [gpu:${gpu_idx}]/GPUMemoryTransferRateOffset[3]=360
-#nvidia-settings --assign [fan:${gpu_idx}]/GPUTargetFanSpeed=66
-
-nvidiaCmd[0]="nvidia-settings --assign [gpu:%i]/GPUGraphicsClockOffset[3]=%i"
-nvidiaCmd[1]="nvidia-settings --assign [gpu:%i]/GPUMemoryTransferRateOffset[3]=%i"
-nvidiaCmd[2]="nvidia-settings --assign [fan:%i]/GPUTargetFanSpeed=%i"
-nvidiaCmd[3]="./nvidia-befehle/smi --id=%i -pl %i"
-#declare -a nvidiaPara=( 0 0 0 0 )
 declare -a nvidiaPara=(
     ${GRAFIK_CLOCK[${algorithm}]}
     ${MEMORY_CLOCK[${algorithm}]}
     ${FAN_SPEED[${algorithm}]}
     ${POWER_LIMIT[${algorithm}]}
 )
+
+# Fan-Kontrolle ermöglichen. Heisst: MANUELL. GPUFanControlState=0 heisst AUTOMATIC
+if [ ! $NoCards ]; then
+    #nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
+    printf -v cmd "${nvidiaCmd[-1]}" ${gpu_idx} 1
+    ${cmd}
+fi
+# Die Fan-Kontrolle MANUELL brauchen wir hier drin nicht mehr.
+unset nvidiaCmd[-1]
 
 echo "Die gewünschte Logdatei für die Tweaking-Kommandos lautet: $OWN_LOGFILE"
 echo "Zusätzlich muss das Kommando in die folgenden Dateien geschrieben werden:"

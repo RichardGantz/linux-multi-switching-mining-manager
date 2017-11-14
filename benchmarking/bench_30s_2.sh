@@ -34,11 +34,13 @@ declare -i MIN_HASH_COUNT=20    # -m Anzahl         : Mindestanzahl Hashberechnu
 declare -i MIN_WATT_COUNT=30    # -w Anzahl Sekunden: Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
 STOP_AFTER_MIN_REACHED=1        # -t : setzt Abbruch nach der Mindestlaufzeit- und Mindest-Hashzahleenermittlung auf 0
                                 #      Das ist der Tweak-Mode. Standard ist der Benchmark-Modus
-BENCH_KIND=2                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown
+BENCH_KIND=2                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; 888 == FullPowerMode
 ATTENTION_FOR_USER_INPUT=1      # -a : setzt die Attention auf 0, übergeht menschliche Eingaben
                                 #      ---------> und wird über Variablen und Dateien gesteuert  <---------
                                 #      ---------> MUSS ERST IMPLEMENTIERT WERDEN !!!!!!!!!       <---------
                                 #      ---------> IM MOMENT NUR DIE UNTERDRÜCKUNG VON AUSGABEN   <---------
+LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ ) {out = out "/" $i }; \
+                   print substr(out,2) }')
 
 initialParameters="$*"
 #POSITIONAL=()
@@ -52,17 +54,22 @@ while [[ $# -gt 0 ]]; do
             ;;
         -w|--min-watt-seconds)
             MIN_WATT_COUNT="$2"
-            BENCH_KIND=3                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown
+            BENCH_KIND=3               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
             shift 2
             ;;
         -m|--min-hash-count)
             MIN_HASH_COUNT="$2"
-            BENCH_KIND=3                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown
+            BENCH_KIND=3               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
             shift 2
             ;;
         -t|--tweak-mode)
             STOP_AFTER_MIN_REACHED=0
-            BENCH_KIND=1                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown
+            BENCH_KIND=1               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
+            shift
+            ;;
+        -p|--full-power-mode)
+            STOP_AFTER_MIN_REACHED=0
+            BENCH_KIND=888             # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
             shift
             ;;
         -d|--debug-infos)
@@ -70,16 +77,32 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo $0 \[-w\|--min-watt-seconds TIME\] \
-                 \[-m\|--min-hash-count HASHES\] \
-                 \[-t\|--tweak-mode\] \
-                 \[-d\|--debug-infos\] \
-                 \[-h\|--help\]
+            echo $0 <<EOF '[-w|--min-watt-seconds TIME] 
+                 [-m|--min-hash-count HASHES] 
+                 [-t|--tweak-mode] 
+                 [-p|--full-power-mode] 
+                 [-d|--debug-infos] 
+                 [-h|--help]'
+EOF
             echo "-w default is ${MIN_WATT_COUNT} seconds"
             echo "-m default is ${MIN_HASH_COUNT} hashes"
-            echo "-t runs the script infinitely. Otherwise it stops after both minimums are reached."
+            echo "-t runs the script infinitely, ignores -w / -m, prepared for EFFICENCY tuning mode via tweak_commands.sh"
+            echo "-p runs the script infinitely. ignores -w / -m, prepared for FULL POWER Mode via tweak_commands.sh"
+            echo "   If both -t and -p are present then only the last one comes into effect."
             echo "-d keeps temporary files for debugging purposes"
             echo "-h this help message"
+            echo ""
+            echo "You can run the benchmarking in 3 major modes:"
+            echo "1. Default mode, which is initially all offsets 0 and auto settings on"
+            echo "   After tweaking or tuning the new EFFICIENCY values become the overall Default mode"
+            echo "2. Tuning for best EFFICIENCY qoutient of Hashes per Watts (option -t)"
+            echo "3. Tuning for MAXIMUM Hashes regardless of power and accordingly FULL POWER mode (option -p)"
+            echo ""
+            echo "This means:"
+            echo "- GPUs ALWAYS start up with the Default mode settings."
+            echo "- Once tweaked respectively tuned for EFFICIENCY, the GPUs Default mode is changed."
+            echo "- Each Algorithm has its own Default mode sttings."
+            echo ""
             exit
             ;;
         *)
@@ -388,12 +411,13 @@ function _On_Exit () {
         ####################################################################
         #    Aufbereitung der Werte zum Schreiben in die benchmark_*.json
         #
-        temp_einheit=$(cat ${BENCHLOGFILE} | grep -m1 "/s$" | gawk -e '{print $NF}')
+        temp_einheit=$(cat ${BENCHLOGFILE} | sed -e 's/ *yes!$//g' | grep -m1 "/s$" | gawk -e '{print $NF}')
         if [ ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
             ###
             ### BENCHMARKING MODE was invoked
             ###
-            hashCount=$(cat ${BENCHLOGFILE} \
+            hashCount=$(cat ${BENCHLOGFILE}  \
+                      | sed -e 's/ *yes!$//g' \
                       | grep "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum )\
@@ -463,7 +487,10 @@ echo $$ >$(basename $0 .sh).pid
 if [ ! -d test ]; then mkdir test; fi
 
 # Für Fake in Entwicklungssystemen ohne Grakas
-if [ $HOME == "/home/richard" ]; then NoCards=true; fi
+if [ $HOME == "/home/richard" ]; then
+    NoCards=true
+    PATH=${PATH}:${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle
+fi
 
 ###################################################################################
 #
@@ -491,10 +518,22 @@ if [ $HOME == "/home/richard" ]; then NoCards=true; fi
 #
 #                _query_actual_Power_Temp_and_Clocks
 #
+
+# Stellt auch die 5 bekannten Befehle in dem Array nvidiaCmd[0-4] zur Verfügung:
+#nvidia-smi --id=${gpu_idx} -pl 82 (root powerconsumption)
+#nvidia-settings --assign [gpu:${gpu_idx}]/GPUGraphicsClockOffset[3]=170
+#nvidia-settings --assign [gpu:${gpu_idx}]/GPUMemoryTransferRateOffset[3]=360
+#nvidia-settings --assign [fan:${gpu_idx}]/GPUTargetFanSpeed=66
+# Fan-Kontrolle auf MANUELL = 1 oder 0 für AUTOMATISCH
+#nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
 source nvidia-befehle/nvidia-query.inc
-source ../algo_infos.inc
+
+# Funktionen zum Einlesen von ALGO_NAMES und ALGO_PORTS aus dem Web
+source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
+
+# Funktionen für das Einlesen aller bekannten Miner und Unterscheidung in Vefügbare sowie Fehlende.
 if [ ${#_MINERFUNC_INCLUDED} -eq 0 ];then
-    source ../miner-func.inc
+    source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 fi
 
 # Das ist jetzt richtig aktiv und liest die folgenden Systeminformationen in die entsprechenden Arrays:
@@ -508,6 +547,13 @@ fi
 #            GPU${gpu_idx}Mines[]=          # declaration only
 #     uuidEnabledSOLL[${gpu_uuid}]=         # 0/1
 #        AlgoDisabled[${algo}]=             # STRING with all Info
+#
+# UND:
+#      Stellt sicher, dass aktuelle gpu-bENCH.sh Dateien in den GPU-UUID Verzeichnissen sind.
+#      Diese sorgen durch "source"-ing dafür, dass die JSON-Einträge und Arrays zusammenpassen
+#
+# Das entsprechende "source"-ing machen wir weiter unten, wenn wir wissen, um welche GPU
+#     und welchen $algorithm es sich handelt.
 workdir=$(pwd)
 cd ..
 source gpu-abfrage.sh
@@ -591,7 +637,7 @@ IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
 # In ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
 
-_set_ALLE_MINER_from_path "../miners"
+_set_ALLE_MINER_from_path "${LINUX_MULTI_MINING_ROOT}/miners"
 
 # Dann gleich Bereitstellung zweier Arrays mit AvailableAlgos und MissingAlgos.
 # Die MissingAlgos könnte man in einer automatischen Schleife benchmarken lassen,
@@ -700,7 +746,12 @@ else
 fi
 algo=${menuItems[${algonr:1}]}
 
-echo "das ist der Algo den du ausgewählt hast : ${algo}"
+algorithm="${algo}#${miner_name}#${miner_version}"
+# Sync mit tweak_command.sh
+echo "${algorithm}" >benching_${gpu_idx}_algo
+
+echo "das ist der NH-Algo,    den du ausgewählt hast : ${algo}"
+echo "das ist der \$algorithm, den du ausgewählt hast : ${algorithm}"
 if [ "$algo" = "scrypt" ] ; then
     echo "Dieser Algo ist nicht mehr mit Grafikkarten lohnenswert. Dafür ermitteln wir keine Werte mehr."
     read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
@@ -727,10 +778,6 @@ LOGPATH="../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version}"
 BENCHLOGFILE="test/benchmark_${algo}_${gpu_uuid}.log"
 TWEAKLOGFILE="test/tweak_${algo}_${gpu_uuid}.log"
 rm -f ${BENCHLOGFILE} ${TWEAKLOGFILE} COUNTER watt_bensh_30s.out watt_bensh_30s_max.out
-
-algorithm="${algo}#${miner_name}#${miner_version}"
-# Sync mit tweak_command.sh
-echo "${algorithm}" >benching_${gpu_idx}_algo
 
 if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
     ###
@@ -765,7 +812,87 @@ MAX_WATT=0
 
 ################################################################################
 ###
-###          5.1. Zusammensetzung des Startkommandos
+###          5.1. LIVE oder OFFLINE benchmarken?
+###
+################################################################################
+
+echo ""
+echo "Noch eine letzte Frage:"
+echo "Willst Du LIVE oder OFFLINE Benchmarken oder Tunen?"
+while :; do
+    read -p "--> l <-- für LIVE    und    --> o <-- für OFFLINE : " live_mode
+    [ "$live_mode" == "l" -o "$live_mode" == "o" ] && break
+done
+
+################################################################################
+###
+###          5.2. Setzen der GPU-Einstellungen
+###
+################################################################################
+
+# Funktion zum Einlesen der Benchmarkdaten nach eventuellem vorherigen Update der JSON Datei
+workdir=$(pwd)
+cd ../${gpu_uuid}
+source gpu-bENCH.sh
+cd ${workdir} >/dev/null
+
+# Alle Einstellungen aller Algorithmen der ausgewählten GPU einlesen
+# Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da, z.B. die folgenden 4
+_read_IMPORTANT_BENCHMARK_JSON_in
+
+declare -a nvidiaPara=(
+    ${GRAFIK_CLOCK[${algorithm}]}
+    ${MEMORY_CLOCK[${algorithm}]}
+    ${FAN_SPEED[${algorithm}]}
+    ${POWER_LIMIT[${algorithm}]}
+)
+
+# Die Clocks nach den Werten in der JSON setzen
+unset CmdStack
+for (( i=0; $i<2; i++ )); do
+    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[$i]}" ${gpu_idx} ${nvidiaPara[$i]}
+done
+    
+# Fan-Kontrolle nach den Werten in der JSON setzen
+if [ ${FAN_SPEED[${algorithm}]} -eq 0 ]; then
+    # Automatik einschalten. Entsprechendes Kommando ist das LETZTE auf dem nvidiaCmd-Array
+    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
+else
+    # Fan Speed Kontrolle von AUTOMATIK auf MANUELL stellen
+    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 1
+    # Fan Speed auf eingelesenen Wert setzen
+    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[2]}" ${gpu_idx} ${nvidiaPara[2]}
+fi
+
+# Power Limit nach den Werten in der JSON setzen
+if [ ${POWER_LIMIT[${algorithm}]} -gt 0 ]; then
+    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
+fi
+
+echo""
+echo "Kurze Zusammenfassung:"
+echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
+echo "Das ist der Minder, den Du ausgewählt hast: ${miner_name} ${miner_version}"
+echo "das ist der NH-Algo,    den du ausgewählt hast : ${algo}"
+echo "das ist der \$algorithm, den du ausgewählt hast : ${algorithm}"
+[ "${InternalAlgos[$algo]}" != "${algo}" ] && echo "Das ist der Miner-Interne Algoname: ${InternalAlgos[$algo]}"
+echo "Du hast Dich für den " $([ "$live_mode" == "l" ] && echo "LIVE" || echo "OFFLINE") " Modus entschieden"
+echo ""
+echo "DIE FOLGENDEN KOMMANDOS WERDEN NACH BESTÄTIGUNG ABGESETZT:"
+for (( i=0; $i<${#CmdStack[@]}; i++ )); do
+    echo "---> ${CmdStack[$i]} <---"
+done
+read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
+
+# GPU-Kommandos absetzen...
+for (( i=0; $i<${#CmdStack[@]}; i++ )); do
+    ${CmdStack[$i]}
+done
+
+
+################################################################################
+###
+###          5.3. Zusammensetzung des Startkommandos
 ###
 ################################################################################
 
@@ -782,22 +909,42 @@ algo_port=${PORTs[${algo}]}
 # Jetzt bauen wir den Benchmakaufruf zusammen, der in dem .inc entsprechend vorbereitet ist.
 # 1. Erzeugung der Parameterliste
 
-# Diese Funktion musste leider erfunden werden wegen der internen anderen Algonamen,
-# die NiceHash willkürlich anders benannt hat.
-# So rufen wir eine Funktion, wenn sie definiert wurde.
-declare -f PREP_BENCH_PARAMETERSTACK &>/dev/null && PREP_BENCH_PARAMETERSTACK
-PARAMETERSTACK=""
-for (( i=0; $i<${#BENCH_PARAMETERSTACK[@]}; i++ )); do
-    declare -n param="${BENCH_PARAMETERSTACK[$i]}"
-    PARAMETERSTACK+="${param} "
-done
+case "$live_mode" in
 
-# JETZT KOMMT DAS KOMPLETTE KOMMANDO ZUM STARTEN DES MINERS IN DIE VARIABLE ${minerstart}
-printf -v minerstart "${BENCH_START_CMD}" ${PARAMETERSTACK}
+    "l")
+        # Diese Funktion musste leider erfunden werden wegen der internen anderen Algonamen,
+        # die NiceHash willkürlich anders benannt hat.
+        # So rufen wir eine Funktion, wenn sie definiert wurde.
+        declare -f PREP_LIVE_PARAMETERSTACK &>/dev/null && PREP_LIVE_PARAMETERSTACK
+        PARAMETERSTACK=""
+        for (( i=0; $i<${#LIVE_PARAMETERSTACK[@]}; i++ )); do
+            declare -n param="${LIVE_PARAMETERSTACK[$i]}"
+            PARAMETERSTACK+="${param} "
+        done
+
+        # JETZT KOMMT DAS KOMPLETTE KOMMANDO ZUM STARTEN DES MINERS IN DIE VARIABLE ${minerstart}
+        printf -v minerstart "${LIVE_START_CMD}" ${PARAMETERSTACK}
+        ;;
+
+    "o")
+        # Diese Funktion musste leider erfunden werden wegen der internen anderen Algonamen,
+        # die NiceHash willkürlich anders benannt hat.
+        # So rufen wir eine Funktion, wenn sie definiert wurde.
+        declare -f PREP_BENCH_PARAMETERSTACK &>/dev/null && PREP_BENCH_PARAMETERSTACK
+        PARAMETERSTACK=""
+        for (( i=0; $i<${#BENCH_PARAMETERSTACK[@]}; i++ )); do
+            declare -n param="${BENCH_PARAMETERSTACK[$i]}"
+            PARAMETERSTACK+="${param} "
+        done
+
+        # JETZT KOMMT DAS KOMPLETTE KOMMANDO ZUM STARTEN DES MINERS IN DIE VARIABLE ${minerstart}
+        printf -v minerstart "${BENCH_START_CMD}" ${PARAMETERSTACK}
+        ;;
+esac
 
 ################################################################################
 ###
-###          5.2. Startschuss setzen und Startkommando absetzen
+###          5.4. Startschuss setzen und Startkommando absetzen
 ###
 ################################################################################
 
@@ -807,7 +954,7 @@ BENCHMARKING_WAS_STARTED=1
 
 ################################################################################
 ###
-###          5.3. Miner Starten und Logausgabe in eigenes Terminal umleiten
+###          5.5. Miner Starten und Logausgabe in eigenes Terminal umleiten
 ###
 ################################################################################
 
@@ -833,7 +980,7 @@ fi
 
 ################################################################################
 ###
-###          5.4. Wattmessung starten (3 Sekunden nach dem Minerstart !? )
+###          5.6. Wattmessung starten (3 Sekunden nach dem Minerstart !? )
 ###
 ################################################################################
 
@@ -854,6 +1001,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
     #   Wir müssen keine ESC-Sequenzen mehr rausfiltern!
     #       | sed -e 's/\x1B[[][[:digit:]]*m//g' \
     hashCount=$(cat ${BENCHLOGFILE} \
+                       | sed -e 's/ *yes!$//g' \
                        | grep -c "/s$")
     if [ $hashCount -ge $MIN_HASH_COUNT ]; then countHashes=0; fi
 
@@ -902,6 +1050,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             #         | sed -e 's/\x1B[[][[:digit:]]*m//g' \
             hashCount=$(cat ${BENCHLOGFILE} \
                       | tail -n +$hash_line \
+                      | sed -e 's/ *yes!$//g' \
                       | grep -e "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum ) \
@@ -919,6 +1068,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             # Farben Escape-Sequenzen müssen wir nicht mehr ausfiltern
             #         | sed -e 's/\x1B[[][[:digit:]]*m//g' \
             hashCount=$(cat ${BENCHLOGFILE} \
+                      | sed -e 's/ *yes!$//g' \
                       | grep "/s$" \
                       | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum )\
@@ -1049,7 +1199,7 @@ printf " Max WATT Wert: %12s\n" $MAX_WATT
 #sed -i -e 's/\x1B[[][[:digit:]]*m//g' ${BENCHLOGFILE}
 
 rm -f temp_hash
-cat ${BENCHLOGFILE} | grep "/s$" \
+cat ${BENCHLOGFILE} | sed -e 's/ *yes!$//g' | grep "/s$" \
     | tee >(grep -m1 "/s$" | gawk -e '{print $NF}' > temp_einheit) \
     | gawk -e '{hash=NF-1; print $hash }' >>temp_hash
 HASH_temp=$(< "temp_hash")
