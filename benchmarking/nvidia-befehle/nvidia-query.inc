@@ -30,6 +30,12 @@ fi
 # "Min Power Limit"
 # "Max Power Limit"
 
+nvidiaCmd[0]="nvidia-settings --assign [gpu:%i]/GPUGraphicsClockOffset[3]=%i"
+nvidiaCmd[1]="nvidia-settings --assign [gpu:%i]/GPUMemoryTransferRateOffset[3]=%i"
+nvidiaCmd[2]="nvidia-settings --assign [fan:%i]/GPUTargetFanSpeed=%i"
+nvidiaCmd[3]="./nvidia-befehle/smi --id=%i -pl %i"
+nvidiaCmd[4]="nvidia-settings --assign [gpu:%i]/GPUFanControlState=%i"
+
 shopt -s lastpipe
 function _query_actual_Power_Temp_and_Clocks () {
     if [ ! $NoCards ]; then
