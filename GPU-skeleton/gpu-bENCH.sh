@@ -16,8 +16,6 @@
 #     angesprochen werden können.
 #
 
-_UpdateIt_=0
-
 # Wo befinden wir uns eigentlich?
 PWD=$(pwd | gawk -e 'BEGIN {FS="/"} { print $NF }')
 if [ "$PWD" == "GPU-skeleton" ]; then
@@ -37,7 +35,7 @@ elif [ "${PWD:0:4}" == "GPU-" ]; then
         # Dieser Fall ist ein bisschen Chaotisch. Könnte sein, dass gpu-abfrage.sh nicht reinkopiert hat
         # oder dass GitKraken wieder was gelöscht hat.
         # Na ja, wir holen sie auf jeden Fall mal.
-        cp -f ../GPU-skeleton/gpu-bENCH.inc .
+        cp -f -p ../GPU-skeleton/gpu-bENCH.inc .
     fi
     #
     # ABER: damit wir das Folgende, die STRUKTURANPASSUNG nicht immer wieder und wieder tun, schauen wir, ob wir die

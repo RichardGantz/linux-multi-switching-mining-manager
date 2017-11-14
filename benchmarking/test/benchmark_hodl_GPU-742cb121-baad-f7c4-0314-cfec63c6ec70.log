@@ -1,9 +1,0 @@
-*** ccminer 2.2 for nVidia GPUs by tpruvot@github ***
-    Built with the nVidia CUDA Toolkit 8.0 64-bits
-
-  Originally based on Christian Buchner and Christian H. project
-  Include some algos from alexis78, djm34, sp, tsiv and klausT.
-
-BTC donation address: 1AJdfCpLWPNoAMDfHF1wD5y8VgKSSTHxPo (tpruvot)
-
-[2017-11-02 10:21:47] Unknown algo parameter 'hodl'
