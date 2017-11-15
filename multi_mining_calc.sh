@@ -79,6 +79,8 @@ GRID[0]="netz"
 GRID[1]="solar"
 GRID[2]="solar_akku"
 
+FullPowerPattern="\#888$"    # Endet mit "#888"
+
 SYNCFILE="you_can_read_now.sync"
 rm -f $SYNCFILE
 
@@ -243,7 +245,7 @@ while : ; do
     ###############################################################################################
     ###############################################################################################
     while [ ! -f ${SYNCFILE} ]; do
-        echo "$(basename $0): ###---> Waiting for ${SYNCFILE} to become available..."
+        echo "###---> Waiting for ${SYNCFILE} to become available..."
         sleep 1
     done
     #  Das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available} merken für später.

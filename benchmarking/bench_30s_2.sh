@@ -34,7 +34,7 @@ declare -i MIN_HASH_COUNT=20    # -m Anzahl         : Mindestanzahl Hashberechnu
 declare -i MIN_WATT_COUNT=30    # -w Anzahl Sekunden: Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
 STOP_AFTER_MIN_REACHED=1        # -t : setzt Abbruch nach der Mindestlaufzeit- und Mindest-Hashzahleenermittlung auf 0
                                 #      Das ist der Tweak-Mode. Standard ist der Benchmark-Modus
-BENCH_KIND=2                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; 888 == FullPowerMode
+bENCH_KIND=2                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; 888 == FullPowerMode
 ATTENTION_FOR_USER_INPUT=1      # -a : setzt die Attention auf 0, übergeht menschliche Eingaben
                                 #      ---------> und wird über Variablen und Dateien gesteuert  <---------
                                 #      ---------> MUSS ERST IMPLEMENTIERT WERDEN !!!!!!!!!       <---------
@@ -54,22 +54,22 @@ while [[ $# -gt 0 ]]; do
             ;;
         -w|--min-watt-seconds)
             MIN_WATT_COUNT="$2"
-            BENCH_KIND=3               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
+            bENCH_KIND=3               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
             shift 2
             ;;
         -m|--min-hash-count)
             MIN_HASH_COUNT="$2"
-            BENCH_KIND=3               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
+            bENCH_KIND=3               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
             shift 2
             ;;
         -t|--tweak-mode)
             STOP_AFTER_MIN_REACHED=0
-            BENCH_KIND=1               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
+            bENCH_KIND=1               # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
             shift
             ;;
         -p|--full-power-mode)
             STOP_AFTER_MIN_REACHED=0
-            BENCH_KIND=888             # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
+            bENCH_KIND=888             # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; -p FullPower == 888
             shift
             ;;
         -d|--debug-infos)
@@ -160,21 +160,35 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
     # Die WATT-Werte noch zu Integern machen und dabei aufrunden
     avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
-    MAX_WATT=$((${MAX_WATT/%[.][[:digit:]]*}+1))
+    maxWATT=$((${maxWATT/%[.][[:digit:]]*}+1))
 
     # Der Zeitstempel dieser Messung
-    BENCH_DATE=$BENCH_OR_TWEAK_END
+    bENCH_DATE=$BENCH_OR_TWEAK_END
 
-    # Den EXAKTEN Textblock für ${algo} && ${miner_name} && ${miner_version} raussuchen
-    # Zeilennummern in temporärer Datei merken
-    sed -n -e '/"Name": "'${algo}'",/{                     # if found ${algo}
-         N;N;N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 3 lines; if found ${miner_name}
-             N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
-         N;=;Q100}}};                                      # appe(N)d 1 line;  print line-number; Quit and set $?=100
-         ${Q99}                                            # on last line Quit and set $?=99 (NOT FOUND)
-         ' \
+    declare -i tempazb=0
+    # Full Power ($?=100) oder Effizienz Messung ($?=99)
+    [[ ${bENCH_KIND} -eq 888 ]] \
+        && sed_search='/"Name": "'${algo}'",/{                   # if found ${algo}
+             N;N;N;/"MinerName": "'${miner_name}'",/{            # appe(N)d 3 lines; if found ${miner_name}
+                 N;/"MinerVersion": "'${miner_version}'",/{      # appe(N)d 1 line;  if found ${miner_version}
+                     N;N;N;N;N;N;N;N;/"BENCH_KIND": 888,/{       # appe(N)d 8 lines; if found BENCH_KIND 888
+             =;Q100}}}};                                         # (=) print line-number; Quit and set $?=100
+             ${Q99}                                              # on last line Quit and set $?=99 (NOT FOUND)
+             ' \
+        || sed_search='/"Name": "'${algo}'",/{                   # if found ${algo}
+             N;N;N;/"MinerName": "'${miner_name}'",/{            # appe(N)d 3 lines; if found ${miner_name}
+                 N;/"MinerVersion": "'${miner_version}'",/{      # appe(N)d 1 line;  if found ${miner_version}
+                     N;N;N;N;N;N;N;N;/"BENCH_KIND": 888,/d;{     # appe(N)d 8 lines; if found 888, (d)elete and continue
+             =;Q100}}}};                                         # otherwise (=) print line-number; Quit and set $?=100
+             ${Q99}                                              # on last line Quit and set $?=99 (NOT FOUND)
+             '
+    sed -n -e "${sed_search}" \
         ${IMPORTANT_BENCHMARK_JSON} \
         > tempazb
+    _Q_=$?
+    # Die BenchmarkSpeed Zeile haben wir auf der Suche nach dem 888 um 7 Zeilen überschritten.
+    # Deshalb müssen wir die abziehen, FALLS er etwas gefunden hat (Q100)
+    [[ ${_Q_} -eq 100 ]] && tempazb=$(($(< "tempazb")-7))
 
     #" <-- wegen richtigem Highlightning in meinem proggi ... bitte nicht entfernen
     ## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
@@ -215,8 +229,6 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # tempazb + 13: LessThreads
 
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
-    declare -i tempazb=$(< "tempazb") 
-
     if [ ${tempazb} -gt 1 ] ; then
         echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
         echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
@@ -224,49 +236,49 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
         echo "$((tempazb-4))s/: [0-9.]*,$/: ${ALGO_IDs[${algo}]},/"  >sed_insert_on_different_lines_cmd
         echo     "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"           >>sed_insert_on_different_lines_cmd
         echo "$((tempazb+2))s/: [0-9.]*,$/: ${avgWATT},/"           >>sed_insert_on_different_lines_cmd
-        if [[ ${#MAX_WATT} -ne 0 ]]; then
-            echo "der MAX_WATT Wert ${MAX_WATT} wird nun in der Zeile $((tempazb+3)) eingefügt"
-            echo "$((tempazb+3))s/: [0-9.]*,$/: ${MAX_WATT},/"      >>sed_insert_on_different_lines_cmd
+        if [[ ${#maxWATT} -ne 0 ]]; then
+            echo "der MAX_WATT Wert ${maxWATT} wird nun in der Zeile $((tempazb+3)) eingefügt"
+            echo "$((tempazb+3))s/: [0-9.]*,$/: ${maxWATT},/"       >>sed_insert_on_different_lines_cmd
         fi
         if [[ ${#hashCount} -ne 0 ]]; then
             echo "der HASHCOUNT Wert ${hashCount} wird nun in der Zeile $((tempazb+4)) eingefügt"
-            echo "$((tempazb+4))s/: [0-9]*,$/: ${hashCount},/"      >>sed_insert_on_different_lines_cmd
+            echo "$((tempazb+4))s/: [0-9.]*,$/: ${hashCount},/"     >>sed_insert_on_different_lines_cmd
         fi
-        if [[ ${#HASH_DURATION} -ne 0 ]]; then
-            echo "der HASH_DURATION Wert ${HASH_DURATION} wird nun in der Zeile $((tempazb+5)) eingefügt"
-            echo "$((tempazb+5))s/: [0-9]*,$/: ${HASH_DURATION},/"  >>sed_insert_on_different_lines_cmd
+        if [[ ${#hASH_DURATION} -ne 0 ]]; then
+            echo "der HASH_DURATION Wert ${hASH_DURATION} wird nun in der Zeile $((tempazb+5)) eingefügt"
+            echo "$((tempazb+5))s/: [0-9.]*,$/: ${hASH_DURATION},/" >>sed_insert_on_different_lines_cmd
         fi
-        if [[ ${#BENCH_DATE} -ne 0 ]]; then
-            echo "der BENCH_DATE Wert ${BENCH_DATE} wird nun in der Zeile $((tempazb+6)) eingefügt"
-            echo "$((tempazb+6))s/: [0-9]*,$/: ${BENCH_DATE},/"     >>sed_insert_on_different_lines_cmd
+        if [[ ${#bENCH_DATE} -ne 0 ]]; then
+            echo "der BENCH_DATE Wert ${bENCH_DATE} wird nun in der Zeile $((tempazb+6)) eingefügt"
+            echo "$((tempazb+6))s/: [0-9.]*,$/: ${bENCH_DATE},/"    >>sed_insert_on_different_lines_cmd
         fi
-        if [[ ${#BENCH_KIND} -ne 0 ]]; then
-            echo "der BENCH_KIND Wert ${BENCH_KIND} wird nun in der Zeile $((tempazb+7)) eingefügt"
-            echo "$((tempazb+7))s/: [0-9]*,$/: ${BENCH_KIND},/"     >>sed_insert_on_different_lines_cmd
+        if [[ ${#bENCH_KIND} -ne 0 ]]; then
+            echo "der BENCH_KIND Wert ${bENCH_KIND} wird nun in der Zeile $((tempazb+7)) eingefügt"
+            echo "$((tempazb+7))s/: [0-9.]*,$/: ${bENCH_KIND},/"    >>sed_insert_on_different_lines_cmd
         fi
-        if [[ ${#MinerFee} -ne 0 ]]; then
-            echo "der MinerFee Wert ${MinerFee} wird nun in der Zeile $((tempazb+8)) eingefügt"
-            echo "$((tempazb+8))s/: [0-9]*,$/: ${MinerFee},/"       >>sed_insert_on_different_lines_cmd
+        if [[ ${#minerFee} -ne 0 ]]; then
+            echo "der MinerFee Wert ${minerFee} wird nun in der Zeile $((tempazb+8)) eingefügt"
+            echo "$((tempazb+8))s/: [0-9.]*,$/: ${minerFee},/"      >>sed_insert_on_different_lines_cmd
         fi
         if [[ ${#grafik_clock} -ne 0 ]]; then
-            echo "der GraphicClock Wert ${grafik_clock} wird nun in der Zeile $((tempazb+9)) eingefügt"
-            echo "$((tempazb+9))s/: [0-9]*,$/: ${grafik_clock},/"   >>sed_insert_on_different_lines_cmd
+            echo "der GRAFIK_CLOCK Wert ${grafik_clock} wird nun in der Zeile $((tempazb+9)) eingefügt"
+            echo "$((tempazb+9))s/: [0-9.]*,$/: ${grafik_clock},/"  >>sed_insert_on_different_lines_cmd
         fi
         if [[ ${#memory_clock} -ne 0 ]]; then
-            echo "der MemoryClock Wert ${memory_clock} wird nun in der Zeile $((tempazb+10)) eingefügt"
-            echo "$((tempazb+10))s/: [0-9]*,$/: ${memory_clock},/"  >>sed_insert_on_different_lines_cmd
+            echo "der MEMORY_CLOCK Wert ${memory_clock} wird nun in der Zeile $((tempazb+10)) eingefügt"
+            echo "$((tempazb+10))s/: [0-9.]*,$/: ${memory_clock},/" >>sed_insert_on_different_lines_cmd
         fi
         if [[ ${#fan_speed}    -ne 0 ]]; then
             echo "der FanSpeed Wert ${fan_speed} wird nun in der Zeile $((tempazb+11)) eingefügt"
-            echo "$((tempazb+11))s/: [0-9]*,$/: ${fan_speed},/"     >>sed_insert_on_different_lines_cmd
+            echo "$((tempazb+11))s/: [0-9.]*,$/: ${fan_speed},/"    >>sed_insert_on_different_lines_cmd
         fi
         if [[ ${#power_limit}  -ne 0 ]]; then
-            echo "der PowerLimit Wert ${power_limit} wird nun in der Zeile $((tempazb+12)) eingefügt"
-            echo "$((tempazb+12))s/: [0-9]*,$/: ${power_limit},/"   >>sed_insert_on_different_lines_cmd
+            echo "der POWER_LIMIT Wert ${power_limit} wird nun in der Zeile $((tempazb+12)) eingefügt"
+            echo "$((tempazb+12))s/: [0-9.]*,$/: ${power_limit},/"  >>sed_insert_on_different_lines_cmd
         fi
         if [[ ${#less_threads}  -ne 0 ]]; then
-            echo "der LessThreads Wert ${less_threads} wird nun in der Zeile $((tempazb+13)) eingefügt"
-            echo "$((tempazb+13))s/: [0-9]*$/: ${less_threads}/"    >>sed_insert_on_different_lines_cmd
+            echo "der LESS_THREADS Wert ${less_threads} wird nun in der Zeile $((tempazb+13)) eingefügt"
+            echo "$((tempazb+13))s/: [0-9.]*$/: ${less_threads}/"   >>sed_insert_on_different_lines_cmd
         fi
         sed -i -f sed_insert_on_different_lines_cmd ${IMPORTANT_BENCHMARK_JSON}
     else
@@ -291,12 +303,12 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             '      \"PowerLimit\": %s,\n'
             '      \"LessThreads\": %s\n'
         )
-        if [[ ${#MAX_WATT}            -eq 0 ]]; then MAX_WATT=0;        fi
+        if [[ ${#maxWATT}             -eq 0 ]]; then maxWATT=0;         fi
         if [[ ${#hashCount}           -eq 0 ]]; then hashCount=0;       fi
-        if [[ ${#HASH_DURATION}       -eq 0 ]]; then HASH_DURATION=0;   fi
-        if [[ ${#BENCH_DATE}          -eq 0 ]]; then BENCH_DATE=0;      fi
-        if [[ ${#BENCH_KIND}          -eq 0 ]]; then BENCH_KIND=0;      fi
-        if [[ ${#MinerFee}            -eq 0 ]]; then MinerFee=0;        fi
+        if [[ ${#hASH_DURATION}       -eq 0 ]]; then hASH_DURATION=0;   fi
+        if [[ ${#bENCH_DATE}          -eq 0 ]]; then bENCH_DATE=0;      fi
+        if [[ ${#bENCH_KIND}          -eq 0 ]]; then bENCH_KIND=0;      fi
+        if [[ ${#minerFee}            -eq 0 ]]; then minerFee=0;        fi
         if [[ ${#miner_base_type}     -eq 0 ]]; then miner_base_type=9; fi
         if [[ ${#grafik_clock}        -eq 0 ]]; then grafik_clock=0;    fi
         if [[ ${#memory_clock}        -eq 0 ]]; then memory_clock=0;    fi
@@ -312,12 +324,12 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             ${avgHASH}
             ""
             ${avgWATT}
-            ${MAX_WATT}
+            ${maxWATT}
             ${hashCount}
-            ${HASH_DURATION}
-            ${BENCH_DATE}
-            ${BENCH_KIND}
-            ${MinerFee}
+            ${hASH_DURATION}
+            ${bENCH_DATE}
+            ${bENCH_KIND}
+            ${minerFee}
             ${grafik_clock}
             ${memory_clock}
             ${fan_speed}
@@ -451,12 +463,12 @@ function _On_Exit () {
             ### 
         fi
             
-        MAX_WATT=$(< "watt_bensh_30s_max.out")
+        maxWATT=$(< "watt_bensh_30s_max.out")
 
         # Ist das wirklich noch nötig?
         printf " Summe WATT   : %12s; Messwerte: %5s\n" $wattSum $wattCount
         printf " Durchschnitt : %12s\n" $avgWATT
-        printf " Max WATT Wert: %12s\n" ${MAX_WATT}
+        printf " Max WATT Wert: %12s\n" ${maxWATT}
         printf " Summe HASH   : %12s; Messwerte: %5s\n" ${hashSum:0:$(($(expr index "$hashSum" ".")+2))} $hashCount
         printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} ${temp_einheit}
 
@@ -464,11 +476,11 @@ function _On_Exit () {
         # Hier sollten wir nur die Dauer seit der letzten Parameteränderung messen, ODER ???
         #
         # --->   IST EVENTUELL NOCH ZU KORRIGIEREN   <---
-        # HASH_DURATION=$((${BENCH_OR_TWEAK_END}-${BENCH_DATE}))
+        # hASH_DURATION=$((${BENCH_OR_TWEAK_END}-${bENCH_DATE}))
         #
         # Wir korrigieren das jetzt mal:
         # Die Wattwerte werden auf jeden Fall sekündlich ermittelt!
-        HASH_DURATION=${wattCount}
+        hASH_DURATION=${wattCount}
 
         # Es sind ja wenigstens avgHASH und avgWATT ermittelt worden.
         _edit_BENCHMARK_JSON_and_put_in_the_new_values
@@ -559,6 +571,8 @@ cd ..
 source gpu-abfrage.sh
 _func_gpu_abfrage_sh
 cd ${workdir} >/dev/null
+gpu_idx_list="${index[@]}"
+
 
 ################################################################################
 ################################################################################
@@ -613,8 +627,11 @@ _read_in_ALGO_PORTS
 
 # auswahl des devices "eingabe wartend"
 echo ""
-read -p "Für welches GPU device soll ein Benchmark druchgeführt werden: " gpu_idx
-
+while :; do
+    _prompt="Für welches GPU device soll ein Benchmark druchgeführt werden? ${gpu_idx_list}: "
+    read -p "${_prompt}" gpu_idx
+    [[ ${gpu_idx} =~ ^[[:digit:]]*$ ]] && [[ ${gpu_idx_list} =~ ^.*${gpu_idx} ]] && break
+done
 gpu_uuid=${uuid[${gpu_idx}]}
 echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
 
@@ -664,14 +681,18 @@ echo ""
 echo " Die folgenden Miner können getestet werden:"
 echo ""
 unset i;   declare -i i=0
+choice_list=''
 for minerName in ${ALLE_MINER}; do
     read minerChoice[$i] minerVersion[$i] <<<"${minerName//#/ }"
     minerVersion[$i]=${minerVersion[$i]%.algos}
     printf " %2i : %s V. %s\n" $((i+1)) ${minerChoice[$i]} ${minerVersion[$i]}
-    i+=1
+    i+=1; choice_list+="$i "
 done
 echo ""
-read -p "Welchen Miner möchtest Du benchmarken/tweaken ? " choice
+while :; do
+    read -p "Welchen Miner möchtest Du mit GPU #${gpu_idx} benchmarken/tweaken? ${choice_list}: " choice
+    [[ ${choice_list} =~ ^.*${choice} ]] && break
+done
 
 miner_name=${minerChoice[$(($choice-1))]}
 miner_version=${minerVersion[$(($choice-1))]}
@@ -718,8 +739,10 @@ declare -n                 actInternalAlgos="Internal_${miner_name}_${miner_vers
 declare -a menuItems=( "${!actInternalAlgos[@]}" )
 numAlgos=${#menuItems[@]}
 
+menuItems_list=''
 if [ $numAlgos -gt 1 ]; then
     for i in ${!menuItems[@]}; do
+        menuItems_list+="a$i "
         printf "%10s=%17s" "a$i" "\"${menuItems[$i]}\""
         if [ $(((i+1) % 3)) -eq 0 ]; then printf "\n"; fi
         # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
@@ -727,7 +750,14 @@ if [ $numAlgos -gt 1 ]; then
     done
     printf "\n"
 
-    read -p "Für welchen Algo willst du testen: " algonr
+    while :; do
+        echo ${menuItems_list}
+        read -p "Welchen Algo soll Miner ${miner_name} ${miner_version} mit GPU #${gpu_idx} testen : " algonr
+        # Das matched beides ein ganzes Wort
+        REGEXPAT="\<${algonr}\>"
+        REGEXPAT="\b${algonr}\b"
+        [[ ${menuItems_list} =~ ${REGEXPAT} ]] && break
+    done
 elif [ $numAlgos -eq 1 ]; then
     # ... oder angenommener einziger Algo aus der Datei für die Algos.
     algonr=a0
@@ -747,6 +777,10 @@ fi
 algo=${menuItems[${algonr:1}]}
 
 algorithm="${algo}#${miner_name}#${miner_version}"
+# Hier ist die Stelle, an der wir den $algorithm korrigieren, wenn wir uns für den Full Power -p Modus
+# per Kommandozeilenparameter -p entschieden haben:
+[[ ${bENCH_KIND} -eq 888 ]] && algorithm+='#888'
+
 # Sync mit tweak_command.sh
 echo "${algorithm}" >benching_${gpu_idx}_algo
 
@@ -800,7 +834,7 @@ countHashes=1
 declare -i COUNTER=0
 declare -i wattCount=0
 declare -i hashCount=0
-MAX_WATT=0
+maxWATT=0
 
 ####################################################################################
 ################################################################################
@@ -821,7 +855,7 @@ echo "Noch eine letzte Frage:"
 echo "Willst Du LIVE oder OFFLINE Benchmarken oder Tunen?"
 while :; do
     read -p "--> l <-- für LIVE    und    --> o <-- für OFFLINE : " live_mode
-    [ "$live_mode" == "l" -o "$live_mode" == "o" ] && break
+    [[ "$live_mode" == "l" || "$live_mode" == "o" ]] && break
 done
 
 ################################################################################
@@ -840,6 +874,7 @@ cd ${workdir} >/dev/null
 # Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da, z.B. die folgenden 4
 _read_IMPORTANT_BENCHMARK_JSON_in
 
+# Nvidia-Befhele zum tunen, die wir kennen und so gut es ging abstrahiert haben
 declare -a nvidiaPara=(
     ${GRAFIK_CLOCK[${algorithm}]}
     ${MEMORY_CLOCK[${algorithm}]}
@@ -872,7 +907,7 @@ fi
 echo""
 echo "Kurze Zusammenfassung:"
 echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
-echo "Das ist der Minder, den Du ausgewählt hast: ${miner_name} ${miner_version}"
+echo "Das ist der Miner,      den Du ausgewählt hast : ${miner_name} ${miner_version}"
 echo "das ist der NH-Algo,    den du ausgewählt hast : ${algo}"
 echo "das ist der \$algorithm, den du ausgewählt hast : ${algorithm}"
 [ "${InternalAlgos[$algo]}" != "${algo}" ] && echo "Das ist der Miner-Interne Algoname: ${InternalAlgos[$algo]}"
@@ -882,13 +917,6 @@ echo "DIE FOLGENDEN KOMMANDOS WERDEN NACH BESTÄTIGUNG ABGESETZT:"
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
     echo "---> ${CmdStack[$i]} <---"
 done
-read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
-
-# GPU-Kommandos absetzen...
-for (( i=0; $i<${#CmdStack[@]}; i++ )); do
-    ${CmdStack[$i]}
-done
-
 
 ################################################################################
 ###
@@ -944,12 +972,21 @@ esac
 
 ################################################################################
 ###
-###          5.4. Startschuss setzen und Startkommando absetzen
+###          5.4. Letzte Abfrage, dann Startschuss setzen und Kommandos absetzen
 ###
 ################################################################################
 
-BENCH_DATE=$(date --utc +%s)
+echo "---> DER START DES MINERS SIEHT SO AUS: <---"
 echo "${minerstart} >>${BENCHLOGFILE} &"
+
+read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
+
+# GPU-Kommandos absetzen...
+for (( i=0; $i<${#CmdStack[@]}; i++ )); do
+    ${CmdStack[$i]}
+done
+
+bENCH_DATE=$(date --utc +%s)
 BENCHMARKING_WAS_STARTED=1
 
 ################################################################################
@@ -1163,12 +1200,12 @@ fi  ## $NoCards
 # Die Anzahl Wattwerte, die gemessen wurden. Jede Sekunde ein Wert.
 # Daher ist das auch gleichzeitig die Dauer der Hashwerteermittlung
 COUNTER=$(< "COUNTER")
-HASH_DURATION=$COUNTER
+hASH_DURATION=$COUNTER
 
 sort watt_bensh_30s.out |tail -1 > watt_bensh_30s_max.out
 
 WATT=$(< "watt_bensh_30s.out")
-MAX_WATT=$(< "watt_bensh_30s_max.out")
+maxWATT=$(< "watt_bensh_30s_max.out")
 
 sum_str='0'
 for w in $WATT ; do
@@ -1180,7 +1217,7 @@ read sum avgWATT <<<$(echo "sum = ${sum_str};\
 
 printf " Summe        : %12s; Messwerte: %5s\n" $sum $COUNTER
 printf " Durchschnitt : %12s\n" $avgWATT
-printf " Max WATT Wert: %12s\n" $MAX_WATT
+printf " Max WATT Wert: %12s\n" $maxWATT
 
 
 ############################################################################### 
