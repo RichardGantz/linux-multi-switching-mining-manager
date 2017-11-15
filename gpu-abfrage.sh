@@ -84,11 +84,17 @@ source gpu-abfrage.inc
 
 function _func_gpu_abfrage_sh () {
     unset READARR
+    declare -ig GPU_COUNT
     if [ $NoCards ]; then
-        gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' .FAKE.nvidia-smi.output >${SYSTEM_FILE}
+        GPU_COUNT=$(gawk -e 'BEGIN {FS=", | %"} \
+                           {print $1; print $2; print $3; print $4; print $5}' \
+                           .FAKE.nvidia-smi.output >${SYSTEM_FILE} \
+                           | wc -l)
     else
-        nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader | \
-            gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' >${SYSTEM_FILE}
+        GPU_COUNT=$(nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader \
+                           | gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' \
+                                  >${SYSTEM_FILE} \
+                           | wc -l )
     fi
     readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 

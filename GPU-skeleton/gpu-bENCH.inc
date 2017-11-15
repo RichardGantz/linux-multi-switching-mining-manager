@@ -151,6 +151,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     #      320
     #      
     #sed -e 's/\r//g' $IMPORTANT_BENCHMARK_JSON | \
+    if [ ${#bENCH_SRC} -eq 0 ]; then bENCH_SRC=${IMPORTANT_BENCHMARK_JSON}.tee_bENCH_SRC; fi
     shopt -s lastpipe
     gawk -e '$1 ~ /"Name":/ \
                  { algo          = substr( tolower($2), 2, length($2)-3 ); \
@@ -188,7 +189,10 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
                    power_limit   = substr( $2, 1, length($2)-1 ); \
                    getline;                                       # LESS_THREADS \
                    less_threads  = substr( $2, 1, length($2)-0 ); \
-                   print algo "#" miner_name "#" miner_version; \
+                   algorithm = algo "#" miner_name "#" miner_version; \
+                   if ( BENCH_KIND == 888 ) \
+                      { algorithm = algorithm "#" BENCH_KIND }; \
+                   print algorithm;     \
                    print benchspeed;    \
                    print watt;          \
                    print MAX_WATT;      \
