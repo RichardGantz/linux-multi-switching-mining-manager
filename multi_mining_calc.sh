@@ -14,6 +14,7 @@
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
 verbose=0
+performanceTest=1
 
 # Sicherheitshalber alle .pid Dateien löschen.
 # Das machen die Skripts zwar selbst bei SIGTERM, nicht aber bei SIGKILL und anderen.
@@ -132,6 +133,8 @@ source ./gpu-abfrage.sh
 # Das gibt Informationen der gpu-abfrage.sh aus
 ATTENTION_FOR_USER_INPUT=1
 while : ; do
+
+    [[ ${performanceTest} -eq 1 ]] && echo "$(date --utc +%s): >1.< While Loop ENTRY" >>perfmon.log
 
     # Diese Abfrage erzeugt die beiden Dateien "gpu_system.out" und "GLOBAL_GPU_SYSTEM_STATE.in"
     # Daten von "GLOBAL_GPU_SYSTEM_STATE.in", WELCHES MANUELL BEARBEITET WERDEN KANN,
@@ -252,6 +255,8 @@ while : ; do
     #  Die GPUs haben schon losgelegt, das heisst, dass SYNCFILE da ist und in etwa 31s neu getouched wird
     declare -i new_Data_available=$(stat -c %Y ${SYNCFILE})
 
+    [[ ${performanceTest} -eq 1 ]] && echo "$(date --utc +%s): >2.< Startschuss: Neue Daten sind verfügbar" >>perfmon.log
+
     ###############################################################################################
     # (26.10.2017)
     # Vor dem Einlesen der Werte aus dem SMARTMETER, um u.a. SolarWattAvailable berechnen zu können,
@@ -283,6 +288,7 @@ while : ; do
         fi
     done
 
+    [[ ${performanceTest} -eq 1 ]] && echo "$(date --utc +%s): >3.< GPUs haben alle Daten geschrieben" >>perfmon.log
 
     ###############################################################################################
     #
@@ -336,6 +342,8 @@ while : ; do
             done
         fi
     done
+
+    [[ ${performanceTest} -eq 1 ]] && echo "$(date --utc +%s): >4.< Alle Algos aller GPUs sind eigelesen." >>perfmon.log
 
     ###############################################################################################
     #
@@ -436,6 +444,8 @@ while : ; do
     #     unter Berücksichtigung eines entsprechenden "solar" Anteils, wodurch die Kosten sinken.
     # Die Kombination mit dem besten GV-Verhältnis merken wir uns jeweils in MAX_PROFIT und MAX_PROFIT_GPU_Algo_Combination:
     
+    [[ ${performanceTest} -eq 1 ]] && echo "$(date --utc +%s): >5.< Berechnungen beginnen mit Einzelberechnungen" >>perfmon.log
+
     #####################################################################################################
     #
     #     DAS IST EIN EXTREM WICHTIGES VARIABLENPAAR:
@@ -630,6 +640,8 @@ while : ; do
         fi
     fi
 
+    [[ ${performanceTest} -eq 1 ]] && echo "$(date --utc +%s): >6.< Beginn mit der Gesamtsystemberechnung" >>perfmon.log
+
     echo "=========  Gesamtsystemberechnung  ========="
 
     # Für die Mechanik der systematischen GV-Werte Ermittlung
@@ -681,6 +693,8 @@ while : ; do
     #                Die Auswertung der optimalen Kombination
     #
     ################################################################################
+
+    [[ ${performanceTest} -eq 1 ]] && echo "$(date --utc +%s): >7.< Auswertung und Miner-Steuerungen" >>perfmon.log
 
     printf "=========       Endergebnis        =========\n"
     echo "\$GLOBAL_GPU_COMBINATION_LOOP_COUNTER: $GLOBAL_GPU_COMBINATION_LOOP_COUNTER"
@@ -954,6 +968,8 @@ while : ; do
                  >smartmeter
         fi
     fi
+
+    [[ ${performanceTest} -eq 1 ]] && echo "$(date --utc +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 
     printf "=========     Ende des Zyklus      =========\n"
     while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
