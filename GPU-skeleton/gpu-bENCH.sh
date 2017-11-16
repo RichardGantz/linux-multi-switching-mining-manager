@@ -40,16 +40,19 @@ elif [ "${PWD:0:4}" == "GPU-" ]; then
     #
     # ABER: damit wir das Folgende, die STRUKTURANPASSUNG nicht immer wieder und wieder tun, schauen wir, ob wir die
     #       momentane gpu-bENCH.inc nicht schon geholt haben:
-    if [ ! $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc) -eq $(stat -c %Y gpu-bENCH.inc) ]; then
+    if [ !     $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc) \
+           -eq $(stat -c %Y gpu-bENCH.inc) ]; then
         #
         # Quell-bENCH ist seit dem Runterkopieren verändert worden, aber möglicherweise INKONSISTENT
         # Deshalb haben wir vereinbart, dass dieser Zustand so lang als INKONSISTENT anzusehen ist,
-        # bis die beiden Dateien benchmark_skeleton.json und gpu-bENCH.inc absichtlich auf das selbe Datum gesetzt werden.
+        # bis die beiden Dateien benchmark_skeleton.json und gpu-bENCH.inc
+        # absichtlich auf das selbe Datum gesetzt werden, z.B. über:
         #     touch -r benchmark_skeleton.json gpu-bENCH.inc
         # Das setzt das Editierungsdatum der gpu-bENCH.inc im letztlichen Erfolgsfall zwar VORAUS,
         #     aber das spielt ja keine Rolle. Sie wäre so oder so der GPU-eigenen gpu-bENCH.inc voraus.
         #
-        if [ $(stat -c %Y ../GPU-skeleton/benchmark_skeleton.json) -eq $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc ) ]; then
+        if [       $(stat -c %Y ../GPU-skeleton/benchmark_skeleton.json) \
+               -eq $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc ) ]; then
             #
             # Quell-bENCH ist seit dem Runterkopieren verändert worden, aber jetzt als KONSISTENT signalisiert!
             # Diese Bedingung sagt aus, dass ein konsistenter gpu-bENCH.inc Zustand hergestellt wurde und
@@ -77,4 +80,3 @@ elif [ "${PWD:0:4}" == "GPU-" ]; then
 else
     echo "Weiss nicht genau... müsste weiter untersuchen... " >/dev/null
 fi
-

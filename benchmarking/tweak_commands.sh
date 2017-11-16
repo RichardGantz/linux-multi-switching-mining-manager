@@ -37,7 +37,7 @@ read OWN_LOGFILE WATT_LOGFILE HASH_LOGFILE <<<$(< tweak_to_these_logs)
 gpu_idx=$(< bensh_gpu_30s_.index)
 gpu_uuid=$(< uuid)
 algorithm=$(< benching_${gpu_idx}_algo)
-read algo miner_name miner_version <<<"${algorithm//#/ }"
+read algo miner_name miner_version muck <<<"${algorithm//#/ }"
 LOGPATH="../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version}"
 
 # Jetzt haben wir gleich alle Daten für den $algorithm !
@@ -85,7 +85,9 @@ echo "Die gewünschte Logdatei für die Tweaking-Kommandos lautet: $OWN_LOGFILE"
 echo "Zusätzlich muss das Kommando in die folgenden Dateien geschrieben werden:"
 echo "Wattwerte: $WATT_LOGFILE und Hashwerte: $HASH_LOGFILE"
 
-declare -i lfdCmd cmdNr para
+declare -i lfdCmd cmdNr # para - Diese Deklaration als Integer hat sich gar nicht gut gemacht,
+                        #        als Buchstaben eingegeben wurden. Er hat dan immer 0 draus gemacht.
+                        #        Komischerweise passiert das bei cmdNr nicht ??? Sehr merkwürdig.
 while :; do
 
     if [ ${DoIt} ]; then
@@ -107,18 +109,29 @@ while :; do
     fi
 
     echo ""
-    echo "Benchmark is actually running for the following GPU:"
-    echo "GPU #${gpu_idx} with UUID: ${gpu_uuid}"
+    echo "Benchmark wird momentan mit der folgenden GPU durchgeführt, die Du beeinflussen kannst:"
+    echo "GPU #${gpu_idx} mit UUID: ${gpu_uuid}"
+    echo "Das ist der Miner,      der ausgewählt ist : ${miner_name} ${miner_version}"
+    echo "das ist der NH-Algo,    der ausgewählt ist : ${algo}"
+    echo "das ist der \$algorithm, der ausgewählt ist : ${algorithm}"
     echo ""
-
+    cmdNr_list=''
     for (( lfdCmd=0; $lfdCmd<${#nvidiaCmd[@]}; lfdCmd++ )); do
         printf "%3i : ${nvidiaCmd[${lfdCmd}]}\n" $((${lfdCmd}+1)) ${gpu_idx} ${nvidiaPara[${lfdCmd}]}
+        cmdNr_list+="$((${lfdCmd}+1)) "
     done
-    
     echo ""
-    read -p "Welches Kommando für GPU #${gpu_idx} ( 1 ... ${#nvidiaCmd[@]} ) ? " cmdNr
+
+    while :; do
+        read -p "Welches Kommando für GPU #${gpu_idx}? ${cmdNr_list} : " cmdNr
+        REGEXPAT="\<${cmdNr}\>"
+        [[ ${cmdNr_list} =~ ${REGEXPAT} ]] && break
+    done
 
     printf -v cmd "${nvidiaCmd[$((${cmdNr}-1))]}" ${gpu_idx} ${nvidiaPara[$((${cmdNr}-1))]}
-    read -p "${cmd} Neuer Wert? " para
-    
+    while :; do
+        read -p "${cmd} Neuer Wert? " para
+        REGEXPAT="\<[[:digit:]]+\>"
+        [[ ${para} =~ ${REGEXPAT} ]] && break
+    done
 done
