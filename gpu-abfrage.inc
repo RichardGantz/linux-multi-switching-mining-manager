@@ -141,3 +141,76 @@ _update_SYSTEM_STATEin_if_necessary () {
         || cp -f ${SYSTEM_STATE}.out ${SYSTEM_STATE}.in
     rm -f ${SYSTEM_STATE}.out
 }
+
+_read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
+    readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
+
+    # Die Daten der GPUs in Arrays einlesen, die durch den GPU-Grafikkarten-Index indexiert werden können
+    unset index;      declare -ag index
+    unset name;       declare -ag name
+    unset bus;        declare -ag bus
+    unset uuid;       declare -ag uuid
+    unset auslastung; declare -ag auslastung
+    for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
+        j=$(expr $i / 5)
+        index[$j]=${READARR[$i]}        # index[] = Grafikkarten-Index für miner
+        name[${index[$j]}]=${READARR[$i+1]}
+        bus[${index[$j]}]=${READARR[$i+2]}
+        uuid[${index[$j]}]=${READARR[$i+3]}
+        auslastung[${index[$j]}]=${READARR[$i+4]}
+        # EXTREM WICHTIGE Deklarationen!
+        # Seitdem dieser Teil am Anfang einer Endlosschleife enthalten ist, müssen wir die Arrays erst mal löschen!
+        declare -n deleteIt="GPU${index[$j]}Algos";     unset deleteIt
+        declare -n deleteIt="GPU${index[$j]}Watts";     unset deleteIt
+        declare -n deleteIt="GPU${index[$j]}Mines";     unset deleteIt
+        declare -ag "GPU${index[$j]}Algos"
+        declare -ag "GPU${index[$j]}Watts"
+        declare -ag "GPU${index[$j]}Mines"
+    done
+
+    # Die folgende Datei GLOBAL_GPU_SYSTEM_STATE.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
+    # Sie wird, wenn nicht vorhanden vom Skript erstellt, damit wir die UUID's und Namen haben.
+    # Und wenn sie vorhanden ist, merken wir uns die manuell gesetzten Enabled-Zustände,
+    #     BEVOR wir die Datei neu schreiben.
+    # Warum muss sie neu geschrieben werden?
+    #     Weil möglicherweise in der Zwischenzeit Karten ein- oder ausgebaut wurden,
+    #     die dazugenommen werden müssen mit einem Default-Wert ENABLED
+    #     oder ganz rausfliegen können, weil sie eh nicht mehr im System sind
+    # Eventuell können wir hier auch die temporär disabelten Algos (automatisch?) eintragen lassen
+    #     und durchschleifen. DARUM KÜMMERN WIR UNS ABER, WENN ES SOWEIT IST.
+    #     (Hier ist erst mal nur das Einlesen mitgemacht, weil der Code schon im multi_mining_calc.sh so drin war.)
+    unset SYSTEM_STATE_CONTENT
+    unset uuidEnabledSOLL;  declare -Ag uuidEnabledSOLL
+    unset AlgoDisabled;     declare -Ag AlgoDisabled
+    unset NumEnabledGPUs;   declare -ig NumEnabledGPUs
+    if [ -s ${SYSTEM_STATE}.in ]; then
+        cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
+        shopt_cmd_before=$(shopt -p lastpipe)
+        shopt -s lastpipe
+        cat ${SYSTEM_STATE}.in               \
+            | grep -v "^#"                   \
+            | grep -e "^GPU-\|^AlgoDisabled" \
+            | readarray -n 0 -O 0 -t SYSTEM_STATE_CONTENT
+
+        for (( i=0; $i<${#SYSTEM_STATE_CONTENT[@]}; i++ )); do
+            if [ "${SYSTEM_STATE_CONTENT[$i]:0:4}" == "GPU-" ]; then
+                echo ${SYSTEM_STATE_CONTENT[$i]} \
+                    | cut -d':' --output-delimiter=' ' -f1,3 \
+                    | read UUID GenerallyEnabled
+                declare -ig uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
+                NumEnabledGPUs+=${GenerallyEnabled}
+            elif [ "${SYSTEM_STATE_CONTENT[$i]:0:12}" == "AlgoDisabled" ]; then
+                unset AlgoName
+                read -a AlgoName <<<"${SYSTEM_STATE_CONTENT[$i]//:/ }"
+                if [ ${#AlgoName[@]} -eq 2 ] && [ "${AlgoName[0]}" == "AlgoDisabled" ]; then
+                    # Bestimmt den * vergessen oder nicht mal ein echter Algoname?
+                    AlgoDisabled[${AlgoName[1]}]="AlgoDisabled:${AlgoName[1]}:*"
+                else
+                    AlgoDisabled[${AlgoName[1]}]="${SYSTEM_STATE_CONTENT[$i]}"
+                fi
+            fi
+        done
+        ${shopt_cmd_before}
+    fi
+}
+

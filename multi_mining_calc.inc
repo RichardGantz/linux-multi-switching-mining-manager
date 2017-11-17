@@ -188,7 +188,7 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
             MAX_PROFIT_GPU_Algo_Combination=${algosCombinationKey}
             # Hier könnten wir eigentlich schon ausgeben, welche GPU mit welchem Algo
             echo "New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-            if [ ${verbose} == 1 ]; then
+            if [[ ${verbose} == 1 ]]; then
                 _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
                 echoString="Exactly: "
                 for (( i=0; $i<${#GPUINDEXES[@]}; i++ )); do
@@ -420,4 +420,85 @@ function _read_in_actual_RUNNING_STATE () {
         # Sichern der alten Datei. Vielleicht brauchen wir sie bei einem Abbruch zur Analyse
         cp -f ${RUNNING_STATE} ${RUNNING_STATE}.BAK
     fi  ### if [ -f ${RUNNING_STATE} ]; then
+}
+
+_read_in_kWhMin_kWhMax_kWhAkk () {
+    ###############################################################################################
+    #
+    #     EINLESEN der STROMPREISE in BTC
+    #
+    # In algo_multi_abfrage.sh, die vor Kurzem gelaufen sein muss,
+    # werden die EUR-Strompreise in BTC-Preise umgewandelt.
+    # Diese Preise brauchen wir in BTC, um die Kosten von den errechneten "Mines" abziehen zu können.
+    #
+    unset kwh_BTC; declare -A kwh_BTC
+    for ((grid=0; $grid<${#GRID[@]}; grid+=1)); do
+        # ACHTUNG. DAS MUSS AUF JEDEN FALL EIN MAL PRO Preiseermittlungslauf LAUF GEMACHT WERDEN!!!
+        # IST NUR DER BEQUEMLICHKEIT HALBER IN DIESE <GRID> SCHLEIFE GEPACKT,
+        # WEIL SIE NUR 1x DURCHLÄUFT
+        # Die in BTC umgerechneten Strompreise für die Vorausberechnungen später
+        kwh_BTC[${GRID[$grid]}]=$(< kWh_${GRID[$grid]}_Kosten_BTC.in)
+    done
+    # AUSNAHME BIS GEKLÄRT IST, WAS MIT DEM SOLAR-AKKU ZU TU IST, hier nur diese beiden Berechnungen
+    kWhMax=${kwh_BTC["netz"]}
+    kWhMin=${kwh_BTC["solar"]}
+    kWhAkk=${kwh_BTC["solar_akku"]}
+}
+
+_read_in_All_ALGO_WATTS_MINESin () {
+    ###############################################################################################
+    #
+    #    EINLESEN ALLER ALGORITHMEN, WATTS und MINES, AUF DIE WIR GERADE GEWARTET HABEN
+    #
+    # In dieser Datei hat die jeweilige GPU jetzt aber ALL ihre Algos,
+    #           die dabei verbrauchten Watts
+    #           und die "Mines" in BTC, die sie dabei errechnet, festgehalten:
+    # ALGO_WATTS_MINES.in
+    # Und kann wie üblich über readarray eingelesen werden.
+
+    #
+    # Und wir speichern diese in einem Array-Drilling, der immer synchron zu setzen ist:
+    #     GPU{realer_gpu_index}Algos[]                 also u.a.  GPU5Algos[]
+    #     GPU{realer_gpu_index}Watts[]                 also u.a.  GPU5Watts[]
+    #     GPU{realer_gpu_index}Mines[]                 also u.a.  GPU5Mines[]
+    #
+    # Wenn zur Zeit mehrere Algos für eine GPU möglich sind, sieht das z.B. so aus im Fall von 3 Algos:
+    #     GPU{realer_gpu_index}Algos[0]="cryptonight"  also u.a.  GPU5Algos[0]="cryptonight"
+    #                               [1]="equihash"                         [1]="equihash"
+    #                               [2]="daggerhashimoto"                  [2]="daggerhashimoto"
+    #     GPU{realer_gpu_index}Watts[0]="55"           also u.a.  GPU5Watts[0]="55"
+    #                               [1]="104"                              [1]="104"    
+    #                               [2]="98"                               [2]="98"
+    #     GPU{realer_gpu_index}Mines[0]=".00011711"    also u.a.  GPU5Mines[0]=".00011711"
+    #                               [1]=".00017009"                        [1]=".00017009"    
+    #                               [2]=".00013999"                        [2]=".00013999"
+    #
+    for (( idx=0; $idx<${#index[@]}; idx++ )); do
+        declare -n actGPUAlgos="GPU${index[$idx]}Algos"
+        declare -n actAlgoWatt="GPU${index[$idx]}Watts"
+        declare -n actAlgoMines="GPU${index[$idx]}Mines"
+
+        # Damit ist sichergestellt, dass gpu_gv-algo.sh mit dem Schreiben ALLER Daten fertig ist.
+        while [ -f ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.lock ]; do echo "Waiting..." >/dev/null; done
+        if [ -s ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in ]; then
+            unset READARR
+            readarray -n 0 -O 0 -t READARR <${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in
+            for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+                # Das ist eine sehr elegante Möglichkeit, einen neuen Wert auf ein Array zu pushen.
+                # Wir nehmen das jetzt aber alles mal raus und machen es anders und beobachten wieder
+                # die Durchlaufzeiten, ob die sich wieder mit der Zeit erhöhen UND ob sich
+                # der Speicherbedarf erhöht, OBWOHL alle Arrays immer erst durch UNSET zerstört werden
+                # ---> ARRAYPUSH 1 <---
+                if [[ ${arrayRedeclareTest} -eq 1 ]]; then
+                    actGPUAlgos=(${actGPUAlgos[@]}   "${READARR[$i]}")
+                    actAlgoWatt=(${actAlgoWatt[@]}   "${READARR[$i+1]}")
+                    actAlgoMines=(${actAlgoMines[@]} "${READARR[$i+2]}")
+                else
+                    actGPUAlgos[${#actGPUAlgos[@]}]="${READARR[$i]}"
+                    actAlgoWatt[${#actAlgoWatt[@]}]="${READARR[$i+1]}"
+                    actAlgoMines[${#actAlgoMines[@]}]="${READARR[$i+2]}"
+                fi
+            done
+        fi
+    done
 }
