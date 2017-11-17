@@ -66,8 +66,12 @@ function _calculate_ACTUAL_REAL_PROFIT () {
     # Also Kosten immer " * 24 / 1000", wobei wir darauf achten, dass das Teilen
     #     immer als möglichst letzte Rechenoperation erfolgt,
     #     weil alle Stellen >scale einfach weggeschmissen werden.
-    gesamtFormel="$3 - ( ${gesamtKostenBTC} ) * 24 / 1000"
-    ACTUAL_REAL_PROFIT=$(echo "scale=8; ${gesamtFormel} " | bc )
+    gesamtFormel="mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000"
+    echo "scale=8; ${gesamtFormel}; print real_profit, \" \", mines_sum" \
+        | bc \
+        | read ACTUAL_REAL_PROFIT ACTUAL_MAX_FP_MINES
+    #        | tee bc_inner_commands \
+    #   | tee bc_ergebnis \
 }
 
 ########################################################################
@@ -86,6 +90,9 @@ function _calculate_ACTUAL_REAL_PROFIT () {
 #
 function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
 
+    shopt_cmd_before=$(shopt -p lastpipe)
+    shopt -s lastpipe
+
     _calculate_ACTUAL_REAL_PROFIT $1 $2 "$3"
 
     # Da MAX_PROFIT eine Dezimalzahl und kein Integer ist, kann die bash nicht damit rechnen.
@@ -95,15 +102,6 @@ function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
     # als OLD_MAX_PROFIT
     OLD_MAX_PROFIT=${MAX_PROFIT}
 
-    # Da ist was schief gegangen. Aus ".0" ist plötzlich "0" geworden, was eigentlich für die
-    # Berechnung egal ist, aber der Vergleich OLD_MAX_PROFIT == ${MAX_PROFIT} geht dann schief,
-    # weil "0" != ".0" ist!    Kann eigentlich gelöscht werden
-    #if [[ ${#ACTUAL_REAL_PROFIT} == 0 ]]; then
-    #    echo "\$1:$1, \$2:$2, \$3:$3"
-    #fi
-
-    shopt_cmd_before=$(shopt -p lastpipe)
-    shopt -s lastpipe
     echo "scale=8; if ( ${ACTUAL_REAL_PROFIT} > ${MAX_PROFIT} ) \
                         { print ${ACTUAL_REAL_PROFIT}, \" \", ${ACTUAL_REAL_PROFIT} } \
                    else { print ${ACTUAL_REAL_PROFIT}, \" \", \"${MAX_PROFIT}\" }" \
@@ -202,6 +200,23 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
                 done
                 echo "${echoString%%?}"
             fi  ## if [ ${verbose} == 1 ]
+        fi
+
+        # (17.11.2017)
+        # Wir halten jetzt auch die MAX_FP_MINES und die dabei verbrauchten Watt in MAX_FP_WATTS fest
+        # Das sind Daten, die wir "nebenbei" festhalten für den Fall,
+        #     dass IM MOMENT (für den kommenden Zyklus) GARANTIERT KEINE NETZPOWER BEZOGEN WERDEN MUSS
+        # Die ACTUAL_MAX_FP_MINES werden auch von der innersten Berechnung gesetzt (_calculate_ACTUAL_REAL_PROFIT),
+        #     die oben im Rahmen von _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT bereits gerufen wurde.
+        OLD_MAX_FP_MINES=${MAX_FP_MINES}
+        MAX_FP_MINES=$(echo "scale=8; if ( ${ACTUAL_MAX_FP_MINES} > ${MAX_FP_MINES} ) \
+                                                   { print ${ACTUAL_MAX_FP_MINES} } \
+                                              else { print ${MAX_FP_MINES} }" \
+                              | bc )
+        if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
+            MAX_FP_WATTS=${CombinationWatts}
+            MAX_FP_GPU_Algo_Combination=${algosCombinationKey}
+            echo "New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
         fi
 
         # Für Statistik-Zwecke. Dieser Zähler sollte über die 31s-Intervalle ziemlich gleich bleiben
