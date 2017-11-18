@@ -351,6 +351,11 @@ echo "=========    Berechnungsverlauf    ========="
 for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
     echo ${MAX_PROFIT_MSG_STACK[$msg]}
 done
+if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
+    echo "FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
+else
+    echo "KEIN(!) FULL POWER MODE möglich bei ${SolarWattAvailable}W SolarPower und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
+fi
 for msg in ${!MAX_FP_MSG_STACK[@]}; do
     echo ${MAX_FP_MSG_STACK[$msg]}
 done
@@ -376,3 +381,4 @@ done
 echo "${SwitchOffGPUsArrayString/% /}"           >>MAX_PROFIT_DATA.out
 echo "${GLOBAL_GPU_COMBINATION_LOOP_COUNTER}"    >>MAX_PROFIT_DATA.out
 echo "${GLOBAL_MAX_PROFIT_CALL_COUNTER}"         >>MAX_PROFIT_DATA.out
+echo "${MAX_FP_WATTS}"                           >>MAX_PROFIT_DATA.out
