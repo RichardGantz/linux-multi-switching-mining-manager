@@ -216,7 +216,13 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                     fi
                     if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
                         MAX_PROFIT_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
-                        echo "New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+                        # ---> ARRAYPUSH 3a <---
+                        msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+                        if [[ ${arrayRedeclareTest} -eq 1 ]]; then
+                            MAX_PROFIT_MSG_STACK=(${MAX_PROFIT_MSG_STACK[@]} ${msg})
+                        else
+                            MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
+                        fi
                     fi
 
                     # (17.11.2017)
@@ -231,7 +237,13 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                     if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
                         MAX_FP_WATTS=${actAlgoWatt[$algoIdx]}
                         MAX_FP_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
-                        echo "New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+                        # ---> ARRAYPUSH 3b <---
+                        msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+                        if [[ ${arrayRedeclareTest} -eq 1 ]]; then
+                            MAX_FP_MSG_STACK=(${MAX_FP_MSG_STACK[@]} ${msg})
+                        else
+                            MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
+                        fi
                     fi
                 fi
             done
@@ -334,6 +346,14 @@ if [[ ${MAX_GOOD_GPUs} -gt 1 ]]; then      # Den Fall für 1 GPU allein haben wi
     done
 
 fi  # if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
+
+echo "=========    Berechnungsverlauf    ========="
+for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
+    echo ${MAX_PROFIT_MSG_STACK[$msg]}
+done
+for msg in ${!MAX_FP_MSG_STACK[@]}; do
+    echo ${MAX_FP_MSG_STACK[$msg]}
+done
 
 # Die folgenden Variablen müssen dann in Dateien gepiped werden, damit die Auswertung funktioniert:
 # 

@@ -233,9 +233,12 @@ while [ 1 -eq 1 ] ; do
     # Neue Kurse aus dem Netz
     # Gültiges Ergebnis .json File fängt so an:
     # {"result":{"stats":[
+    # {"result":{"simplemultialgo":[
     # und muss genau 1 mal gefunden werden
-    searchPattern='^[{]"result":[{]"stats":\['
-    pageDown=$( curl "https://api.nicehash.com/api?method=stats.global.current&location=0" \
+    # searchPattern='^[{]"result":[{]"stats":\['
+    # pageDown=$( curl "https://api.nicehash.com/api?method=stats.global.current&location=0" \
+    searchPattern='^[{]"result":[{]"simplemultialgo":\['
+    pageDown=$(curl "https://api.nicehash.com/api?method=simplemultialgo.info" \
         | tee $algoID_KURSE_WEB \
         | grep -c -e "$searchPattern" )
 
@@ -245,12 +248,20 @@ while [ 1 -eq 1 ] ; do
         echo "--------------------------------------------------------------------"
         unset NoAlgoNames_notified NoAlgoNames_recorded
 
-        num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS="},{|:[\[]{" } \
-             /"algo":[0-9]*/ && /"price":"[0-9.]*"/ { \
-                 if (match( $0, /"algo":[0-9]*/     )) \
-                    { M=substr($0, RSTART, RLENGTH);   print substr(M, index(M,":")+1 ) }  \
-                 if (match( $0, /"price":"[0-9.]*"/ )) \
-                    { M=substr($0, RSTART, RLENGTH-1); print substr(M, index(M,":")+2 ) } }'  \
+        #num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS="},{|:[\[]{" } \
+        #     /"algo":[0-9]*/ && /"price":"[0-9.]*"/ { \
+        #         if (match( $0, /"algo":[0-9]*/     )) \
+        #            { M=substr($0, RSTART, RLENGTH);   print substr(M, index(M,":")+1 ) }  \
+        #         if (match( $0, /"price":"[0-9.]*"/ )) \
+        #            { M=substr($0, RSTART, RLENGTH-1); print substr(M, index(M,":")+2 ) } }'  \
+        #      $algoID_KURSE_WEB 2>/dev/null \
+        #    | tee $algoID_KURSE_ARR \
+        #    | wc -l ) / 2 )
+        num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"} \
+            match( $0, /"algo":[[:digit:]]*/ )\
+                 { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) } \
+            match( $0, /"paying":"[.[:digit:]]*/ )\
+                 { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }'  \
               $algoID_KURSE_WEB 2>/dev/null \
             | tee $algoID_KURSE_ARR \
             | wc -l ) / 2 )
