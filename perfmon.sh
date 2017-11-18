@@ -3,6 +3,13 @@
 #
 # Bisschen Analyse der perfmon Daten
 
+# So kann die Ausgabe von $0 gefiltert werden, um den maximalen Wert, der vorkam anzuzeigen
+#    UND die Anzahl, wie oft dieser maximale Wert vorkam
+#     ./perfmon.sh| awk -e 'BEGIN {max=0} NF==1 {\
+#     if ($1>max) {max=$1; cnt=1}\
+#     else if ($1==max) {cnt++}\
+#     } END {print max " " cnt}'
+
 echo "######################################################################"
 echo "Die Entwicklung der Berechnungsdauern in Sekunden über die Zeit hinweg"
 echo "Jede Zeile ist ein 31s Zyklus"
@@ -39,7 +46,6 @@ END {
             if (delta > 86400) print "6-Das sind " delta/86400 " Tage"
 }
 ' | grep 6 | awk -e '/^6-/ {print; next} $3==5 {s=$8; getline; print s+$8}'
-
 
 exit
 

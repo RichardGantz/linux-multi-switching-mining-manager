@@ -463,6 +463,7 @@ while : ; do
     read -a SwitchOffGPUs <<<"${MAX_PROFIT_DATA[3]}"
     GLOBAL_GPU_COMBINATION_LOOP_COUNTER=${MAX_PROFIT_DATA[4]}
     GLOBAL_MAX_PROFIT_CALL_COUNTER=${MAX_PROFIT_DATA[5]}
+    MAX_FP_WATTS=${MAX_PROFIT_DATA[6]}
 
     ################################################################################
     #

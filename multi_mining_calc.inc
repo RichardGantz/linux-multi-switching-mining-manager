@@ -187,7 +187,13 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
         if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
             MAX_PROFIT_GPU_Algo_Combination=${algosCombinationKey}
             # Hier könnten wir eigentlich schon ausgeben, welche GPU mit welchem Algo
-            echo "New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+            # ---> ARRAYPUSH 3c <---
+            msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+            if [[ ${arrayRedeclareTest} -eq 1 ]]; then
+                MAX_PROFIT_MSG_STACK=(${MAX_PROFIT_MSG_STACK[@]} ${msg})
+            else
+                MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
+            fi
             if [[ ${verbose} == 1 ]]; then
                 _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
                 echoString="Exactly: "
@@ -216,7 +222,13 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
         if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
             MAX_FP_WATTS=${CombinationWatts}
             MAX_FP_GPU_Algo_Combination=${algosCombinationKey}
-            echo "New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+            # ---> ARRAYPUSH 3d <---
+            msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+            if [[ ${arrayRedeclareTest} -eq 1 ]]; then
+                MAX_FP_MSG_STACK=(${MAX_FP_MSG_STACK[@]} ${msg})
+            else
+                MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
+            fi
         fi
 
         # Für Statistik-Zwecke. Dieser Zähler sollte über die 31s-Intervalle ziemlich gleich bleiben

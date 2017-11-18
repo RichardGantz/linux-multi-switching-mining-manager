@@ -42,6 +42,21 @@ ATTENTION_FOR_USER_INPUT=1      # -a : setzt die Attention auf 0, übergeht mens
 LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ ) {out = out "/" $i }; \
                    print substr(out,2) }')
 
+prepare_hashes_for_bc='BEGIN {out="0"}
+{ hash=NF-1; einheit=NF
+  switch ($einheit) {
+    case /^Sol\/s$|^H\/s$/: faktor=1       ; break
+    case /^k/:              faktor=kBase   ; break
+    case /^M/:              faktor=kBase**2; break
+    case /^G/:              faktor=kBase**3; break
+    case /^T/:              faktor=kBase**4; break
+    case /^P/:              faktor=kBase**5; break
+  }
+  out=out "+" $hash "*" faktor
+}
+END {print out}
+'
+
 initialParameters="$*"
 #POSITIONAL=()
 while [[ $# -gt 0 ]]; do
@@ -139,24 +154,6 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     #[2017-10-28 16:40:04] GPU #0: Zotac GTX 980 Ti, 8964.48 kH/s
     #[2017-10-28 16:40:04] Total: 8997.08 kH/s
 
-
-    #######################################################
-    #
-    # Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
-    #
-    #######################################
-    # herrausfiltern ob KH,MH ....
-    case "${temp_einheit:0:1}" in
-        S|H) faktor=1                  ;;
-        k)   faktor=${k_base}          ;;
-        M)   faktor=$((${k_base}**2))  ;;
-        G)   faktor=$((${k_base}**3))  ;;
-        T)   faktor=$((${k_base}**4))  ;;
-        P)   faktor=$((${k_base}**5))  ;;
-        *)   echo "Shit: Unknown Umrechnungsfaktor '${temp_einheit:0:1}'"
-    esac
-    avgHASH=$(echo "${avgHASH} * $faktor" | bc)
-    echo "HASHWERT wurde in Einheit ${temp_einheit:1} umgerechnet: $avgHASH"
 
     # Die WATT-Werte noch zu Integern machen und dabei aufrunden
     avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
@@ -423,7 +420,8 @@ function _On_Exit () {
         ####################################################################
         #    Aufbereitung der Werte zum Schreiben in die benchmark_*.json
         #
-        temp_einheit=$(cat ${BENCHLOGFILE} | sed -e 's/ *(yes!)$//g' | grep -m1 "/s$" | gawk -e '{print $NF}')
+        temp_einheit=$(cat ${BENCHLOGFILE} | sed -e 's/ *(yes!)$//g' | grep -m1 "/s$" \
+                              | gawk -e '/H\/s$/ {print "H/s"; next}{print "Sol/s"}')
         if [ ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
             ###
             ### BENCHMARKING MODE was invoked
@@ -431,7 +429,7 @@ function _On_Exit () {
             hashCount=$(cat ${BENCHLOGFILE}  \
                       | sed -e 's/ *(yes!)$//g' \
                       | grep "/s$" \
-                      | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
+                      | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum )\
                       | wc -l \
                      )
@@ -997,7 +995,7 @@ BENCHMARKING_WAS_STARTED=1
 
 if [ $NoCards ]; then
     if [ ! -f "${BENCHLOGFILE}" ]; then
-        if [ "${miner_name}" == "miner" ]; then
+        if [[ "${miner_name}" == "miner" ]]; then
             #sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log >${BENCHLOGFILE}
             cp -f equihash.log ${BENCHLOGFILE}
         else
@@ -1089,7 +1087,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
                       | tail -n +$hash_line \
                       | sed -e 's/ *(yes!)$//g' \
                       | grep -e "/s$" \
-                      | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
+                      | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum ) \
                       | wc -l \
                      )
@@ -1107,7 +1105,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             hashCount=$(cat ${BENCHLOGFILE} \
                       | sed -e 's/ *(yes!)$//g' \
                       | grep "/s$" \
-                      | tee >(gawk -M -e 'BEGIN{out="0"}{hash=NF-1; out=out "+" $hash}END{print out}' \
+                      | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum )\
                       | wc -l \
                      )
@@ -1164,97 +1162,4 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
     rm -f ${READY_FOR_SIGNALS}
 
 done  ##  while [ $countWatts ] || [ $countHashes ] || [ ! $STOP_AFTER_MIN_REACHED ]
-
-exit
-
-############################################################################################
-############################################################################################
-############################################################################################
-################                                                    ########################
-################                  ENDE DES SKRIPTES                 ########################
-################                                                    ########################
-############################################################################################
-############################################################################################
-############################################################################################
-
-#       Verlagerung des Restes in die On_Exit Routine, da die auch dann
-#       sofort aktiviert wird, wenn der Tweaker von aussen beendet...
-#       Dieser ganze Rest kann bald gelöscht werden...
-
-echo "... Wattmessen ist beendet!!" 
-
-echo "Beenden des Miners"
-if [ ! $NoCards ]; then
-    ## Beenden des miners
-    ccminer=$(cat "ccminer.pid")
-    kill -15 $ccminer
-    rm ccminer.pid
-    sleep 2
-fi  ## $NoCards
-
-
-###############################################################################
-#
-#Berechnung der Durchschnittlichen Verbrauches 
-#
-# Die Anzahl Wattwerte, die gemessen wurden. Jede Sekunde ein Wert.
-# Daher ist das auch gleichzeitig die Dauer der Hashwerteermittlung
-COUNTER=$(< "COUNTER")
-hASH_DURATION=$COUNTER
-
-sort watt_bensh_30s.out |tail -1 > watt_bensh_30s_max.out
-
-WATT=$(< "watt_bensh_30s.out")
-maxWATT=$(< "watt_bensh_30s_max.out")
-
-sum_str='0'
-for w in $WATT ; do
-    sum_str+="+$w"
-done
-read sum avgWATT <<<$(echo "sum = ${sum_str};\
-     print sum, \" \", sum / $COUNTER"\
-    | bc)
-
-printf " Summe        : %12s; Messwerte: %5s\n" $sum $COUNTER
-printf " Durchschnitt : %12s\n" $avgWATT
-printf " Max WATT Wert: %12s\n" $maxWATT
-
-
-############################################################################### 
-# 
-#Berechnung der Durchschnittlichen Hash wertes 
-# 
-
-#cat miner.out |gawk -e 'BEGIN {FS=", "} {print $2}' |grep -E -o -e '[0-9.]*' 
-# ---> nur die mit "yes!" zur berechnung des hashes nehmen bei "THREADING" <---
-
-# Wegen des MH, KH umrechnung wird später bevor die daten in die bench hineingeschrieben wird der wert angepasst.
-# die Werte werden in zwei schritten herausgefiltert und in eine hash temp datei zusammengepakt, so dass jeder hash
-# wert erfasst werden kann
-
-# Ausfiltern von Farben Escape-Sequenzen, damit grep das "/s$" auch finden kann.
-#sed -i -e 's/\x1B[[][[:digit:]]*m//g' ${BENCHLOGFILE}
-
-rm -f temp_hash
-cat ${BENCHLOGFILE} | sed -e 's/ *(yes!)$//g' | grep "/s$" \
-    | tee >(grep -m1 "/s$" | gawk -e '{print $NF}' > temp_einheit) \
-    | gawk -e '{hash=NF-1; print $hash }' >>temp_hash
-HASH_temp=$(< "temp_hash")
-
-sum_str='0'
-declare -i HASHCOUNTER=0 
-for float in $HASH_temp ; do  
-    sum_str+="+${float}"
-    let HASHCOUNTER++
-done
-echo $HASHCOUNTER > HASHCOUNTER
-read sum avgHASH <<<$(echo "scale=9; sum = ${sum_str};\
-     print sum, \" \", sum / $HASHCOUNTER"\
-    | bc)
-
-printf " Summe        : %12s; Messwerte: %5s\n" ${sum:0:$(($(expr index "$sum" ".")+2))} $HASHCOUNTER
-printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} $(< temp_einheit)
-
-# Es folgt zum Schluss die On_Exit-Routine, die diese Funktion aufruft!
-# _edit_BENCHMARK_JSON_and_put_in_the_new_values
 
