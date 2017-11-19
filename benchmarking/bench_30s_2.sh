@@ -45,12 +45,12 @@ LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ )
 prepare_hashes_for_bc='BEGIN {out="0"}
 { hash=NF-1; einheit=NF
   switch ($einheit) {
-    case /^Sol\/s$|^H\/s$/: faktor=1       ; break
-    case /^k/:              faktor=kBase   ; break
-    case /^M/:              faktor=kBase**2; break
-    case /^G/:              faktor=kBase**3; break
-    case /^T/:              faktor=kBase**4; break
-    case /^P/:              faktor=kBase**5; break
+    case /^Sol\/s$|^H\/s$/: faktor=1      ; break
+    case /^k/:              faktor=kBase  ; break
+    case /^M/:              faktor=kBase^2; break
+    case /^G/:              faktor=kBase^3; break
+    case /^T/:              faktor=kBase^4; break
+    case /^P/:              faktor=kBase^5; break
   }
   out=out "+" $hash "*" faktor
 }
@@ -227,6 +227,9 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
     if [ ${tempazb} -gt 1 ] ; then
+        #
+        # Das alles dient der Vorbereitung der zeilengenauen Bearbeitung der IMPORTANT_BENCHMARK_JSON
+        #
         echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
         echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
         echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+2)) eingefügt"
@@ -277,8 +280,14 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             echo "der LESS_THREADS Wert ${less_threads} wird nun in der Zeile $((tempazb+13)) eingefügt"
             echo "$((tempazb+13))s/: [0-9.]*$/: ${less_threads}/"   >>sed_insert_on_different_lines_cmd
         fi
+        #
+        # Das ist die tatsächliche Bearbeitung der IMPORTANT_BENCHMARK_JSON
+        #
         sed -i -f sed_insert_on_different_lines_cmd ${IMPORTANT_BENCHMARK_JSON}
     else
+        #
+        # Der Algo für diese Minerversion war nicht vorhanden und wird nun zu IMPORTANT_BENCHMARK_JSON hinzugefügt
+        #
         BLOCK_FORMAT=(
             '      \"Name\": \"%s\",\n'
             '      \"NiceHashID\": %s,\n'
@@ -348,7 +357,7 @@ function _delete_temporary_files () {
     rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
        temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb temp_hash temp_einheit \
        HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on_different_lines_cmd* ccminer.pid \
-       ${READY_FOR_SIGNALS}
+       ${READY_FOR_SIGNALS} MULTI_ALGO_INFO.json
 }
 _delete_temporary_files
 
@@ -597,17 +606,22 @@ gpu_idx_list="${index[@]}"
 
 NH_DOMAIN="nicehash.com"
 export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
-ALGO_NAMES_WEB="ALGO_NAMES.json"
-ALGO_PORTS_WEB="MULTI_ALGO_INFO.json"
+algoID_KURSE_PORTS_WEB="KURSE.json"
+algoID_KURSE_PORTS_ARR="KURSE_PORTS.in"
 
 # Da manche Skripts in Unterverzeichnissen laufen, müssen diese Skripts die Globale Variable für sich intern anpassen
 # ---> Wir könnten auch mit Symbolischen Links arbeiten, die in den Unterverzeichnissen angelegt werden und auf die
 # ---> gleichnamigen Dateien darüber zeigen.
-ALGO_NAMES_WEB="../${ALGO_NAMES_WEB}"
-ALGO_PORTS_WEB="../${ALGO_PORTS_WEB}"
+algoID_KURSE_PORTS_WEB="../${algoID_KURSE_PORTS_WEB}"
+algoID_KURSE_PORTS_ARR="../${algoID_KURSE_PORTS_ARR}"
 
-_read_in_ALGO_NAMES
-_read_in_ALGO_PORTS
+# >>>>>>>>>> DAS IST MOMENTAN EINE LEICHE.
+# >>>>>>>>>> WIR BEKOMMEN ALLE WERTE FÜR'S BENCHMARKING AUCH ÜBER DIE "simplemultialgo" API-Abfrage
+#ALGO_NAMES_WEB="ALGO_NAMES.json"             # GLOBALE VARIABLE Kandidat
+#ALGO_NAMES_WEB="../${ALGO_NAMES_WEB}"        # Lokale Anpassung für Skripts in Unterverzeichnissen
+#_read_in_ALGO_NAMES
+
+_read_in_ALGO_PORTS_KURSE
 
 ################################################################################
 ################################################################################
@@ -853,7 +867,13 @@ echo "Noch eine letzte Frage:"
 echo "Willst Du LIVE oder OFFLINE Benchmarken oder Tunen?"
 while :; do
     read -p "--> l <-- für LIVE    und    --> o <-- für OFFLINE : " live_mode
-    [[ "$live_mode" == "l" || "$live_mode" == "o" ]] && break
+    if [[ "$live_mode" == "l" ]]; then
+        if [[ ${KURSE[$algo]} -eq 0 ]]; then
+            echo "Paying ist im Moment auf 0, deshalb Umschaltung auf OFFLINE Benchmarking"
+            live_mode="o"
+        fi
+    fi
+    [[ "$live_mode" == "o" ]] && break
 done
 
 ################################################################################

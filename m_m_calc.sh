@@ -353,12 +353,12 @@ for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
 done
 if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
     echo "FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
+    for msg in ${!MAX_FP_MSG_STACK[@]}; do
+        echo ${MAX_FP_MSG_STACK[$msg]}
+    done
 else
     echo "KEIN(!) FULL POWER MODE möglich bei ${SolarWattAvailable}W SolarPower und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
 fi
-for msg in ${!MAX_FP_MSG_STACK[@]}; do
-    echo ${MAX_FP_MSG_STACK[$msg]}
-done
 
 # Die folgenden Variablen müssen dann in Dateien gepiped werden, damit die Auswertung funktioniert:
 # 

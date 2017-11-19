@@ -48,7 +48,7 @@ SYNCFILE="you_can_read_now.sync"
 
 function _On_Exit () {
     # Wir könnten auch alle GPUs stoppen...
-    rm -f ${ALGO_NAMES_ARR} ${algoID_KURSE_ARR} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} $(basename $0 .sh).pid
+    rm -f ${ALGO_NAMES_ARR} ${algoID_KURSE_PORTS_ARR} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
 
@@ -57,8 +57,8 @@ ALGO_NAMES_ARR="ALGO_NAMES.in"
 
 _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
 {
-    # $1 = Webdateiname, z.B. ${ALGO_NAMES_WEB}, ${algoID_KURSE_WEB}
-    # $2 = Einlesedatei, z.B. ${ALGO_NAMES_ARR}, ${algoID_KURSE_ARR}
+    # $1 = Webdateiname, z.B. ${ALGO_NAMES_WEB}, ${algoID_KURSE_PORTS_WEB}
+    # $2 = Einlesedatei, z.B. ${ALGO_NAMES_ARR}, ${algoID_KURSE_PORTS_ARR}
     # Tja, was machen wir in dem Fall also?
     # Die Stratum-Server laufen und nehmen offensichtlich generierten Goldstaub entgegen.
     # Und die Karten, die wir vor 31s eingeschaltet haben, liefen ja mit Gewinn.
@@ -204,8 +204,8 @@ _notify_about_NO_BTC_KURS()
 #    Der NAME wiederum dient als Index für das Array KURSE[algoname],
 #        der den PREIS aus der nächsten Zeile [$i+1 =1,3,5,7,etc.] aufnimmt.
 
-algoID_KURSE_WEB="KURSE.json"
-algoID_KURSE_ARR="KURSE.in"
+algoID_KURSE_PORTS_WEB="KURSE.json"
+algoID_KURSE_PORTS_ARR="KURSE.in"
 while [ 1 -eq 1 ] ; do
     # Algos nur stündlich prüfen
     declare -i algo_age=$(expr $(date --utc +%s) - $algo_names_arr_modified )
@@ -239,11 +239,11 @@ while [ 1 -eq 1 ] ; do
     # pageDown=$( curl "https://api.nicehash.com/api?method=stats.global.current&location=0" \
     searchPattern='^[{]"result":[{]"simplemultialgo":\['
     pageDown=$(curl "https://api.nicehash.com/api?method=simplemultialgo.info" \
-        | tee $algoID_KURSE_WEB \
+        | tee $algoID_KURSE_PORTS_WEB \
         | grep -c -e "$searchPattern" )
 
     if [[ "${pageDown}" != "1" ]]; then
-        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${algoID_KURSE_WEB}" "${algoID_KURSE_ARR}" "$searchPattern"
+        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${algoID_KURSE_PORTS_WEB}" "${algoID_KURSE_PORTS_ARR}" "$searchPattern"
     else
         echo "--------------------------------------------------------------------"
         unset NoAlgoNames_notified NoAlgoNames_recorded
@@ -254,16 +254,16 @@ while [ 1 -eq 1 ] ; do
         #            { M=substr($0, RSTART, RLENGTH);   print substr(M, index(M,":")+1 ) }  \
         #         if (match( $0, /"price":"[0-9.]*"/ )) \
         #            { M=substr($0, RSTART, RLENGTH-1); print substr(M, index(M,":")+2 ) } }'  \
-        #      $algoID_KURSE_WEB 2>/dev/null \
-        #    | tee $algoID_KURSE_ARR \
+        #      $algoID_KURSE_PORTS_WEB 2>/dev/null \
+        #    | tee $algoID_KURSE_PORTS_ARR \
         #    | wc -l ) / 2 )
         num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"} \
             match( $0, /"algo":[[:digit:]]*/ )\
                  { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) } \
             match( $0, /"paying":"[.[:digit:]]*/ )\
                  { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }'  \
-              $algoID_KURSE_WEB 2>/dev/null \
-            | tee $algoID_KURSE_ARR \
+              $algoID_KURSE_PORTS_WEB 2>/dev/null \
+            | tee $algoID_KURSE_PORTS_ARR \
             | wc -l ) / 2 )
         if [[ ! $num_algos_with_price == $num_algos_with_name ]]; then
             notify-send "###---> MAYBE A NEW ALGORITHM DETECTED !!! <---###"
