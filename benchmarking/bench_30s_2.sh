@@ -1,14 +1,14 @@
 #!/bin/bash
 ###############################################################################
 # 
-# Erstellung der Benchmarkwerte mit hielfe des ccminers 
+# Erstellung der Benchmarkwerte mit Hilfe des ccminers
 # 
-# Erstüberblick der möglichen Algos zum Berechnen + hash werte (nicht ganz aussagekräftig) 
+# Erstüberblick der möglichen Algos zum Berechnen + hash werte (nicht ganz aussagekräftig)
 # 
 #   
 # 
-# ## benchmark aufruf vom ccminer mit allen algoryhtmen welcher dieser kann 
-#   Vor--benchmark um einen ersten überblick zu bekommen über algos und hashes 
+# ## benchmark aufruf vom ccminer mit allen algoryhtmen welcher dieser kann
+#   Vor--benchmark um einen ersten überblick zu bekommen über algos und hashes
 # 
 #if [ $# -eq 0 ]; then kill -9 $$; fi
 
@@ -35,7 +35,7 @@ declare -i MIN_WATT_COUNT=30    # -w Anzahl Sekunden: Mindestanzahl Wattwerte, d
 STOP_AFTER_MIN_REACHED=1        # -t : setzt Abbruch nach der Mindestlaufzeit- und Mindest-Hashzahleenermittlung auf 0
                                 #      Das ist der Tweak-Mode. Standard ist der Benchmark-Modus
 bENCH_KIND=2                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; 888 == FullPowerMode
-ATTENTION_FOR_USER_INPUT=1      # -a : setzt die Attention auf 0, übergeht menschliche Eingaben
+ATTENTION_FOR_USER_INPUT=1      # -a | --auto: setzt die Attention auf 0, übergeht menschliche Eingaben
                                 #      ---------> und wird über Variablen und Dateien gesteuert  <---------
                                 #      ---------> MUSS ERST IMPLEMENTIERT WERDEN !!!!!!!!!       <---------
                                 #      ---------> IM MOMENT NUR DIE UNTERDRÜCKUNG VON AUSGABEN   <---------
@@ -45,12 +45,12 @@ LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ )
 prepare_hashes_for_bc='BEGIN {out="0"}
 { hash=NF-1; einheit=NF
   switch ($einheit) {
-    case /^Sol\/s$|^H\/s$/: faktor=1       ; break
-    case /^k/:              faktor=kBase   ; break
-    case /^M/:              faktor=kBase**2; break
-    case /^G/:              faktor=kBase**3; break
-    case /^T/:              faktor=kBase**4; break
-    case /^P/:              faktor=kBase**5; break
+    case /^Sol\/s$|^H\/s$/: faktor=1      ; break
+    case /^k/:              faktor=kBase  ; break
+    case /^M/:              faktor=kBase^2; break
+    case /^G/:              faktor=kBase^3; break
+    case /^T/:              faktor=kBase^4; break
+    case /^P/:              faktor=kBase^5; break
   }
   out=out "+" $hash "*" faktor
 }
@@ -155,12 +155,13 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     #[2017-10-28 16:40:04] Total: 8997.08 kH/s
 
 
+    # Der Zeitstempel dieser Messung, nach dem Herausfallen aus dem Sleep am Ende der Endlosschleife,
+    # dem Eintritt in die On_Exit() Routine, dem kill <ccminer.pid und 1 Sekunde sleep.
+    bENCH_DATE=$BENCH_OR_TWEAK_END
+
     # Die WATT-Werte noch zu Integern machen und dabei aufrunden
     avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
     maxWATT=$((${maxWATT/%[.][[:digit:]]*}+1))
-
-    # Der Zeitstempel dieser Messung
-    bENCH_DATE=$BENCH_OR_TWEAK_END
 
     declare -i tempazb=0
     # Full Power ($?=100) oder Effizienz Messung ($?=99)
@@ -227,6 +228,9 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
     if [ ${tempazb} -gt 1 ] ; then
+        #
+        # Das alles dient der Vorbereitung der zeilengenauen Bearbeitung der IMPORTANT_BENCHMARK_JSON
+        #
         echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
         echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
         echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+2)) eingefügt"
@@ -277,8 +281,14 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             echo "der LESS_THREADS Wert ${less_threads} wird nun in der Zeile $((tempazb+13)) eingefügt"
             echo "$((tempazb+13))s/: [0-9.]*$/: ${less_threads}/"   >>sed_insert_on_different_lines_cmd
         fi
+        #
+        # Das ist die tatsächliche Bearbeitung der IMPORTANT_BENCHMARK_JSON
+        #
         sed -i -f sed_insert_on_different_lines_cmd ${IMPORTANT_BENCHMARK_JSON}
     else
+        #
+        # Der Algo für diese Minerversion war nicht vorhanden und wird nun zu IMPORTANT_BENCHMARK_JSON hinzugefügt
+        #
         BLOCK_FORMAT=(
             '      \"Name\": \"%s\",\n'
             '      \"NiceHashID\": %s,\n'
@@ -348,7 +358,7 @@ function _delete_temporary_files () {
     rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
        temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb temp_hash temp_einheit \
        HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on_different_lines_cmd* ccminer.pid \
-       ${READY_FOR_SIGNALS}
+       ${READY_FOR_SIGNALS} MULTI_ALGO_INFO.json yes_count booo_count
 }
 _delete_temporary_files
 
@@ -369,6 +379,22 @@ function _On_Exit () {
         echo "Beenden des Miners..."
         kill -15 $(< "ccminer.pid")
 
+        # 2 Sekunden warten... Auf was?
+        # Vielleicht, bis der ccminer.pid - Prozess weg ist
+        # UND, damit sich die Karte nicht "verschluckt",
+        #      wenn gleich ein neuer Miner gestartet werden sollte, wie das im multi_mining_betrieb der Fall ist
+        if [ ! $NoCards ]; then
+            sleep 1
+        fi  ## $NoCards
+
+        # Bis jetzt könnten Werte in das $BENCHLOGFILE hineingekommen sein.
+        # Das ist vor allem für den Tweak-Fall interessant, weil der das $BENCHLOGFILE nochmal
+        # durchgehen muss! Denn es könnte noch ein Wert dazu gekommen sein!
+        # ---> BITTE NOCHMAL NACHPROGRAMMIEREN!                      <---
+        # ---> MUSS DAS BENCHFILE AUCH IM TWEAKMODE NOCHMAL SCANNEN! <---
+        #
+        BENCH_OR_TWEAK_END=$(date --utc +%s)
+
         echo "Beenden des Logger-Terminals..."
         kill_pids=$(ps -ef \
            | grep -e "${Bench_Log_PTY_Cmd}" \
@@ -379,17 +405,6 @@ function _On_Exit () {
             kill $kill_pids
             printf "done.\n"
         fi
-        if [ ! $NoCards ]; then
-            sleep 2
-        fi  ## $NoCards
-        #
-        # Bis jetzt könnten Werte in das $BENCHLOGFILE hineingekommen sein.
-        # Das ist vor allem für den Tweak-Fall interessant, weil der das $BENCHLOGFILE nochmal
-        # durchgehen muss! Denn es könnte noch ein Wert dazu gekommen sein!
-        # ---> BITTE NOCHMAL NACHPROGRAMMIEREN!                      <---
-        # ---> MUSS DAS BENCHFILE AUCH IM TWEAKMODE NOCHMAL SCANNEN! <---
-        #
-        BENCH_OR_TWEAK_END=$(date --utc +%s)
 
         # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
         if [ -f ${BENCHLOGFILE} ]; then
@@ -597,17 +612,32 @@ gpu_idx_list="${index[@]}"
 
 NH_DOMAIN="nicehash.com"
 export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
-ALGO_NAMES_WEB="ALGO_NAMES.json"
-ALGO_PORTS_WEB="MULTI_ALGO_INFO.json"
+algoID_KURSE_PORTS_WEB="KURSE.json"
+algoID_KURSE_PORTS_ARR="KURSE_PORTS.in"
 
 # Da manche Skripts in Unterverzeichnissen laufen, müssen diese Skripts die Globale Variable für sich intern anpassen
 # ---> Wir könnten auch mit Symbolischen Links arbeiten, die in den Unterverzeichnissen angelegt werden und auf die
 # ---> gleichnamigen Dateien darüber zeigen.
-ALGO_NAMES_WEB="../${ALGO_NAMES_WEB}"
-ALGO_PORTS_WEB="../${ALGO_PORTS_WEB}"
+algoID_KURSE_PORTS_WEB="../${algoID_KURSE_PORTS_WEB}"
+algoID_KURSE_PORTS_ARR="../${algoID_KURSE_PORTS_ARR}"
 
-_read_in_ALGO_NAMES
-_read_in_ALGO_PORTS
+# Die Informationen frisch aus dem Web zu holen ist leider nötig,
+# weil wir im Fall des Live-Benchmarkings keine Algos berechnen wollen, für die es 0 gibt.
+# Allerdings macht das im laufenden Betrieb schon die algo_multi_abfrage.sh, der wir NICHT dazwischenfunken wollen.
+#   Deshalb holen wir die Daten nur dann selbst, wenn die algoID_KURSE_PORTS_WEB älter als 120 Sekunden ist.
+#   Denn dann läuft die algo_multi_abfrage.sh nicht
+if [ ! -s ${algoID_KURSE_PORTS_WEB} ] \
+       || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s)+120)) -lt $(date --utc +%s) ]]; then
+    declare -i secs=1
+    _prepare_ALGO_PORTS_KURSE_from_the_Web
+    while [ $? -eq 1 ]; do
+        echo "Waiting for valid File ${algoID_KURSE_PORTS_WEB} from the Web, Second Nr. $secs"
+        sleep 1
+        let secs++
+        _prepare_ALGO_PORTS_KURSE_from_the_Web
+    done
+fi
+_read_in_ALGO_PORTS_KURSE
 
 ################################################################################
 ################################################################################
@@ -853,7 +883,15 @@ echo "Noch eine letzte Frage:"
 echo "Willst Du LIVE oder OFFLINE Benchmarken oder Tunen?"
 while :; do
     read -p "--> l <-- für LIVE    und    --> o <-- für OFFLINE : " live_mode
-    [[ "$live_mode" == "l" || "$live_mode" == "o" ]] && break
+    if [[ "$live_mode" == "l" ]]; then
+        if [ "${KURSE[$algo]}" == "0" ]; then
+            echo "Paying ist im Moment auf 0, deshalb Umschaltung auf OFFLINE Benchmarking"
+            live_mode="o"
+        else
+            break
+        fi
+    fi
+    [[ "$live_mode" == "o" ]] && break
 done
 
 ################################################################################
@@ -872,7 +910,13 @@ cd ${workdir} >/dev/null
 # Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da, z.B. die folgenden 4
 _read_IMPORTANT_BENCHMARK_JSON_in
 
-# Nvidia-Befhele zum tunen, die wir kennen und so gut es ging abstrahiert haben
+# Nvidia-Befhele zum tunen, die wir kennen und so gut es ging abstrahiert haben:
+#nvidiaCmd[0]="nvidia-settings --assign [gpu:%i]/GPUGraphicsClockOffset[3]=%i"
+#nvidiaCmd[1]="nvidia-settings --assign [gpu:%i]/GPUMemoryTransferRateOffset[3]=%i"
+#nvidiaCmd[2]="nvidia-settings --assign [fan:%i]/GPUTargetFanSpeed=%i"
+#nvidiaCmd[3]="./nvidia-befehle/smi --id=%i -pl %i"
+#nvidiaCmd[4]="nvidia-settings --assign [gpu:%i]/GPUFanControlState=%i"
+
 declare -a nvidiaPara=(
     ${GRAFIK_CLOCK[${algorithm}]}
     ${MEMORY_CLOCK[${algorithm}]}
@@ -984,9 +1028,6 @@ for (( i=0; $i<${#CmdStack[@]}; i++ )); do
     ${CmdStack[$i]}
 done
 
-bENCH_DATE=$(date --utc +%s)
-BENCHMARKING_WAS_STARTED=1
-
 ################################################################################
 ###
 ###          5.5. Miner Starten und Logausgabe in eigenes Terminal umleiten
@@ -1003,6 +1044,14 @@ if [ $NoCards ]; then
         fi
     fi
 fi  ## $NoCards
+
+# Startsekunde festhalten.
+# Wir halten auch die Sekunde nach dem Killing des Miners bei Eintritt in die On_Exit() Routine fest.
+# Wir könnten also überlegen, ob wir Endesekunde - Startsekunde als Messdauer für die Hashwerte festhalten?
+# Wir geben es mal beides aus.
+# Dann sehen wir, wie stark eine eventuelle Diskrepanz auftritt
+bENCH_START=$(date --utc +%s)
+BENCHMARKING_WAS_STARTED=1
 
 ${minerstart} >>${BENCHLOGFILE} &
 echo $! > ccminer.pid
