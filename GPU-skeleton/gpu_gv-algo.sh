@@ -15,35 +15,39 @@
 #     in die Assoziativen Arrays bENCH["AlgoName"] und WATTS["AlgoName"] aufnimmt
 #  8. Ruft _read_IMPORTANT_BENCHMARK_JSON_in() und hat jetzt die beiden Arrays zur Verfügung und kennt das "Alter"
 #     der Benchmarkdatei zum Zeitpunkt des Einlesens in der Variablen ${IMPORTANT_BENCHMARK_JSON_last_age_in_seconds}
-#  9. Definiert _read_ALGOs_in(), welches nur dann etwas im Arbeitsspeicher ändert, wenn die Datei
-#     ../ALGO_NAMES.in existiert und nicht leer ist:
-#     Dann liest sie die Datei in die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] ein
-#     und merkt sich das "Alter" der eingelesenen Datei in der Variablen ${ALGO_NAMES_last_age_in_seconds}
-# 10. Definiert _read_KURSE_in(), welches die Datei "../KURSE.in" in das Array KURSE["AlgoName"] aufnimmt.
-#     Das Alter dieser Datei ist unwichtig, weil sie IMMER durch algo_multi_abfrage.sh aus dem Web aktualisiert wird.
-#     Andere müssen dafür sorgen, dass die Daten in dieser Datei gültig sind!
+# (21.11.2017)
+# Wir wissen jetzt, dass alle relevanten Werte in der "simplemultialgo"-api Abfrage enthalten sind
+#     und brauchen die ../ALGO_NAMES.in überhaupt nicht mehr.
+#     Das folgende kann raus:
+#  9. 
+#
+# (21.11.2017)
+# Das machen wir ANDERS. Es gibt schon includable Funktionen zum Abruf, Auswertung und Einlesen der Webseite
+# in die Arrays durch source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
+#        ALGOs[ $algo_ID ]
+#        KURSE[ $algo ]
+#        PORTs[ $algo ]
+#     ALGO_IDs[ $algo ]
+# 10. source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
+#
 # 11. ###WARTET### jetzt, bis das SYNCFILE="../you_can_read_now.sync" vorhanden ist.
 #                         und merkt sich dessen "Alter" in der Variable ${new_Data_available}
-# 12. ###WARTET### jetzt, bis die Datei ALGO_NAMES="../ALGO_NAMES.in" vorhanden und NICHT LEER ist.
-# 13. Ruft _read_ALGOs_in und hat jetzt die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] zur Verfügung,
-#     FALLS die Datei ../ALGO_NAMES.in existiert und nicht leer ist!
-#     ---> Ansonsten sind die beiden Arrays NICHT DEFINIERT! <--- (was kein guter Zustand ist und wir nochmal
-#                                                                  die Konsequenzen untersuchen müssen!!!)
-#          Wenn diese Arrays nicht da sind, kann nichts berechnet werde.
-#          Alle weiteren Schritte sind SINNLOS und das Skript sollte NICHTS WEITER UNTERNEHMEN!
-#          Wir müssen also später zu dieser Stelle zurückkehren und WISSEN, ob algo_multi_abfrage.sh
-#          WIRKLICH SICHERSTELLT, DASS DIESE DATEI DA IST UND GÜLTIGEN INHALT HAT, WENN "this" an dieser
-#          Stelle vorbeikommt und die Datei einlesen will.
+#
+# (21.11.2017)
+# Wir wissen jetzt, dass alle relevanten Werte in der "simplemultialgo"-api Abfrage enthalten sind
+#     und brauchen die ../ALGO_NAMES.in überhaupt nicht mehr.
+#     Das folgende kann raus:
+# 12. 
+# 13. 
 #
 # 14. EINTRITT IN DIE ENDLOSSCHLEIFE. Die folgenden Aktionen werden immer und immer wieder durchgeführt,
 #                                     solange dieser Prozess läuft.
 #  1. Ruft _update_SELF_if_necessary
 #  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
-#                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
-#  3. Ruft _read_ALGOs_in     falls die Quelldatei upgedated wurde.
-#                             => Aktuelle Arrays kMGTP["AlgoName"] und ALGOs["algoID"]
-#  4. ###WARTET### jetzt, bis die Datei "../KURSE.in" vorhanden und NICHT LEER ist.
-#  5. Ruft _read_KURSE_in     => Array KURSE["AlgoName"] verfügbar
+#                                        => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
+#  3. (weggefallen)
+#  4. ###WARTET### jetzt, bis die Datei "../KURSE_PORTS.in" vorhanden und NICHT LEER ist.
+#  5. Ruft _read_in_ALGO_PORTS_KURSE     => Array KURSE["AlgoName"] verfügbar
 #  6. Berechnet jetzt die "Mines" in BTC und schreibt die folgenden Angaben in die Datei ALGO_WATTS_MINES.in :
 #               AlgoName
 #               Watt
@@ -105,6 +109,28 @@ _update_SELF_if_necessary
 # ---> An dieser Stelle sollte wohl das Include "source" der GLOBALEN VARIABLEN stattfinden <---
 # ---> An dieser Stelle sollte wohl das Include "source" der GLOBALEN VARIABLEN stattfinden <---
 # ---> An dieser Stelle sollte wohl das Include "source" der GLOBALEN VARIABLEN stattfinden <---
+##################################################################################################################
+#                       GLOBALE VARIABLEN für spätere Implementierung
+# Diese Variablen sind Kandidaten, um als Globale Variablen in einem "source" file überall integriert zu werden.
+# Sie wird dann nicht mehr an dieser Stelle stehen, sondern über "source GLOBAL_VARIABLES.inc" eingelesen
+#
+# Diese Variable ist besonders wichtig für die über "source" includierten Dateien, die teilweise wissen müssen,
+# wo sie aufegerufen wurden und wo ihr eigentliches "Home" ist.
+# Gleich wird die
+#     ../gpu-bENCH.inc gerufen,                               die ihrerseits eingangs sogar die
+#     source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+# ruft und welche natürlich das ../miners Verzeichnis finden können muss, um Auskunft über Miner geben zu können.
+#
+
+GRID[0]="netz"
+GRID[1]="solar"
+GRID[2]="solar_akku"
+
+declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu rechnen
+
+LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ ) {out = out "/" $i }; \
+                   print substr(out,2) }')
+
 # Mehr und mehr setzt sich die Systemweite Verwendung dieser Variablen durch:
 gpu_idx=$(< gpu_index.in)
 if [ ${#gpu_idx} -eq 0 ]; then
@@ -156,24 +182,6 @@ if [ $? == 0 ]; then
     echo "-------------------------------------------"
     exit
 fi
-
-##################################################################################################################
-#                       GLOBALE VARIABLEN für spätere Implementierung
-# Diese Variablen sind Kandidaten, um als Globale Variablen in einem "source" file überall integriert zu werden.
-# Sie wird dann nicht mehr an dieser Stelle stehen, sondern über "source GLOBAL_VARIABLES.inc" eingelesen
-#
-# Diese Variable ist besonders wichtig für die über "source" includierten Dateien, die teilweise wissen müssen,
-# wo sie aufegerufen wurden und wo ihr eigentliches "Home" ist.
-# Gleich wird die
-#     ../gpu-bENCH.inc gerufen,                               die ihrerseits eingangs sogar die
-#     source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
-# ruft und welche natürlich das ../miners Verzeichnis finden können muss, um Auskunft über Miner geben zu können.
-#
-
-LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ ) {out = out "/" $i }; \
-                   print substr(out,2) }')
-
-
 
 ###############################################################################
 #
@@ -229,79 +237,28 @@ _read_IMPORTANT_BENCHMARK_JSON_in
 
 ###############################################################################
 #
-# WELCHE ALGOS DA
+# Einlesen und verarbeiten der aktuellen Algos und Kurse
 #
-# Abfrage welche Algorithmen gibt es  
 #
-######################################
-
-#  9. Definiert _read_ALGOs_in(), welches nur dann etwas im Arbeitsspeicher ändert, wenn die Datei
-#     ../ALGO_NAMES.in existiert und nicht leer ist:
-#     Dann liest sie die Datei in die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] ein
-#     und merkt sich das "Alter" der eingelesenen Datei in der Variablen ${ALGO_NAMES_last_age_in_seconds}
-ALGO_NAMES="../ALGO_NAMES.in"
-# Ein bisschen Hygiene bei Änderung von Dateinamen
-ALGO_NAMES_OLD=""; if [ -f "$ALGO_NAMES_OLD" ]; then rm "$ALGO_NAMES_OLD"; fi
-
-_read_ALGOs_in()
-{
-    # Eigentlich sollte algo_multi_abfrage.sh schon dafür gesorgt haben, dass diese
-    # Datei nicht leer ist.
-    # Nur zur Sicherheit lesen wir sie nur dann ein, wenn sie nicht leer ist.
-    if [ -s ${ALGO_NAMES} ]; then
-        # Aus den Name:kMGTP:Algo Drillingen
-        #     die assoziativen Arrays ALGOs und kMGTP erstellen
-        # 
-        unset kMGTP; declare -Ag kMGTP
-        unset ALGOs
-        unset READARR
-
-        # Die Zeit merken, um aussen entscheiden zu können,
-        # ob das Array durch Aufruf von _read_ALGOs_in neu erstellt werden muss
-        # Wichtig dabei ist, die Zeit VOR dem tatsächlichen Einlesen der Datei festzuhalten !!!
-        #    Ansonsten kann der Fall eintreten, dass bis zum nächsten erforderlichen Update
-        #    - und das kann ein ganzer Tag sein - mit den alten Daten gearbeitet wird.
-        #    Ist SEEEHR unwahrscheinlich, aber möglich
-        ALGO_NAMES_last_age_in_seconds=$(date --utc --reference=$ALGO_NAMES +%s)
-
-        # $ALGO_NAMES einlesen in das indexed Array READARR
-        readarray -n 0 -O 0 -t READARR <$ALGO_NAMES
-        for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
-            #echo ${READARR[$i]}
-            kMGTP[${READARR[$i]}]=${READARR[$i+1]}
-            ALGOs[${READARR[$i+2]}]=${READARR[$i]}
-        done
-    fi
-}
-
-###############################################################################
-#
-# Einlesen und verarbeiten der aktuellen Kurse
-#
-# Unbedingte Voraussetzung: Das Array ALGOs[] mit den Algorithmennamen
 #
 ######################################
 
-# 10. Definiert _read_KURSE_in(), welches die Datei "../KURSE.in" in das Array KURSE["AlgoName"] aufnimmt.
+#                       GLOBALE VARIABLEN für spätere Implementierung
+# Diese Variablen sind Kandidaten, um als Globale Variablen in einem "source" file überall integriert zu werden.
+# Sie wird dann nicht mehr an dieser Stelle stehen, sondern über "source GLOBAL_VARIABLES.inc" eingelesen
+algoID_KURSE_PORTS_WEB="KURSE.json"
+algoID_KURSE_PORTS_ARR="KURSE_PORTS.in"
+
+# Da manche Skripts in Unterverzeichnissen laufen, müssen diese Skripts die Globale Variable für sich intern anpassen
+# ---> Wir könnten auch mit Symbolischen Links arbeiten, die in den Unterverzeichnissen angelegt werden und auf die
+# ---> gleichnamigen Dateien darüber zeigen.
+algoID_KURSE_PORTS_WEB="../${algoID_KURSE_PORTS_WEB}"
+algoID_KURSE_PORTS_ARR="../${algoID_KURSE_PORTS_ARR}"
+
+# 10. Definiert _read_in_ALGO_PORTS_KURSE(), welches die Datei "../KURSE_PORTS.in" in das Array KURSE["AlgoName"] aufnimmt.
 #     Das Alter dieser Datei ist unwichtig, weil sie IMMER durch algo_multi_abfrage.sh aus dem Web aktualisiert wird.
 #     Andere müssen dafür sorgen, dass die Daten in dieser Datei gültig sind!
-KURSE_in="../KURSE.in"
-# Ein bisschen Hygiene bei Änderung von Dateinamen
-KURSE_in_OLD=""; if [ -f "$KURSE_in_OLD" ]; then rm "$KURSE_in_OLD"; fi
-
-_read_KURSE_in()
-{
-    unset KURSE; declare -Ag KURSE
-    unset READARR
-
-    # Aus den ALGORITHMUS:PREIS Paaren das assoziative Array KURSE erstellen
-    readarray -n 0 -O 0 -t READARR <$KURSE_in
-    for ((i=0; $i<${#READARR[@]}; i+=2)) ; do
-        #echo ${READARR[$i]}
-        #echo ${ALGOs[${READARR[$i]}]}
-        KURSE[${ALGOs[${READARR[$i]}]}]=${READARR[$i+1]}
-    done
-}
+source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 
 ###############################################################################
 #
@@ -322,66 +279,10 @@ while [ ! -f ${SYNCFILE} ]; do
 done
 new_Data_available=$(date --utc --reference=${SYNCFILE} +%s)
 
-# Auf jeden Fall beim Starten die zwei Arrays aufbauen.
-# Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
-# 12. ###WARTET### jetzt, bis die Datei ALGO_NAMES="../ALGO_NAMES.in" vorhanden und NICHT LEER ist.
-while [ ! -s $ALGO_NAMES ]; do
-    echo "GPU #${gpu_idx}: ###---> Waiting for $ALGO_NAMES to become available..."; sleep 1
-done
-# 13. Ruft _read_ALGOs_in und hat jetzt die Arrays kMGTP["AlgoName"] und ALGOs["algoID"] zur Verfügung,
-#     FALLS die Datei ../ALGO_NAMES.in existiert und nicht leer ist!
-#     ---> Ansonsten sind die beiden Arrays NICHT DEFINIERT! <--- (was kein guter Zustand ist und wir nochmal
-#                                                                  die Konsequenzen untersuchen müssen!!!)
-#          Wenn diese Arrays nicht da sind, kann nichts berechnet werde.
-#          Alle weiteren Schritte sind SINNLOS und das Skript sollte NICHTS WEITER UNTERNEHMEN!
-#          Wir müssen also später zu dieser Stelle zurückkehren und WISSEN, ob algo_multi_abfrage.sh
-#          WIRKLICH SICHERSTELLT, DASS DIESE DATEI DA IST UND GÜLTIGEN INHALT HAT, WENN "this" an dieser
-#          Stelle vorbeikommt und die Datei einlesen will.
-_read_ALGOs_in
-
-###############################################################################
-# 1. curl "https://api.nicehash.com/api?method=stats.global.current&location=0"
-# 2. Die eine .json-Zeile bei "},{" in einzelne Zeilen aufspalten
-# 3. Zuerst /"algo":[0-9*]/ suchen und alles nach dem ":" ausgeben
-# 4. Dann   /
-#    So sieht der Anfang der Datei aus, wenn RS angewendet wurde:
-#{"result":{"stats"
-#"profitability_above_ltc":"44.99","price":"0.0122","profitability_ltc":"0.0084","algo":0,"speed":"3913.40252248"
-#"price":"0.2632","profitability_btc":"0.2279","profitability_above_btc":"15.48","algo":1,"speed":"58787556.32539999"
-#...
-#"price":"0.0124","algo":20,"speed":"3137.82488726","profitability_eth":"0.0072","profitability_above_eth":"71.20"
-#
-# 5. Ausgabe von ALGO-index und PREIS in Datei KURSE.in, die dann so aussieht:
-#0
-#0.0107
-#1
-#0.2821
-#2
-# ...
-# ---
-#28
-#0.0724
-#29
-#0.0108
-#
-# 6. Einlesen der Datei KURSE.in in das Array READARR
-# 7. READARR durchgehen und das assoziative Array KURSE aufbauen:
-#    Der erste Wert [$i=0,2,4,6,etc.] ist der ALGO-index,
-#        der als Index für Array ALGOs[] dient und den NAMEN auswirft.
-#    Der NAME wiederum dient als Index für das Array KURSE[algoname],
-#        der den PREIS aus der nächsten Zeile [$i+1 =1,3,5,7,etc.] aufnimmt.
-
-
-
 ###############################################################################
 #
 #     ENDLOSSCHLEIFE START
 #
-
-GRID[0]="netz"
-GRID[1]="solar"
-GRID[2]="solar_akku"
-
 #
 # 14. EINTRITT IN DIE ENDLOSSCHLEIFE. Die folgenden Aktionen werden immer und immer wieder durchgeführt,
 #                                     solange dieser Prozess läuft.
@@ -395,36 +296,32 @@ while [ 1 -eq 1 ] ; do
     #  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
     #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
     if [[ $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds < $(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s) ]]; then
-        echo "GPU #${gpu_idx}: ###---> Updating Arrays bENCH[] und WATTs[] from $IMPORTANT_BENCHMARK_JSON"
+        echo "GPU #${gpu_idx}: ###---> Updating Arrays bENCH[] and WATTs[] (and more) from $IMPORTANT_BENCHMARK_JSON"
         _read_IMPORTANT_BENCHMARK_JSON_in
     fi
 
     # Die Reihenfolge der Dateierstellungen durch ../algo_multi_abfrage.sh ist:
-    #     1.: $ALGO_NAMES
-    #     2.: $KURSE_in
-    #     3.: ../BTC_EUR_kurs.in
+    # (21.11.2017)
+    # Wir wissen jetzt, dass alle relevanten Werte in der "simplemultialgo"-api Abfrage enthalten sind
+    #     und brauchen die ../ALGO_NAMES.in überhaupt nicht mehr.
+    #     Das folgende kann raus und es ergibt sich eine neue Reihenfolge:
+    #     (1.: $ALGO_NAMES entfällt)
+    #     1.: $algoID_KURSE_PORTS_WEB und $algoID_KURSE_PORTS_ARR
+    #     2.: ../BTC_EUR_kurs.in
     # Letzte: ${SYNCFILE}
 
-    # Ist die Datei ALGO_NAMES mit einer aktuellen Version überschrieben worden?
-    #  3. Ruft _read_ALGOs_in     falls die Quelldatei upgedated wurde.
-    #                             => Aktuelle Arrays kMGTP["AlgoName"] und ALGOs["algoID"]
-    if [[ $ALGO_NAMES_last_age_in_seconds < $(date --utc --reference=$ALGO_NAMES +%s) ]]; then
-        echo "GPU #${gpu_idx}: ###---> Updating Arrays ALGOs[] und kMGTP[] from $ALGO_NAMES"
-        _read_ALGOs_in
-    fi
-
     # Einlesen und verarbeiten der aktuellen Kurse, sobald die Datei vorhanden und nicht leer ist
-    #  4. ###WARTET### jetzt, bis die Datei "../KURSE.in" vorhanden und NICHT LEER ist.
-    while [ ! -s $KURSE_in ]; do
-        echo "GPU #${gpu_idx}: ###---> Waiting for $KURSE_in to become available..."
+    #  4. ###WARTET### jetzt, bis die Datei "../KURSE_PORTS.in" vorhanden und NICHT LEER ist.
+    while [ ! -s ${algoID_KURSE_PORTS_ARR} ]; do
+        echo "GPU #${gpu_idx}: ###---> Waiting for ${algoID_KURSE_PORTS_ARR} to become available..."
         sleep 1
     done
-    #  5. Ruft _read_KURSE_in     => Array KURSE["AlgoName"] verfügbar
-    _read_KURSE_in
+    #  5. Ruft _read_in_ALGO_PORTS_KURSE     => Array KURSE["AlgoName"] verfügbar
+    _read_in_ALGO_PORTS_KURSE
 
     ###############################################################################
     #
-    #    Festhalten ALLER   AlgoNames, Watts und Mines für die Multi_mining_calc.sh
+    #    Berechnung und Ausgabe ALLER AlgoNames, Watts und Mines für die Multi_mining_calc.sh
     #
     ######################################
     # Zur sichereren Synchronisation, dass der multi_mining_calc.sh erst dann die Datei ALGO_WATTS_MINES
@@ -444,14 +341,13 @@ while [ 1 -eq 1 ] ; do
     for algorithm in "${!bENCH[@]}"; do
         read algo miner_name miner_version <<<${algorithm//#/ }
         if [[          ${#bENCH[$algorithm]} -gt 0   \
-                    && ${#kMGTP[$algo]}      -gt 0   \
                     && ${#KURSE[$algo]}      -gt 0   \
                     && ${WATTS[$algorithm]}  -lt 1000 \
             ]]; then
             # "Mines" in BTC berechnen
             algoMines=$(echo "scale=8;   ${bENCH[$algorithm]}  \
                                        * ${KURSE[$algo]}  \
-                                       / ${kMGTP[$algo]}  \
+                                       / ${k_base}^3  \
                              " | bc )
             printf "$algorithm\n${WATTS[$algorithm]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
         else

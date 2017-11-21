@@ -33,118 +33,22 @@ GRID[0]="netz"
 GRID[1]="solar"
 GRID[2]="solar_akku"
 
-###############################################################################
-#
-# WELCHE ALGOS DA
-#
-# Abfrage welche Algorithmen gibt es  ... muss nur selten abgefragt werden ggf. 
-# einmal die stunde vielleicht
-#
-# Wir brauchen: "name", "speed_text" und "algo"
-#"down_step":"-0.0001","min_diff_working":"0.1","min_limit":"0.2","speed_text":"GH","min_diff_initial":"0.04","name":"Skunk","algo":29,"multi":"1"
-#
-#
 SYNCFILE="you_can_read_now.sync"
 
+algoID_KURSE_PORTS_WEB="KURSE.json"
+algoID_KURSE_PORTS_ARR="KURSE_PORTS.in"
+
+# Funktionen zum Abruf der KURSE/PORTS/AlgoNAmes/AlgoIDs aus dem Web incl. Aufbereiten der .in Datei
+# und zum Einlesen aus der aufbereiteten .in Datei mittels readarray
+source algo_infos.inc
+
 function _On_Exit () {
-    # Wir könnten auch alle GPUs stoppen...
-    rm -f ${ALGO_NAMES_ARR} ${algoID_KURSE_PORTS_ARR} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} $(basename $0 .sh).pid
+    rm -f ${algoID_KURSE_PORTS_WEB} ${algoID_KURSE_PORTS_ARR} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} \
+       KURSE.in ALGO_NAMES.json ALGO_NAMES.in \
+       $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
 
-ALGO_NAMES_WEB="ALGO_NAMES.json"
-ALGO_NAMES_ARR="ALGO_NAMES.in"
-
-_notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
-{
-    # $1 = Webdateiname, z.B. ${ALGO_NAMES_WEB}, ${algoID_KURSE_PORTS_WEB}
-    # $2 = Einlesedatei, z.B. ${ALGO_NAMES_ARR}, ${algoID_KURSE_PORTS_ARR}
-    # Tja, was machen wir in dem Fall also?
-    # Die Stratum-Server laufen und nehmen offensichtlich generierten Goldstaub entgegen.
-    # Und die Karten, die wir vor 31s eingeschaltet haben, liefen ja mit Gewinn.
-    # Wie lange kann man die Karten also mit den "alten" Preisen weiterlaufen lassen?
-    # "A couple of Minutes..."
-    # Wir setzen eine Desktopmeldung ab... jede Minute... und machen einen Eintrag
-    #     in eine Datei FATAL_ERRORS.log, damit man nicht vergisst,
-    #     sich langfristig um das Problem zu kümmern.
-    if [[ ! "$NoAlgoNames_notified" == "1" ]]; then
-        notify-send -t 10000 -u critical "### Es gibt zur Zeit keine Datei $1 aus dem Web ###" \
-                 "Die Datei $2 bleibt unverändert oder ist nicht vorhanden. \
-                 Entscheide bitte, wie lange Du die gerade laufenden Miner \
-                 mit den immer mehr veraltenden Zahlpreisen laufen lassen möchtest!"
-        if [[ ! "$NoAlgoNames_recorded" == "1" ]]; then
-            echo $(date "+%F %H:%M:%S") "curl - $1 hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
-            echo "                    Suchmuster $3 wurde nicht gefunden." >>FATAL_ERRORS.log
-            NoAlgoNames_recorded=1
-        fi
-        NoAlgoNames_notified=1
-    #else
-        # Damit wird nur bei jedem 2. Aufruf der Funktion ein notify-send gemacht
-        # Geplant ist, dass das etwa jede Minute stattfindet (31s-Abfrage-Intervall*2)
-        # Für den Sonderfall, dass noch nie eine Datei da war und beim Versuch des Abrufs
-        #     ausgerechnet keine Daten kommen, weil die Seite spinnt,
-        #     passiert das allerdings alle 2 Sekunden.
-        #     Das ist aber nur beim Programmstart der Fall und sollte so gut wie nie vorkommen.
-        #
-        # Aber es gibt noch einen Falle, den wir bedenken müssen:
-        # Wenn der stündliche Update der Datei fällig wird und es kommt nicht saus dem Web,
-        #     dann ist diese Datei noch viel älter.
-        # Aber halt: So oft wie die Kurse ändert diese Datei ja nicht ihren Inhalt.
-        # Das heisst, dass ein einmaliger Hinweis eigentlich genug sein sollte.
-        # Die Kurse kommen in diesem Fall ja auch nicht und die werden sowieso alle 31s abgerufen.
-        #
-        # ERGO: Wir switchen doch nicht auf 0, wodurch nur 1x eine Meldung abgesetzt wird.
-        # NoAlgoNames_notified=0
-    fi
-}
-
-_create_ALGOS_in()
-{
-    echo "------------------   Algonames/ID und Speed   ----------------------"
-    # Neue Algos aus dem Netz
-    # Gültiges Ergebnis .json File fängt so an:
-    # {"result":{"algorithms":[
-    # und muss genau 1 mal gefunden werden
-    searchPattern='^[{]"result":[{]"algorithms":\['
-    algoPageDown=$( curl "https://api.nicehash.com/api?method=buy.info" \
-                          | tee $ALGO_NAMES_WEB \
-                          | grep -c -e "$searchPattern" )
-
-    if [[ "${algoPageDown}" != "1" ]]; then
-        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${ALGO_NAMES_WEB}" "${ALGO_NAMES_ARR}" "$searchPattern"
-    else
-        echo "--------------------------------------------------------------------"
-        # Fehler scheint behoben, Benachrichtigung wieder scharf machen
-        unset NoAlgoNames_notified NoAlgoNames_recorded
-        # Algoname:kMGTP-Faktor:Algo-ID Paare extrahieren nach ALGO_NAMES.in
-        num_algos_with_name=$(expr $(gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"; \
-                   f["k"]=1; f["M"]=2; f["G"]=3; f["T"]=4; f["P"]=5 } \
-             match( $0, /"name":"[[:alnum:]]*/ )\
-                  { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
-             match( $0, /"speed_text":"[[:alpha:]]*/ )\
-                  { M=substr($0, RSTART, RLENGTH); print 1024 ** f[substr(M, index(M,":")+2, 1 )] }  \
-             match( $0, /"algo":[0-9]*/ )\
-                  { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
-             $ALGO_NAMES_WEB 2>/dev/null \
-           | tee $ALGO_NAMES_ARR \
-           | wc -l ) / 3 )
-        algo_names_arr_modified=$(date --utc --reference=$ALGO_NAMES_ARR +%s)
-    fi
-}
-
-declare -i num_algos_with_name=0
-declare -i algo_names_arr_modified=0
-if [ -s ${ALGO_NAMES_ARR} ]; then
-    num_algos_with_name=$(expr $(cat ${ALGO_NAMES_ARR} | wc -l ) / 3 )
-    algo_names_arr_modified=$(date --utc --reference=${ALGO_NAMES_ARR} +%s)
-fi
-while [[ ${num_algos_with_name} -eq 0 ]]; do
-    _create_ALGOS_in
-    if [[ ${num_algos_with_name} -eq 0 ]]; then
-        echo "Waiting for a valid File ${ALGO_NAMES_WEB}"
-        sleep 1
-    fi
-done
 
 _notify_about_NO_BTC_KURS()
 {
@@ -172,111 +76,17 @@ _notify_about_NO_BTC_KURS()
     fi
 }
 
-###############################################################################
-# 1. curl "https://api.nicehash.com/api?method=stats.global.current&location=0"
-# 2. Die eine .json-Zeile bei "},{" in einzelne Zeilen aufspalten
-# 3. Zuerst /"algo":[0-9*]/ suchen und alles nach dem ":" ausgeben
-# 4. Dann   /
-#    So sieht der Anfang der Datei aus, wenn RS angewendet wurde:
-#{"result":{"stats"
-#"profitability_above_ltc":"44.99","price":"0.0122","profitability_ltc":"0.0084","algo":0,"speed":"3913.40252248"
-#"price":"0.2632","profitability_btc":"0.2279","profitability_above_btc":"15.48","algo":1,"speed":"58787556.32539999"
-#...
-#"price":"0.0124","algo":20,"speed":"3137.82488726","profitability_eth":"0.0072","profitability_above_eth":"71.20"
-#
-# 5. Ausgabe von ALGO-index und PREIS in Datei KURSE.in, die dann so aussieht:
-#0
-#0.0107
-#1
-#0.2821
-#2
-# ...
-# ---
-#28
-#0.0724
-#29
-#0.0108
-#
-# 6. Einlesen der Datei KURSE.in in das Array READARR
-# 7. READARR durchgehen und das assoziative Array KURSE aufbauen:
-#    Der erste Wert [$i=0,2,4,6,etc.] ist der ALGO-index,
-#        der als Index für Array ALGOs[] dient und den NAMEN auswirft.
-#    Der NAME wiederum dient als Index für das Array KURSE[algoname],
-#        der den PREIS aus der nächsten Zeile [$i+1 =1,3,5,7,etc.] aufnimmt.
 
-algoID_KURSE_PORTS_WEB="KURSE.json"
-algoID_KURSE_PORTS_ARR="KURSE.in"
 while [ 1 -eq 1 ] ; do
-    # Algos nur stündlich prüfen
-    declare -i algo_age=$(expr $(date --utc +%s) - $algo_names_arr_modified )
-    if [[ ${algo_age} -ge 3600 ]]; then
-        echo "###---> Hourly Update of $ALGO_NAMES_ARR"
-        _create_ALGOS_in
-    fi
-    
-    # kurs abfrage btc als json datei
-    #
-    # ACHTUNG FEHLERQUELLE:
-    #         Wenn VOR Ablauf des nächsten stündlichen Einlesens der ALGO-Namen ein neuer Algo
-    #         hinzukommt, gibt es eine weitere ID und einen weiteren Algonamen,
-    #         DIE IN DEN KURSEN BEREITS AUFTAUCHEN KÖNNTEN!!!
-    #
-    # Strenggenommen müssen wir also nach jedem Einlesen eines Kurses nachsehen, ob sich die IDs
-    # irgendwie verändert haben oder wenigstens ob es mehr geworden sind !!!
-    #
-    # Folgendes ist heute passiert, was in eine Endlosschleife an Einlesevorgängen gemündet ist:
-    # "Web frontend is currently down for maintenance.
-    #  We expect to be back in a couple minutes. Thanks for your patience.
-    #  Stratum servers should be running as usual."
 
-    echo "------------------   Nicehash-Kurse           ----------------------"
-    # Neue Kurse aus dem Netz
+    # Neue Algo Kurse aus dem Netz
     # Gültiges Ergebnis .json File fängt so an:
-    # {"result":{"stats":[
     # {"result":{"simplemultialgo":[
     # und muss genau 1 mal gefunden werden
-    # searchPattern='^[{]"result":[{]"stats":\['
-    # pageDown=$( curl "https://api.nicehash.com/api?method=stats.global.current&location=0" \
-    searchPattern='^[{]"result":[{]"simplemultialgo":\['
-    pageDown=$(curl "https://api.nicehash.com/api?method=simplemultialgo.info" \
-        | tee $algoID_KURSE_PORTS_WEB \
-        | grep -c -e "$searchPattern" )
-
-    if [[ "${pageDown}" != "1" ]]; then
-        _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON "${algoID_KURSE_PORTS_WEB}" "${algoID_KURSE_PORTS_ARR}" "$searchPattern"
-    else
-        echo "--------------------------------------------------------------------"
-        unset NoAlgoNames_notified NoAlgoNames_recorded
-
-        #num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS="},{|:[\[]{" } \
-        #     /"algo":[0-9]*/ && /"price":"[0-9.]*"/ { \
-        #         if (match( $0, /"algo":[0-9]*/     )) \
-        #            { M=substr($0, RSTART, RLENGTH);   print substr(M, index(M,":")+1 ) }  \
-        #         if (match( $0, /"price":"[0-9.]*"/ )) \
-        #            { M=substr($0, RSTART, RLENGTH-1); print substr(M, index(M,":")+2 ) } }'  \
-        #      $algoID_KURSE_PORTS_WEB 2>/dev/null \
-        #    | tee $algoID_KURSE_PORTS_ARR \
-        #    | wc -l ) / 2 )
-        num_algos_with_price=$(expr $(gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"} \
-            match( $0, /"algo":[[:digit:]]*/ )\
-                 { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) } \
-            match( $0, /"paying":"[.[:digit:]]*/ )\
-                 { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }'  \
-              $algoID_KURSE_PORTS_WEB 2>/dev/null \
-            | tee $algoID_KURSE_PORTS_ARR \
-            | wc -l ) / 2 )
-        if [[ ! $num_algos_with_price == $num_algos_with_name ]]; then
-            notify-send "###---> MAYBE A NEW ALGORITHM DETECTED !!! <---###"
-            echo "###---> MAYBE A NEW ALGORITHM DETECTED !!! <---###"
-            echo "###---> FORCED Update of $ALGO_NAMES_ARR   <---###"
-            _create_ALGOS_in
-            continue
-        fi
-    fi
+    echo "------------------   Nicehash-Kurse           ----------------------"
+    _prepare_ALGO_PORTS_KURSE_from_the_Web
+    echo "--------------------------------------------------------------------"
     
-##############################################
-##############################################
-
     # abfrage des BTC-EUR Kurs von bitcoin.de (html)
 
     BTC_EUR_KURS_WEB="BTCEURkurs"
