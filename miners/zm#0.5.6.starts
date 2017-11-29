@@ -1,0 +1,35 @@
+#!/bin/bash
+###############################################################################
+#
+# EQUIHASH Startkommando
+#
+# Hier muss auch das Benchmarking mit dem Live-Kommando gemacht werden!
+#
+
+minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/zm_0.5.6"
+
+LIVE_START_CMD='%s/%s --dev %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --logfile %s --time'
+LIVE_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "gpu_idx"
+    "algo"
+    "continent"
+    "NH_DOMAIN"
+    "algo_port"
+    "worker"
+    "LIVE_LOGFILE"
+)
+
+BENCH_START_CMD='%s/%s --dev %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x--logfile %s --time'
+BENCH_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "gpu_idx"
+    "algo"
+    "continent"
+    "NH_DOMAIN"
+    "algo_port"
+    "worker"
+    "BENCHLOGFILE"
+)
