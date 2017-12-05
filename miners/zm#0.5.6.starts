@@ -21,7 +21,7 @@ LIVE_PARAMETERSTACK=(
     "LIVE_LOGFILE"
 )
 
-BENCH_START_CMD='%s/%s --dev %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x--logfile %s --time'
+BENCH_START_CMD='%s/%s --dev %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --logfile %s --time'
 BENCH_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
