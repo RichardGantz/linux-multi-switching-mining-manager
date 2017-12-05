@@ -610,10 +610,8 @@ while :; do
                         if [ ${#MinerShell_pid} -gt 0 ]; then
                             # Check, ob der Prozess tatsächlich noch existiert.
                             run_pid=$(ps -ef \
-                                | grep -e "${MinerShell_pid}" -e "\./${MinerShell}\.sh" \
-                                | grep -v 'grep -e ' \
-                                | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-                            if [ "${MinerShell_pid}" == "${run_pid}" ]; then
+                                | gawk -e '$2 == '${MinerShell_pid}' && /'${gpu_uuid}'/ {pids=pids $2 " "} END {print pids}')
+                            if [ ${run_pid} =~ ^${MinerShell_pid} ]; then
                                 # Keinen Neustart fordern, denn die Shell läuft ja noch.
                                 # Das haben wir eben auf Herz und Nieren überprüft.
                                 # Und da der Prozess noch läuft, hat er sich auch den Algo noch nicht disabled un deshalb
