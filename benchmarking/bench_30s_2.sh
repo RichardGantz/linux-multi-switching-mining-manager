@@ -12,6 +12,9 @@
 # 
 #if [ $# -eq 0 ]; then kill -9 $$; fi
 
+# GLOBALE VARIABLEN, nützliche Funktionen
+[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source ../globals.inc
+
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
 debug=0
 
@@ -27,7 +30,6 @@ BENCHMARKING_WAS_STARTED=0
 READY_FOR_SIGNALS=benchmarker_ready_for_kill_signal
 
 declare -i t_base=3             # Messintervall in Sekunden für Temperatur, Clocks und Power in Sekunden
-declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu rechnen
 
 # Durch Parameterübergabe beim Aufruf änderbar:
 declare -i MIN_HASH_COUNT=20    # -m Anzahl         : Mindestanzahl Hashberechnungswerte, die abgewartet werden müssen
@@ -39,8 +41,6 @@ ATTENTION_FOR_USER_INPUT=1      # -a | --auto: setzt die Attention auf 0, überg
                                 #      ---------> und wird über Variablen und Dateien gesteuert  <---------
                                 #      ---------> MUSS ERST IMPLEMENTIERT WERDEN !!!!!!!!!       <---------
                                 #      ---------> IM MOMENT NUR DIE UNTERDRÜCKUNG VON AUSGABEN   <---------
-LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ ) {out = out "/" $i }; \
-                   print substr(out,2) }')
 
 prepare_hashes_for_bc='BEGIN {out="0"}
 { hash=NF-1; einheit=NF
@@ -58,14 +58,16 @@ END {print out}
 '
 
 initialParameters="$*"
-#POSITIONAL=()
+POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     parameter="$1"
 
     case $parameter in
         -a|--auto)
             ATTENTION_FOR_USER_INPUT=0
-            shift
+            gpu_idx=$2
+            algorithm=$3
+            shift 3
             ;;
         -w|--min-watt-seconds)
             MIN_WATT_COUNT="$2"
@@ -358,7 +360,7 @@ function _delete_temporary_files () {
     rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
        temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb temp_hash temp_einheit \
        HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on_different_lines_cmd* ccminer.pid \
-       ${READY_FOR_SIGNALS} MULTI_ALGO_INFO.json yes_count booo_count
+       ${READY_FOR_SIGNALS} MULTI_ALGO_INFO.json boo_count
 }
 _delete_temporary_files
 
@@ -511,12 +513,6 @@ trap _On_Exit EXIT
 echo $$ >$(basename $0 .sh).pid
 if [ ! -d test ]; then mkdir test; fi
 
-# Für Fake in Entwicklungssystemen ohne Grakas
-if [ $HOME == "/home/richard" ]; then
-    NoCards=true
-    PATH=${PATH}:${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle
-fi
-
 ###################################################################################
 #
 #                _query_actual_Power_Temp_and_Clocks
@@ -551,15 +547,12 @@ fi
 #nvidia-settings --assign [fan:${gpu_idx}]/GPUTargetFanSpeed=66
 # Fan-Kontrolle auf MANUELL = 1 oder 0 für AUTOMATISCH
 #nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
-source nvidia-befehle/nvidia-query.inc
-
+[[ ${#_NVIDIACMD_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
 # Funktionen zum Einlesen von ALGO_NAMES und ALGO_PORTS aus dem Web
-source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
-
+[[ ${#_ALGOINFOS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 # Funktionen für das Einlesen aller bekannten Miner und Unterscheidung in Vefügbare sowie Fehlende.
-if [ ${#_MINERFUNC_INCLUDED} -eq 0 ];then
-    source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
-fi
+[[ ${#_MINERFUNC_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+
 
 # Das ist jetzt richtig aktiv und liest die folgenden Systeminformationen in die entsprechenden Arrays:
 #      index[0-n]=gpu_idx
@@ -579,13 +572,11 @@ fi
 #
 # Das entsprechende "source"-ing machen wir weiter unten, wenn wir wissen, um welche GPU
 #     und welchen $algorithm es sich handelt.
-workdir=$(pwd)
 cd ..
 source gpu-abfrage.sh
 _func_gpu_abfrage_sh
-cd ${workdir} >/dev/null
+cd ${_WORKDIR_} >/dev/null
 gpu_idx_list="${index[@]}"
-
 
 ################################################################################
 ################################################################################
@@ -610,16 +601,6 @@ gpu_idx_list="${index[@]}"
 # Diese Variablen sind Kandidaten, um als Globale Variablen in einem "source" file überall integriert zu werden.
 # Sie wird dann nicht mehr an dieser Stelle stehen, sondern über "source GLOBAL_VARIABLES.inc" eingelesen
 
-NH_DOMAIN="nicehash.com"
-export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
-algoID_KURSE_PORTS_WEB="KURSE.json"
-algoID_KURSE_PORTS_ARR="KURSE_PORTS.in"
-
-# Da manche Skripts in Unterverzeichnissen laufen, müssen diese Skripts die Globale Variable für sich intern anpassen
-# ---> Wir könnten auch mit Symbolischen Links arbeiten, die in den Unterverzeichnissen angelegt werden und auf die
-# ---> gleichnamigen Dateien darüber zeigen.
-algoID_KURSE_PORTS_WEB="../${algoID_KURSE_PORTS_WEB}"
-algoID_KURSE_PORTS_ARR="../${algoID_KURSE_PORTS_ARR}"
 
 # Die Informationen frisch aus dem Web zu holen ist leider nötig,
 # weil wir im Fall des Live-Benchmarkings keine Algos berechnen wollen, für die es 0 gibt.
@@ -654,12 +635,16 @@ _read_in_ALGO_PORTS_KURSE
 ################################################################################
 
 # auswahl des devices "eingabe wartend"
-echo ""
-while :; do
-    _prompt="Für welches GPU device soll ein Benchmark druchgeführt werden? ${gpu_idx_list}: "
-    read -p "${_prompt}" gpu_idx
-    [[ ${gpu_idx} =~ ^[[:digit:]]*$ ]] && [[ ${gpu_idx_list} =~ ^.*${gpu_idx} ]] && break
-done
+if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 && ${#gpu_idx} -gt 0 && ${#algorithm} -gt 0 ]]; then
+    echo "AUTO-BENCHMARKING GPU #${gpu_idx} for Algorithm ${algorithm}"
+else
+    echo ""
+    while :; do
+        _prompt="Für welches GPU device soll ein Benchmark druchgeführt werden? ${gpu_idx_list}: "
+        read -p "${_prompt}" gpu_idx
+        [[ ${gpu_idx} =~ ^[[:digit:]]*$ ]] && [[ ${gpu_idx_list} =~ ^.*${gpu_idx} ]] && break
+    done
+fi
 gpu_uuid=${uuid[${gpu_idx}]}
 echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
 
@@ -682,18 +667,11 @@ IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
 # In ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
 
-_set_ALLE_MINER_from_path "${LINUX_MULTI_MINING_ROOT}/miners"
-
 # Dann gleich Bereitstellung zweier Arrays mit AvailableAlgos und MissingAlgos.
 # Die MissingAlgos könnte man in einer automatischen Schleife benchmarken lassen,
 # bis es keine MissingAlgos mehr gibt.
-
-for minerName in ${ALLE_MINER}; do
-    read miner_name miner_version <<<"${minerName//#/ }"
-    miner_version=${miner_version%.algos}
-    declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
-    _split_into_Available_and_Missing_Miner_Algo_Arrays
-done
+#_test_=1
+_read_in_ALL_Internal_Available_and_Missing_Miner_Algo_Arrays "${LINUX_MULTI_MINING_ROOT}/miners"
 
 
 ################################################################################
@@ -704,27 +682,29 @@ done
 ################################################################################
 ################################################################################
 
-declare -a minerChoice minerVersion
-echo ""
-echo " Die folgenden Miner können getestet werden:"
-echo ""
-unset i;   declare -i i=0
-choice_list=''
-for minerName in ${ALLE_MINER}; do
-    read minerChoice[$i] minerVersion[$i] <<<"${minerName//#/ }"
-    minerVersion[$i]=${minerVersion[$i]%.algos}
-    printf " %2i : %s V. %s\n" $((i+1)) ${minerChoice[$i]} ${minerVersion[$i]}
-    i+=1; choice_list+="$i "
-done
-echo ""
-while :; do
-    read -p "Welchen Miner möchtest Du mit GPU #${gpu_idx} benchmarken/tweaken? ${choice_list}: " choice
-    [[ ${choice_list} =~ ^.*${choice} ]] && break
-done
+if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 && ${#gpu_idx} -gt 0 && ${#algorithm} -gt 0 ]]; then
+    read algo miner_name miner_version muck888 <<<"${algorithm//#/ }"
+else
+    declare -a minerChoice minerVersion
+    echo ""
+    echo " Die folgenden Miner können getestet werden:"
+    echo ""
+    unset i;   declare -i i=0
+    choice_list=''
+    for minerName in ${ALLE_MINER[@]}; do
+        read minerChoice[$i] minerVersion[$i] <<<"${minerName//#/ }"
+        printf " %2i : %s V. %s\n" $((i+1)) ${minerChoice[$i]} ${minerVersion[$i]}
+        i+=1; choice_list+="$i "
+    done
+    echo ""
+    while :; do
+        read -p "Welchen Miner möchtest Du mit GPU #${gpu_idx} benchmarken/tweaken? ${choice_list}: " choice
+        [[ ${choice_list} =~ ^.*${choice} ]] && break
+    done
 
-miner_name=${minerChoice[$(($choice-1))]}
-miner_version=${minerVersion[$(($choice-1))]}
-
+    miner_name=${minerChoice[$(($choice-1))]}
+    miner_version=${minerVersion[$(($choice-1))]}
+fi
 
 ####################################################################################
 ################################################################################
@@ -746,11 +726,13 @@ miner_version=${minerVersion[$(($choice-1))]}
 #     "Missing_${miner_name}_${miner_version//\./_}_Algos" und
 #     "Available_${miner_name}_${miner_version//\./_}_Algos" erstellt,
 #     die die Namen der entsprechenden algos als Werte haben.
-declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
-if [ ${#actMissingAlgos[@]} -gt 0 ]; then
-    for algo in ${actMissingAlgos[@]}; do
-        printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${algo}
-    done
+if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
+    declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
+    if [ ${#actMissingAlgos[@]} -gt 0 ]; then
+        for algo in ${actMissingAlgos[@]}; do
+            printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${algo}
+        done
+    fi
 fi
 
 ################################################################################
@@ -763,61 +745,67 @@ fi
 # die man ohne Funktion rufen kann? Könnte man sich einen Funktionsaufruf sparen.
 unset InternalAlgos
 declare -A InternalAlgos
-declare -n                 actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
-declare -a menuItems=( "${!actInternalAlgos[@]}" )
-numAlgos=${#menuItems[@]}
-
-menuItems_list=''
-if [ $numAlgos -gt 1 ]; then
-    for i in ${!menuItems[@]}; do
-        menuItems_list+="a$i "
-        printf "%10s=%17s" "a$i" "\"${menuItems[$i]}\""
-        if [ $(((i+1) % 3)) -eq 0 ]; then printf "\n"; fi
-        # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
-        InternalAlgos[${menuItems[$i]}]=${actInternalAlgos[${menuItems[$i]}]}
+declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
+if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 && ${#gpu_idx} -gt 0 && ${#algorithm} -gt 0 ]]; then
+    for lfdAlgo in "${!actInternalAlgos[@]}"; do
+        InternalAlgos[${lfdAlgo}]=${actInternalAlgos[${lfdAlgo}]}
     done
-    printf "\n"
-
-    while :; do
-        echo ${menuItems_list}
-        read -p "Welchen Algo soll Miner ${miner_name} ${miner_version} mit GPU #${gpu_idx} testen : " algonr
-        # Das matched beides ein ganzes Wort
-        REGEXPAT="\<${algonr}\>"
-        REGEXPAT="\b${algonr}\b"
-        [[ ${menuItems_list} =~ ${REGEXPAT} ]] && break
-    done
-elif [ $numAlgos -eq 1 ]; then
-    # ... oder angenommener einziger Algo aus der Datei für die Algos.
-    algonr=a0
-    # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
-    InternalAlgos[${menuItems[0]}]=${actInternalAlgos[${menuItems[0]}]}
 else
-    # Au weia, ... noch gar keine Algos einlesen können.
-    error_msg="Sorry, dieser Miner weiss nicht, welche Algos er minen kann.\n"
-    error_msg+="Es gibt weder eine Datei ../miners/${miner_name}#${miner_version}.algos\n"
-    error_msg+="noch eine Namenkonvertierungsdatei ../miners/NiceHash#${miner_name}.names\n"
-    error_msg+="ODER die Dateien sind vorhanden, aber leer."
-    error_msg+="Bitte erst eine oder beide dieser Dateien erstellen.\n"
-    printf ${error_msg}
-    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
-    exec $0 ${initialParameters}
-fi
-algo=${menuItems[${algonr:1}]}
+    declare -a menuItems=( "${!actInternalAlgos[@]}" )
+    numAlgos=${#menuItems[@]}
 
-algorithm="${algo}#${miner_name}#${miner_version}"
-# Hier ist die Stelle, an der wir den $algorithm korrigieren, wenn wir uns für den Full Power -p Modus
-# per Kommandozeilenparameter -p entschieden haben:
-[[ ${bENCH_KIND} -eq 888 ]] && algorithm+='#888'
+    menuItems_list=''
+    if [ $numAlgos -gt 1 ]; then
+        for i in ${!menuItems[@]}; do
+            menuItems_list+="a$i "
+            printf "%10s=%17s" "a$i" "\"${menuItems[$i]}\""
+            if [ $(((i+1) % 3)) -eq 0 ]; then printf "\n"; fi
+            # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
+            InternalAlgos[${menuItems[$i]}]=${actInternalAlgos[${menuItems[$i]}]}
+        done
+        printf "\n"
 
-# Sync mit tweak_command.sh
-echo "${algorithm}" >benching_${gpu_idx}_algo
+        while :; do
+            echo ${menuItems_list}
+            read -p "Welchen Algo soll Miner ${miner_name} ${miner_version} mit GPU #${gpu_idx} testen : " algonr
+            # Das matched beides ein ganzes Wort
+            REGEXPAT="\<${algonr}\>"
+            REGEXPAT="\b${algonr}\b"
+            [[ ${menuItems_list} =~ ${REGEXPAT} ]] && break
+        done
+    elif [ $numAlgos -eq 1 ]; then
+        # ... oder angenommener einziger Algo aus der Datei für die Algos.
+        algonr=a0
+        # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
+        InternalAlgos[${menuItems[0]}]=${actInternalAlgos[${menuItems[0]}]}
+    else
+        # Au weia, ... noch gar keine Algos einlesen können.
+        error_msg="Sorry, dieser Miner weiss nicht, welche Algos er minen kann.\n"
+        error_msg+="Es gibt weder eine Datei ../miners/${miner_name}#${miner_version}.algos\n"
+        error_msg+="noch eine Namenkonvertierungsdatei ../miners/NiceHash#${miner_name}.names\n"
+        error_msg+="ODER die Dateien sind vorhanden, aber leer."
+        error_msg+="Bitte erst eine oder beide dieser Dateien erstellen.\n"
+        printf ${error_msg}
+        read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+        exec $0 ${initialParameters}
+    fi
+    algo=${menuItems[${algonr:1}]}
 
-echo "das ist der NH-Algo,    den du ausgewählt hast : ${algo}"
-echo "das ist der \$algorithm, den du ausgewählt hast : ${algorithm}"
-if [ "$algo" = "scrypt" ] ; then
-    echo "Dieser Algo ist nicht mehr mit Grafikkarten lohnenswert. Dafür ermitteln wir keine Werte mehr."
-    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
-    exec $0 ${initialParameters}
+    algorithm="${algo}#${miner_name}#${miner_version}"
+    # Hier ist die Stelle, an der wir den $algorithm korrigieren, wenn wir uns für den Full Power -p Modus
+    # per Kommandozeilenparameter -p entschieden haben:
+    [[ ${bENCH_KIND} -eq 888 ]] && algorithm+='#888'
+
+    # Sync mit tweak_command.sh
+    echo "${algorithm}" >benching_${gpu_idx}_algo
+
+    echo "das ist der NH-Algo,    den du ausgewählt hast : ${algo}"
+    echo "das ist der \$algorithm, den du ausgewählt hast : ${algorithm}"
+    if [ "$algo" = "scrypt" ] ; then
+        echo "Dieser Algo ist nicht mehr mit Grafikkarten lohnenswert. Dafür ermitteln wir keine Werte mehr."
+        read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+        exec $0 ${initialParameters}
+    fi
 fi
 
 ################################################################################
@@ -878,21 +866,24 @@ maxWATT=0
 ###
 ################################################################################
 
-echo ""
-echo "Noch eine letzte Frage:"
-echo "Willst Du LIVE oder OFFLINE Benchmarken oder Tunen?"
-while :; do
-    read -p "--> l <-- für LIVE    und    --> o <-- für OFFLINE : " live_mode
-    if [[ "$live_mode" == "l" ]]; then
-        if [ "${KURSE[$algo]}" == "0" ]; then
-            echo "Paying ist im Moment auf 0, deshalb Umschaltung auf OFFLINE Benchmarking"
-            live_mode="o"
-        else
-            break
-        fi
+live_mode="l"
+if [ "${KURSE[$algo]}" == "0" ]; then
+    live_mode="o"
+fi
+if [ ! ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
+    if [ "${live_mode}" == "l" ]; then
+        echo ""
+        echo "Noch eine letzte Frage:"
+        echo "Willst Du LIVE oder OFFLINE Benchmarken oder Tunen?"
+        while :; do
+            read -p "--> l <-- für LIVE    und    --> o <-- für OFFLINE : " live_mode
+            REGEXPAT="^[lo]$"
+            [[ "${live_mode}" =~ ${REGEXPAT} ]] && break
+        done
+    else
+        echo "Paying ist im Moment auf 0, deshalb Umschaltung auf OFFLINE Benchmarking"
     fi
-    [[ "$live_mode" == "o" ]] && break
-done
+fi
 
 ################################################################################
 ###
@@ -901,14 +892,13 @@ done
 ################################################################################
 
 # Funktion zum Einlesen der Benchmarkdaten nach eventuellem vorherigen Update der JSON Datei
-workdir=$(pwd)
 cd ../${gpu_uuid}
 source gpu-bENCH.sh
-cd ${workdir} >/dev/null
+cd ${_WORKDIR_} >/dev/null
 
 # Alle Einstellungen aller Algorithmen der ausgewählten GPU einlesen
 # Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da, z.B. die folgenden 4
-_read_IMPORTANT_BENCHMARK_JSON_in
+_read_IMPORTANT_BENCHMARK_JSON_in without_miners
 
 # Nvidia-Befhele zum tunen, die wir kennen und so gut es ging abstrahiert haben:
 #nvidiaCmd[0]="nvidia-settings --assign [gpu:%i]/GPUGraphicsClockOffset[3]=%i"
@@ -916,35 +906,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in
 #nvidiaCmd[2]="nvidia-settings --assign [fan:%i]/GPUTargetFanSpeed=%i"
 #nvidiaCmd[3]="./nvidia-befehle/smi --id=%i -pl %i"
 #nvidiaCmd[4]="nvidia-settings --assign [gpu:%i]/GPUFanControlState=%i"
-
-declare -a nvidiaPara=(
-    ${GRAFIK_CLOCK[${algorithm}]}
-    ${MEMORY_CLOCK[${algorithm}]}
-    ${FAN_SPEED[${algorithm}]}
-    ${POWER_LIMIT[${algorithm}]}
-)
-
-# Die Clocks nach den Werten in der JSON setzen
-unset CmdStack
-for (( i=0; $i<2; i++ )); do
-    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[$i]}" ${gpu_idx} ${nvidiaPara[$i]}
-done
-    
-# Fan-Kontrolle nach den Werten in der JSON setzen
-if [[ ${FAN_SPEED[${algorithm}]} -eq 0 ]]; then
-    # Automatik einschalten. Entsprechendes Kommando ist das LETZTE auf dem nvidiaCmd-Array
-    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
-else
-    # Fan Speed Kontrolle von AUTOMATIK auf MANUELL stellen
-    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 1
-    # Fan Speed auf eingelesenen Wert setzen
-    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[2]}" ${gpu_idx} ${nvidiaPara[2]}
-fi
-
-# Power Limit nach den Werten in der JSON setzen
-if [[ ${POWER_LIMIT[${algorithm}]} -gt 0 ]]; then
-    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
-fi
+_setup_Nvidia_Default_Tuning_CmdStack
 
 echo""
 echo "Kurze Zusammenfassung:"
@@ -971,6 +933,7 @@ done
 source ../miners/${miner_name}#${miner_version}.starts
 
 # ---> Die folgenden Variablen müssen noch vollständig implementiert werden! <---
+# "LOCATION eu, usa, hk, jp, in, br"  <--- von der Webseite https://www.nicehash.com/algorithm
 continent="eu"        # Noch nicht vollständig implementiert!      <--------------------------------------
 worker="1060"         # Noch nicht vollständig implementiert!      <--------------------------------------
 
@@ -1021,7 +984,9 @@ esac
 echo "---> DER START DES MINERS SIEHT SO AUS: <---"
 echo "${minerstart} >>${BENCHLOGFILE} &"
 
-read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
+if [ ! ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
+    read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
+fi
 
 # GPU-Kommandos absetzen...
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
@@ -1041,6 +1006,7 @@ if [ $NoCards ]; then
             cp -f equihash.log ${BENCHLOGFILE}
         else
             cp test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
+            # cp test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
         fi
     fi
 fi  ## $NoCards
@@ -1057,9 +1023,9 @@ ${minerstart} >>${BENCHLOGFILE} &
 echo $! > ccminer.pid
 Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
 gnome-terminal -e "${Bench_Log_PTY_Cmd}"
-if [ ! $NoCards ]; then
-    sleep 3
-fi
+#if [ ! $NoCards ]; then
+#    sleep 3
+#fi
 
 
 ################################################################################
@@ -1082,8 +1048,6 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
     echo $COUNTER > COUNTER
 
     ### Hashwerte nachsehen und zählen
-    #   Wir müssen keine ESC-Sequenzen mehr rausfiltern!
-    #       | sed -e 's/\x1B[[][[:digit:]]*m//g' \
     hashCount=$(cat ${BENCHLOGFILE} \
                        | sed -e 's/ *(yes!)$//g' \
                        | grep -c "/s$")

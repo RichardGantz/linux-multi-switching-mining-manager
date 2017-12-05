@@ -5,6 +5,8 @@
 #
 #
 
+_NVIDIACMD_INCLUDED=1
+
 if [ $NoCards ]; then
     temperatures=( "54" "52" "58" "57" "60" "54" )
     declare -i lfdTemp=0
@@ -33,11 +35,49 @@ fi
 nvidiaCmd[0]="nvidia-settings --assign [gpu:%i]/GPUGraphicsClockOffset[3]=%i"
 nvidiaCmd[1]="nvidia-settings --assign [gpu:%i]/GPUMemoryTransferRateOffset[3]=%i"
 nvidiaCmd[2]="nvidia-settings --assign [fan:%i]/GPUTargetFanSpeed=%i"
-nvidiaCmd[3]="./nvidia-befehle/smi --id=%i -pl %i"
+nvidiaCmd[3]="../benchmarking/nvidia-befehle/smi --id=%i -pl %i"
 nvidiaCmd[4]="nvidia-settings --assign [gpu:%i]/GPUFanControlState=%i"
 
-shopt -s lastpipe
+#
+# 1. $algorithm muss korrekt sein
+# 2. $IMPORTANT_BENCHMARK_JSON muss eingelesen sein, damit die Arrays gefüllt sind
+#        Trotzdem kann es vorkommen, dass die Array-Variablen leer sind, wenn der Algo noch nicht enthalten ist!
+#
+function _setup_Nvidia_Default_Tuning_CmdStack () {
+    local G=0; [[ ${#GRAFIK_CLOCK[${algorithm}]} -gt 0 ]] && G=${GRAFIK_CLOCK[${algorithm}]}
+    local M=0; [[ ${#MEMORY_CLOCK[${algorithm}]} -gt 0 ]] && M=${MEMORY_CLOCK[${algorithm}]}
+    local F=0; [[ ${#FAN_SPEED[${algorithm}]}    -gt 0 ]] && F=${FAN_SPEED[${algorithm}]}   
+    local P=0; [[ ${#POWER_LIMIT[${algorithm}]}  -gt 0 ]] && P=${POWER_LIMIT[${algorithm}]} 
+    declare -a nvidiaPara=( $G $M $F $P )
+
+    # Die Clocks nach den Werten in der JSON setzen
+    unset CmdStack
+    declare -ag CmdStack
+    local i
+    for (( i=0; $i<2; i++ )); do
+        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[$i]}" ${gpu_idx} ${nvidiaPara[$i]}
+    done
+    
+    # Fan-Kontrolle nach den Werten in der JSON setzen
+    if [ ${F} -eq 0 ]; then
+        # Automatik einschalten. Entsprechendes Kommando ist das LETZTE auf dem nvidiaCmd-Array
+        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
+    else
+        # Fan Speed Kontrolle von AUTOMATIK auf MANUELL stellen
+        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 1
+        # Fan Speed auf eingelesenen Wert setzen
+        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[2]}" ${gpu_idx} ${nvidiaPara[2]}
+    fi
+
+    # Power Limit nach den Werten in der JSON setzen
+    if [ ${P} -gt 0 ]; then
+        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
+    fi
+}
+
+
 function _query_actual_Power_Temp_and_Clocks () {
+    shopt -s lastpipe
     if [ ! $NoCards ]; then
         nvidia-smi -q -i ${gpu_idx} -d Clock,Power >nvidia-befehle/nvidia-Clock-Power.out
         actTemp=$(nvidia-smi -i ${gpu_idx} --query-gpu=temperature.gpu --format=csv,noheader)

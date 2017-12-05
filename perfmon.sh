@@ -12,14 +12,14 @@
 
 echo "######################################################################"
 echo "Die Entwicklung der Berechnungsdauern in Sekunden über die Zeit hinweg"
-echo "Jede Zeile ist ein 31s Zyklus"
+echo "Jede Zeile ist ein 31s Zyklus - Zumindest, wenn die curl's keine längeren Verzögerungen haben"
 cat perfmon.log | gawk -e '
 BEGIN {  FS=":"; start=0; previous=0  }
 {
     if (start==0) start=$1
     last=$1
     if (previous>start) {
-        if ( last - previous > 60 ) {
+        if ( last - previous > 240 ) {
             delta = previous - start
             print "6-In diesem Abschnitt " delta " Sekunden gelaufen von " start " bis " previous
             if (delta > 60)    print "6-Das sind " delta/60    " Minuten"

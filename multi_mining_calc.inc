@@ -349,6 +349,13 @@ _notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING ()
     # Wir setzen eine Desktopmeldung ab... undd machen einen Eintrag
     #     in eine Datei FATAL_ERRORS.log, damit man nicht vergisst,
     #     sich langfristig um das Problem zu kümmern.
+    echo "#############################   CHAOS BEHADLUNG   #############################"
+    echo "Das gesamte System muss möglicherweise gestoppt und neu gestartet werden:"
+    echo "Wir sind auf die Karte mit der UUID=${gpu_uuid} gestossen."
+    echo "Sie lief bisher mit einem Miner, der sie als GPU-Index #${RunningGPUid[${gpu_uuid}]} angesprochen hat."
+    echo "Jetzt soll sie aber ein Miner mit dem Index ${gpu_idx} ansprechen ???"
+    echo "Was also ist mit dem Miner, der noch die vorherige GPU-Index-Nummer #${RunningGPUid[${gpu_uuid}]} bedient?"
+    echo "#############################   CHAOS BEHADLUNG   #############################"
     if [[ ! "$ERROR_notified" == "1" ]]; then
         notify-send -t 10000 -u critical "###   CHAOS BEHADLUNG   ###" \
                  "Die Karte \"$1\" mit der UUID \"$2\" \
@@ -363,75 +370,6 @@ _notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING ()
     else
         ERROR_notified=0
     fi
-}
-
-#####################################################
-# Einlesen des bisherigen Status laufender GPUs
-####################################################
-function _read_in_actual_RUNNING_STATE () {
-    if [ -f ${RUNNING_STATE} ]; then
-        shopt_cmd_before=$(shopt -p lastpipe)
-        shopt -s lastpipe
-
-        unset RUNNING_STATE_CONTENT
-        #unset AlgoDisabled; declare -Ag AlgoDisabled
-        unset RunningGPUid; declare -Ag RunningGPUid
-        unset WasItEnabled; declare -Ag WasItEnabled
-        unset RunningWatts; declare -Ag RunningWatts
-        unset WhatsRunning; declare -Ag WhatsRunning
-        cat ${RUNNING_STATE} \
-            | grep -e "^GPU-\|^AlgoDisabled" \
-            | readarray -n 0 -O 0 -t RUNNING_STATE_CONTENT
-
-        for (( i=0; $i<${#RUNNING_STATE_CONTENT[@]}; i++ )); do
-            if [[ "${RUNNING_STATE_CONTENT[$i]:0:4}" == "GPU-" ]]; then
-                read RunningUUID RunningGPUidx GenerallyEnabled Watt RunningAlgo <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
-                RunningGPUid[${RunningUUID}]=${RunningGPUidx}
-                WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
-                RunningWatts[${RunningUUID}]=${Watt}
-                WhatsRunning[${RunningUUID}]=${RunningAlgo}
-            elif [ "${RUNNING_STATE_CONTENT[$i]:0:12}" == "AlgoDisabled" ]; then
-                unset AlgoName sortThem allDisabled
-                read -a AlgoName <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
-                read -a sortThem <<<${AlgoDisabled[${AlgoName[1]}]//:/ }
-                sortThem=("${sortThem[@]:2}" "${AlgoName[@]:2}")
-                rm -f sortThem;        for sortIt in "${sortThem[@]}"; do echo "$sortIt" >>sortThem; done
-                rest=$(cat sortThem | sort -u )
-                rm -f sortThem
-                readarray -t allDisabled <<<${rest//\n/ }
-                AlgoDisabled[${AlgoName[1]}]="AlgoDisabled:${AlgoName[1]}:${allDisabled// /:}"
-            fi
-        done
-
-        ${shopt_cmd_before}
-
-        if [[ ${verbose} == 1 ]]; then
-            if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
-                echo "---> Alledgedly Running GPUs/Algos"
-                unset lfdUUID
-                for lfdUUID in ${!RunningGPUid[@]}; do
-                    echo "GPU-Index      : ${RunningGPUid[$lfdUUID]}, UUID=$lfdUUID"
-                    echo "War sie Enabled? $((${WasItEnabled[$lfdUUID]} == 1))"
-                    echo "Wieviel Watt   : ${RunningWatts[$lfdUUID]}"
-                    echo "Running Algo   : ${WhatsRunning[$lfdUUID]}"
-                done
-            fi
-            if [[ ${#AlgoDisabled[@]} -gt 0 ]]; then
-                echo "---> Temporarily Disabled Algos"
-                for algoName in ${!AlgoDisabled[@]}; do
-                    unset AlgoName
-                    read -a AlgoName <<<"${AlgoDisabled[$algoName]//:/ }"
-                    echo "$algoName:"
-                    for (( lfdAlgo=2; $lfdAlgo<${#AlgoName[@]}; lfdAlgo++ )); do
-                        echo "    ${AlgoName[$lfdAlgo]}"
-                    done
-                done
-            fi
-        fi
-
-        # Sichern der alten Datei. Vielleicht brauchen wir sie bei einem Abbruch zur Analyse
-        cp -f ${RUNNING_STATE} ${RUNNING_STATE}.BAK
-    fi  ### if [ -f ${RUNNING_STATE} ]; then
 }
 
 _read_in_kWhMin_kWhMax_kWhAkk () {

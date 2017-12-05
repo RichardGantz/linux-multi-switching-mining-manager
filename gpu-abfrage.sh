@@ -61,13 +61,8 @@
 # ausgabe bitte jeweils in variablen packen und alle $[] "index" "gpu-name" "bus" "uuid"
 #
 
-# Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
-# und müssen sich auf den Inhalt fixer Dateien beziehen.
-if [ $HOME == "/home/richard" ]; then NoCards=true; fi
-
-### ERSTER Start und Erstellung der Grundkonfig 
-SYSTEM_FILE="gpu_system.out"
-SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE"
+# GLOBALE VARIABLEN, nützliche Funktionen
+[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
 
 # Ein paar Funktionen zur Verwaltung der Algos, die für alle oder nur für bestimmte GPU-UUIDs disabled sind.
 # Es gibt das Array AlgoDisabled[$algo], das den entsprechenden STRING in der Form

@@ -4,6 +4,10 @@
 # Entgegennehmen, absetzen und protokollieren von TWEAK-Kommandos
 #
 #
+
+# GLOBALE VARIABLEN, nützliche Funktionen
+[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source ../globals.inc
+
 # SYNC MIT DEM BENCHMARKER-PROZESS bench_30s_2.sh:
 # Um sicherzustellen, dass alle Werte in der Endlosschleife gültig berechnet und abgeschlossen wurden,
 # wird diese Datei kurz vor dem sleep 1 in der Endlosschleife erzeugt.
@@ -27,12 +31,6 @@ function _On_Exit () {
 }
 trap _On_Exit EXIT
 
-# Für Fake in Entwicklungssystemen ohne Grakas
-if [ "$HOME" == "/home/richard" ]; then
-    NoCards=true
-    PATH=${PATH}:./nvidia-befehle
-fi
-
 read OWN_LOGFILE WATT_LOGFILE HASH_LOGFILE <<<$(< tweak_to_these_logs)
 gpu_idx=$(< bensh_gpu_30s_.index)
 gpu_uuid=$(< uuid)
@@ -43,9 +41,6 @@ LOGPATH="../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version}"
 # Jetzt haben wir gleich alle Daten für den $algorithm !
 IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 bENCH_SRC="../${gpu_uuid}/bENCH.in"
-# für das folgende "source"
-LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ ) {out = out "/" $i }; \
-                   print substr(out,2) }')
 
 # Stellt die 5 bekannten Befehle zur Verfügung:
 #nvidia-smi --id=${gpu_idx} -pl 82 (root powerconsumption)
@@ -54,15 +49,14 @@ LINUX_MULTI_MINING_ROOT=$(pwd | gawk -e 'BEGIN {FS="/"} { for ( i=1; i<NF; i++ )
 #nvidia-settings --assign [fan:${gpu_idx}]/GPUTargetFanSpeed=66
 # Fan-Kontrolle auf MANUELL = 1 oder 0 für AUTOMATISCH
 #nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
-source nvidia-befehle/nvidia-query.inc
+[[ ${#_NVIDIACMD_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
 
-workdir=$(pwd)
 cd ../${gpu_uuid}
 # Ist schlechter Stil. Sollte keine Frage sein, dass diese Datei wirklich da ist.
 # Diese Abfrage Muss raus, sobald das sichergestellt ist.
 if [ ! -f gpu-bENCH.sh ]; then cp -f ../GPU-skeleton/gpu-bENCH.sh .; fi
 source gpu-bENCH.sh
-cd ${workdir} >/dev/null
+cd ${_WORKDIR_} >/dev/null
 _read_IMPORTANT_BENCHMARK_JSON_in
 
 declare -a nvidiaPara=(

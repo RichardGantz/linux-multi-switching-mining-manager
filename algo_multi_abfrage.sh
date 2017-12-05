@@ -17,6 +17,9 @@
 #
 ###############################################################################
 
+# GLOBALE VARIABLEN, nützliche Funktionen
+[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
+
 # Aktuelle PID der 'algo_multi_abfrage.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
 
@@ -29,22 +32,14 @@ echo $$ >$(basename $0 .sh).pid
 #
 ###############################################################################
 
-GRID[0]="netz"
-GRID[1]="solar"
-GRID[2]="solar_akku"
-
-SYNCFILE="you_can_read_now.sync"
-
-algoID_KURSE_PORTS_WEB="KURSE.json"
-algoID_KURSE_PORTS_ARR="KURSE_PORTS.in"
-
 # Funktionen zum Abruf der KURSE/PORTS/AlgoNAmes/AlgoIDs aus dem Web incl. Aufbereiten der .in Datei
 # und zum Einlesen aus der aufbereiteten .in Datei mittels readarray
-source algo_infos.inc
+[[ ${#_ALGOINFOS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 
 function _On_Exit () {
     rm -f ${algoID_KURSE_PORTS_WEB} ${algoID_KURSE_PORTS_ARR} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} \
        KURSE.in ALGO_NAMES.json ALGO_NAMES.in \
+       I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t \
        $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
@@ -76,8 +71,39 @@ _notify_about_NO_BTC_KURS()
     fi
 }
 
+_check_InternetConnection () {
+    local detected=$(date "+%F %H:%M:%S")
+    for ipaddr in ${InetPingStack[@]}; do
+        ping -q -c 1 -W 1 $ipaddr &>/dev/null
+        [[ $? -eq 0 ]] && detected=""; break
+    done
+    if [ ${#detected} -gt 0 ]; then
+        # Solange diese Datei existiert, kann jeder wissen, dass die Internet-Verbindung unterbrochen ist.
+        touch I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+        msg1="### INTERNET CONNECTION LOST ###"
+        msg2="Waiting for response from one of the 4 choosen IP-Addresses..."
+        notify-send -t 10000 -u critical "$msg1" "$msg2"
+        echo "${detected} $msg1" >>.InternetConnectionLost.log
+        declare -i secs=1
+        while :; do
+            echo "${msg2}, Ping-Cycle Nr. $secs"
+            for ipaddr in ${InetPingStack[@]}; do
+                printf "$ipaddr... "
+                ping -c 1 -W 1 $ipaddr &>/dev/null
+                [[ $? -eq 0 ]] && break 2
+            done
+            printf "\n"
+            let secs++
+        done
+        echo $(date "+%F %H:%M:%S") "Internet Connection established" >>.InternetConnectionLost.log
+        rm -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+    fi
+}
+
 
 while [ 1 -eq 1 ] ; do
+
+    _check_InternetConnection
 
     # Neue Algo Kurse aus dem Netz
     # Gültiges Ergebnis .json File fängt so an:
@@ -138,17 +164,11 @@ while [ 1 -eq 1 ] ; do
 ##############################################
 ##############################################
 
-    # Das ist ein zu grosser Sicherheitspuffer.
     # Die Berechnungen müssen losgehen, nachdem alle GPUs ihre best-Werte ermittelt haben!
     # multi_mining_calc.sh wartet nach der Berechnung des aktuellen SolarWattAvailable darauf,
     # dass alle ENABLED GPUs ihre Dateien ALGO_WATTS_MINES.in geschrieben haben.
     # Erstaunlicherweise kommt es oft vor, dass das manche noch in der selben Sekunde machen,
     # in der auch $SYNCFILE getouched wurde.
-    # (29.10.2017)
-    # Hier rausgenommen, weil multi_mining_calc.sh so umgeschrieben wurde,
-    #      dass sie die ganze Kontrolle übernimmt und alles ordnungsgemäß
-    #      startet und beendet.
-    #./multi_mining_calc.sh &
 
     sleep 31
 done
