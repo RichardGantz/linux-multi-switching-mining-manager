@@ -14,26 +14,15 @@
 #
 ###############################################################################
 
+# GLOBALE VARIABLEN, nützliche Funktionen
+[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
+
 SolarWattAvailable="$1"
 [[ ${#2} -gt 1 ]] && performanceTest=${2:1} || performanceTest=0
 [[ ${#3} -gt 1 ]] && verbose=${3:1} || verbose=0
 
 # Wegen der verschiedenen "push onto Array"-Verfahren
 arrayRedeclareTest=0
-
-GRID[0]="netz"
-GRID[1]="solar"
-GRID[2]="solar_akku"
-
-# SICHERHEITSHALBER die selben Variablem setzen wie in gpu-abfrage.sh,
-#                   damit die Funktionen in .inc auch alle Voraussetzungen erfüllt sehen.
-# Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
-# und müssen sich auf den Inhalt fixer Dateien beziehen.
-if [ $HOME == "/home/richard" ]; then NoCards=true; fi
-
-### ERSTER Start und Erstellung der Grundkonfig 
-SYSTEM_FILE="gpu_system.out"
-SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE"
 
 # Ein paar Funktionen zur Verwaltung der Algos, die für alle oder nur für bestimmte GPU-UUIDs disabled sind.
 # Es gibt die Funktionen
@@ -43,7 +32,7 @@ SYSTEM_STATE="GLOBAL_GPU_SYSTEM_STATE"
 #    _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 source gpu-abfrage.inc
 
-source ./multi_mining_calc.inc
+source multi_mining_calc.inc
 
 # Die folgenden Arrays stehen nach dem Aufruf von _read_in_SYSTEM_FILE_and_SYSTEM_STATEin zur Verfügung:
 #    index[ 0- ]=gpu_idx
@@ -351,13 +340,19 @@ echo "=========    Berechnungsverlauf    ========="
 for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
     echo ${MAX_PROFIT_MSG_STACK[$msg]}
 done
-if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
-    echo "FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
-    for msg in ${!MAX_FP_MSG_STACK[@]}; do
-        echo ${MAX_FP_MSG_STACK[$msg]}
-    done
-else
-    echo "KEIN(!) FULL POWER MODE möglich bei ${SolarWattAvailable}W SolarPower und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
+if [[ "${MAX_PROFIT_GPU_Algo_Combination}" != "${MAX_FP_GPU_Algo_Combination}" \
+            && "${MAX_FP_MINES}" > "${MAX_PROFIT}" ]]; then
+    echo "FULL POWER MINES ${MAX_FP_MINES} wären mehr als die EFFIZIENZ Mines ${MAX_PROFIT}"
+    FP_echo="FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower"
+    FP_echo+=" und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
+    if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
+        echo ${FP_echo}
+        for msg in ${!MAX_FP_MSG_STACK[@]}; do
+            echo ${MAX_FP_MSG_STACK[$msg]}
+        done
+    else
+        echo "KEIN(!)" ${FP_echo}
+    fi
 fi
 
 # Die folgenden Variablen müssen dann in Dateien gepiped werden, damit die Auswertung funktioniert:

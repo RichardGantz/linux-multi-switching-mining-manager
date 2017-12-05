@@ -14,9 +14,7 @@
 #     angesprochen werden können.
 #
 
-if [ ${#_MINERFUNC_INCLUDED} -eq 0 ];then
-    source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
-fi
+[[ ${#_MINERFUNC_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 
 # Extrem wichtige Funktion zur Erweiterung der JSON, falls notwendig.
 #
@@ -91,6 +89,9 @@ function _expand_IMPORTANT_BENCHMARK_JSON ()
 
 _read_IMPORTANT_BENCHMARK_JSON_in()
 {
+    local w_o_miners=0
+    if [ "$1" == "without_miners" ]; then w_o_miners=1; fi
+
     # Das sind die Werte zu jedem einzelnen "${algorithm}" == "${algo}#${miner_name}#${miner_version}"
     unset bENCH         ; declare -Ag bENCH
     unset WATTS         ; declare -Ag WATTS
@@ -107,6 +108,8 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     unset POWER_LIMIT   ; declare -Ag POWER_LIMIT
     unset LESS_THREADS  ; declare -Ag LESS_THREADS
     unset READARR
+
+    _reserve_and_lock_file ${IMPORTANT_BENCHMARK_JSON}
 
     # Dateialter zum Zeitpunkt des Array-Aufbaus festhalten
     IMPORTANT_BENCHMARK_JSON_last_age_in_seconds=$(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s)
@@ -191,7 +194,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
                    less_threads  = substr( $2, 1, length($2)-0 ); \
                    algorithm = algo "#" miner_name "#" miner_version; \
                    if ( BENCH_KIND == 888 ) \
-                      { algorithm = algorithm "#" BENCH_KIND }; \
+                      { algorithm = algorithm "#888" }; \
                    print algorithm;     \
                    print benchspeed;    \
                    print watt;          \
@@ -234,36 +237,38 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
         POWER_LIMIT[${READARR[$i]}]=${READARR[$i+13]}
         LESS_THREADS[${READARR[$i]}]=${READARR[$i+14]}
     done
+    rm -f ${IMPORTANT_BENCHMARK_JSON}.lock
 
-    ################################################################################
-    #
-    # Vergleich der eingelesenen Algorithmen mit der Menge an Algorithmen,
-    # die insgesamt im System möglich sind und auf eventuell fehlende Hinweisen.
-    #
-    #################################################################################
+    if [ ${w_o_miners} -eq 0 ]; then
+        ################################################################################
+        #
+        # Vergleich der eingelesenen Algorithmen mit der Menge an Algorithmen,
+        # die insgesamt im System möglich sind und auf eventuell fehlende Hinweisen.
+        #
+        #################################################################################
 
-    # Einlesen aller Dateien NiceHash#${miner_name}.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
-    # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
-    # in ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
-    #
-    # Das Verzeichnis, das alle diese Informationen bereit hält ist:
-    # ${LINUX_MULTI_MINING_ROOT}/miners
+        # Einlesen aller Dateien NiceHash#${miner_name}.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
+        # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
+        # in ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
+        #
+        # Das Verzeichnis, das alle diese Informationen bereit hält ist:
+        # ${LINUX_MULTI_MINING_ROOT}/miners
 
-    _set_ALLE_MINER_from_path ${LINUX_MULTI_MINING_ROOT}/miners
+        _set_ALLE_MINER_from_path ${LINUX_MULTI_MINING_ROOT}/miners
 
-    # Dann alle Minerversionen und die entsprechenden Algos durchgehen und schauen, ob diese
-    # Algos gerade aus der IMPORTANT_BENCHMARK_JSON eingelesen wurden.
-    # Wenn nicht, Ausgabe einer entsprechenden Meldung
+        # Dann alle Minerversionen und die entsprechenden Algos durchgehen und schauen, ob diese
+        # Algos gerade aus der IMPORTANT_BENCHMARK_JSON eingelesen wurden.
+        # Wenn nicht, Ausgabe einer entsprechenden Meldung
 
-    for minerName in ${ALLE_MINER}; do
-        read m_name m_version <<<"${minerName//#/ }"
-        m_version=${m_version%.algos}
-        declare -n actInternalAlgos="Internal_${m_name}_${m_version//\./_}_Algos"
-        for lfdAlgo in ${!actInternalAlgos[@]}; do
-            if [ ${#bENCH["${lfdAlgo}#${m_name}#${m_version}"]} -eq 0 ]; then
-                printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
-                       ${gpu_idx} "${lfdAlgo}#${m_name}#${m_version}"
-            fi
+        for minerName in ${ALLE_MINER[@]}; do
+            read m_name m_version <<<"${minerName//#/ }"
+            declare -n actInternalAlgos="Internal_${m_name}_${m_version//\./_}_Algos"
+            for lfdAlgo in ${!actInternalAlgos[@]}; do
+                if [ ${#bENCH["${lfdAlgo}#${m_name}#${m_version}"]} -eq 0 ]; then
+                    printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
+                           ${gpu_idx} "${lfdAlgo}#${m_name}#${m_version}"
+                fi
+            done
         done
-    done
+    fi
 }

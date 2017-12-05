@@ -11,9 +11,15 @@
 #
 ###############################################################################
 
+# GLOBALE VARIABLEN, nützliche Funktionen
+[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
+
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
 verbose=0
+
+# Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
+debug=1
 
 # Performance-Test-Werte und Bedeutung:
 # 1: Sekundenzeitstempel an folgenden 8 signifikanten Stellen der Endlosschleife in Datei "perfmon.log"
@@ -42,7 +48,12 @@ find . -depth -name \*.pid -delete
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
 ERRLOG=$(basename $0 .sh).err
-rm -f ${ERRLOG}
+
+function _delete_temporary_files () {
+    rm -f ${ERRLOG} ${SYNCFILE} \
+       I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+}
+_delete_temporary_files
 
 #
 # Aufräumarbeiten beim ordungsgemäßen kill -15 Signal (SIGTERM)
@@ -79,28 +90,12 @@ function _On_Exit () {
     _terminate_all_log_ptys
     [[ ${#pstreePID} -gt 0 ]] && kill ${pstreePID}
     # Temporäre Dateien löschen
+    if [ $debug -eq 0 ]; then _delete_temporary_files; fi
     rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
 
-# Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
-# und müssen sich auf den Inhalt fixer Dateien beziehen.
-# ---> wird in gpu-abfrage.sh gesetzt, das wir bald als "source" hinzunehmen <---
-#NoCards:        if [ $HOME == "/home/richard" ]; then NoCards=true; fi
-#SYSTEM_FILE:    "gpu_system.out"
-#SYSTEM_STATE:   "GLOBAL_GPU_SYSTEM_STATE"
-
-# Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
-RUNNING_STATE="GLOBAL_GPU_ALGO_RUNNING_STATE"
-
-GRID[0]="netz"
-GRID[1]="solar"
-GRID[2]="solar_akku"
-
 FullPowerPattern="\#888$"    # Endet mit "#888"
-
-SYNCFILE="you_can_read_now.sync"
-rm -f $SYNCFILE
 
 # Funktionen Definitionen ausgelagert
 source ./multi_mining_calc.inc
@@ -127,15 +122,19 @@ _terminate_all_processes_of_script "gpu_gv-algo.sh"
 _terminate_all_processes_of_script "algo_multi_abfrage.sh"
 # ---> WIR MÜSSEN AUCH ÜBERLEGEN, WAS WIR MIT DEM RUNNING_STATE MACHEN !!! <---
 # ---> WIE SINNVOLL IST ES, DEN AUFZUHEBEN?                                <---
+rm -f ${RUNNING_STATE}
+
 # Danach ist alles saubergeputzt, soweit wir das im Moment überblicken und es kann losgehen, die
 # gpu_gv-algos's zu starten, die erst mal auf SYNCFILE warten
 # und dann algo_multi_abfrage.sh
 
+exec 2>>${ERRLOG}
+set-title 'Multi Mining Control Center'
 # Error-Kanal in eigenes Terminal ausgeben
 unset ii; declare -i ii=0
 unset LOG_PTY_CMD; declare -ag LOG_PTY_CMD
 LOG_PTY_CMD[999]="tail -f ${ERRLOG}"
-exec 2>>${ERRLOG}
+#LOG_PTY_CMD[999]="set-title 'MultiMining Error Channel Output'; tail -f ${ERRLOG}"
 ofsX=$((ii*60+50))
 ofsY=$((ii*30+50))
 let ii++
@@ -143,6 +142,7 @@ gnome-terminal --hide-menubar \
                --title="MultiMining Error Channel Output" \
                --geometry="100x24+${ofsX}+${ofsY}" \
                -e "${LOG_PTY_CMD[999]}"
+#               -x bash -c "${LOG_PTY_CMD[999]}"
 
 # Besteht nun hauptsächlich aus der Funktion _func_gpu_abfrage_sh
 source ./gpu-abfrage.sh
@@ -206,23 +206,19 @@ while : ; do
     # Dann starten wir die algo_multi_abfrage.sh, wenn sie nicht schon läuft...
     #
     if [ ! -f algo_multi_abfrage.pid ]; then
-        if [ 1 -eq 1 ]; then
-            echo "Starting algo_multi_abfrage.sh in the background..."
-            ./algo_multi_abfrage.sh >>${ERRLOG} &
-        else
-            # Das lohnt sich erst, wenn wir den curl dazu gebracht haben, ebenfalls umzuleiten...
-            # gnome-terminal -x ./abc.sh
-            #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
-            ofsX=$((ii*60+50))
-            ofsY=$((ii*30+50))
-            rm -f algo_multi_abfrage.log
-            echo "Starting algo_multi_abfrage.sh in the background..."
-            ./algo_multi_abfrage.sh >>algo_multi_abfrage.log &
-            gnome-terminal --hide-menubar \
-                           --title="\"RealTime\" Algos und Kurse aus dem Web" \
-                           --geometry="100x24+${ofsX}+${ofsY}" \
-                           -e "tail -f algo_multi_abfrage.log"
-        fi
+        # Das lohnt sich erst, wenn wir den curl dazu gebracht haben, ebenfalls umzuleiten...
+        # gnome-terminal -x ./abc.sh
+        #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
+        ofsX=$((ii*60+50))
+        ofsY=$((ii*30+50))
+        rm -f algo_multi_abfrage.log
+        echo "Starting algo_multi_abfrage.sh in the background..."
+        ./algo_multi_abfrage.sh &>>algo_multi_abfrage.log &
+        LOG_PTY_CMD[998]="tail -f algo_multi_abfrage.log"
+        gnome-terminal --hide-menubar \
+                       --title="\"RealTime\" Algos und Kurse aus dem Web" \
+                       --geometry="100x24+${ofsX}+${ofsY}" \
+                       -e "${LOG_PTY_CMD[998]}"
     fi
 
     ###############################################################################################
@@ -231,16 +227,9 @@ while : ; do
     #
     ###############################################################################################
     # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
-    while [ -f ${RUNNING_STATE}.lock ]; do
-        echo "Waiting for READ access to ${RUNNING_STATE}"
-        sleep 1
-    done
-    # Zum Lesen reservieren...
-    echo $$ >${RUNNING_STATE}.lock
-    # ... einlesen...
-    _read_in_actual_RUNNING_STATE
-    # ... und wieder freigeben
-    rm -f ${RUNNING_STATE}.lock
+    _reserve_and_lock_file ${RUNNING_STATE}          # Zum Lesen reservieren...
+    _read_in_actual_RUNNING_STATE                    # ... einlesen...
+    rm -f ${RUNNING_STATE}.lock                      # ... und wieder freigeben
 
     # Folgende Arrays stehen uns jetzt zur Verfügung, die uns sagen, welche GPU seit den
     # vergangenen 31s mit welchem Algorithmus und welchem Watt-Konsum laufen sollte,
@@ -268,10 +257,18 @@ while : ; do
     ###
     ###############################################################################################
     ###############################################################################################
+    _progressbar='\r'
     while [ ! -f ${SYNCFILE} ]; do
-        echo "###---> Waiting for ${SYNCFILE} to become available..."
-        sleep 1
+        [[ "${_progressbar}" == "\r" ]] && echo "###---> Waiting for ${SYNCFILE} to become available..."
+        _progressbar+='.'
+        if [[ ${#_progressbar} -gt 75 ]]; then
+            printf '\r                                                                            '
+            _progressbar='\r.'
+        fi
+        printf ${_progressbar}
+        sleep .5
     done
+    [[ "${_progressbar}" != "\r" ]] && printf "\n"
     #  Das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available} merken für später.
     #  Die GPUs haben schon losgelegt, das heisst, dass SYNCFILE da ist und in etwa 31s neu getouched wird
     declare -i new_Data_available=$(stat -c %Y ${SYNCFILE})
@@ -293,25 +290,54 @@ while : ; do
     #       und wir die optimale Konfiguration durchrechnen können,
     #       bestimmen wir den momentanen "Strompreis" anhand der Daten aus dem SMARTMETER
     #
-    # Zunächst also warten, bis die "MInes"-Berechnungen und die Wattangaben alle verfügbar sind.
+    # Zunächst also warten, bis die "Mines"-Berechnungen und die Wattangaben alle verfügbar sind.
 
-    while [ 1 == 1 ]; do
+    _progressbar='\r'
+    while :; do
         declare -i AWMTime=new_Data_available+3600
         for UUID in ${!uuidEnabledSOLL[@]}; do
             if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
-                declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in) 2>/dev/null \
-                    && if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
+                if [ ! -f ${UUID}/ALGO_WATTS_MINES.lock ]; then
+                    if [ -f ${UUID}/ALGO_WATTS_MINES.in ]; then
+                        declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in) 2>/dev/null
+                        if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
+                    fi
+                fi
             fi
         done
         if [ $AWMTime -lt $new_Data_available ]; then
-            echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
-            sleep 1
+            [[ "${_progressbar}" == "\r" ]] && echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
+            _progressbar+='.'
+            if [[ ${#_progressbar} -gt 75 ]]; then
+                printf '\r                                                                            '
+                _progressbar='\r.'
+            fi
+            printf ${_progressbar}
+            sleep .5
         else
             break
         fi
     done
+    [[ "${_progressbar}" != "\r" ]] && printf "\n"
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >3.< GPUs haben alle Daten geschrieben" >>perfmon.log
+
+    ###############################################################################################
+    #
+    #    Info über Algos, die DISABLED wurden und sind ausgeben
+    #
+    if [ -f GLOBAL_ALGO_DISABLED ]; then
+        echo "-------------> Die folgenden Algos sind GENERELL DISABLED: <-------------"
+        cat GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$'
+    fi
+    if [ -f BENCH_ALGO_DISABLED ]; then
+        echo "-------------> Die folgenden Algos sind aufgrund des Benchmarings DAUERHAFT DISABLED: <-------------"
+        cat BENCH_ALGO_DISABLED
+    fi
+    if [ -f MINER_ALGO_DISABLED ]; then
+        echo "-------------> Die folgenden Algos sind für 5 Minuten DISABLED: <-------------"
+        cat MINER_ALGO_DISABLED | sort -k 3
+    fi
 
     ###############################################################################################
     #
@@ -479,12 +505,10 @@ while : ; do
     echo "\$GLOBAL_MAX_PROFIT_CALL_COUNTER: $GLOBAL_MAX_PROFIT_CALL_COUNTER"
 
     # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
-    while [ -f ${RUNNING_STATE}.lock ]; do
-        echo "Waiting for WRITE access to ${RUNNING_STATE}"
-        sleep 1
-    done
-    # Zum Schreiben reservieren
-    echo $$ >${RUNNING_STATE}.lock
+    _reserve_and_lock_file ${RUNNING_STATE}          # Zum Schreiben reservieren...
+
+    # Sichern der alten Datei. Vielleicht brauchen wir sie bei einem Abbruch zur Analyse
+    [[ -f ${RUNNING_STATE} ]] && cp -f ${RUNNING_STATE} ${RUNNING_STATE}.BAK
 
     #####################################################
     # Ausgabe des neuen Status
@@ -532,13 +556,6 @@ while : ; do
             ### Schweres Thema: IST DER GPU-INDEX NOCH DER SELBE ??? <-----------------------
             #echo "\${gpu_idx}:${gpu_idx} == \${RunningGPUid[\${gpu_uuid}:${gpu_uuid}]}:${RunningGPUid[${gpu_uuid}]}"
             if [[ "${gpu_idx}" != "${RunningGPUid[${gpu_uuid}]}" ]]; then
-                echo "#############################   CHAOS BEHADLUNG   #############################"
-                echo "Das gesamte System muss möglicherweise gestoppt und neu gestartet werden:"
-                echo "Wir sind auf die Karte mit der UUID=${gpu_uuid} gestossen."
-                echo "Sie lief bisher mit einem Miner, der sie als GPU-Index #${RunningGPUid[${gpu_uuid}]} angesprochen hat."
-                echo "Jetzt soll sie aber ein Miner mit dem Index ${gpu_idx} ansprechen ???"
-                echo "Was also ist mit dem Miner, der noch die vorherige GPU-Index-Nummer #${RunningGPUid[${gpu_uuid}]} bedient?"
-                echo "#############################   CHAOS BEHADLUNG   #############################"
                 _notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING "${name[${gpu_idx}]}" \
                                                               "${gpu_uuid}" \
                                                               "${RunningGPUid[${gpu_uuid}]}" \
@@ -695,13 +712,6 @@ while : ; do
                 #############################   CHAOS BEHADLUNG Anfang  #############################
                 ### Schweres Thema: IST DER GPU-INDEX NOCH DER SELBE ??? <-----------------------
                 if [[ "${gpu_idx}" != "${RunningGPUid[${gpu_uuid}]}" ]]; then
-                    echo "#############################   CHAOS BEHADLUNG   #############################"
-                    echo "Das gesamte System muss möglicherweise gestoppt und neu gestartet werden:"
-                    echo "Wir sind auf die Karte mit der UUID=${gpu_uuid} gestossen."
-                    echo "Sie lief bisher mit einem Miner, der sie als GPU-Index #${RunningGPUid[${gpu_uuid}]} angesprochen hat."
-                    echo "Jetzt soll sie aber ein Miner mit dem Index ${gpu_idx} ansprechen ???"
-                    echo "Was also ist mit dem Miner, der noch die vorherige GPU-Index-Nummer #${RunningGPUid[${gpu_uuid}]} bedient?"
-                    echo "#############################   CHAOS BEHADLUNG   #############################"
                     _notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING "${name[${gpu_idx}]}" \
                                                                   "${gpu_uuid}" \
                                                                   "${RunningGPUid[${gpu_uuid}]}" \
@@ -735,7 +745,7 @@ while : ; do
     done
 
     # Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
-    rm -f ${RUNNING_STATE}.lock
+    rm -f ${RUNNING_STATE}.lock                      # ... und wieder freigeben
 
     echo "Neues globales Switching Sollzustand Kommandofile"
     cat ${RUNNING_STATE}

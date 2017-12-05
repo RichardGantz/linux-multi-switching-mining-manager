@@ -19,14 +19,14 @@ _MINERFUNC_INCLUDED=1
 _set_ALLE_MINER_from_path () {
     local workdir=$(pwd)
     cd $1
-    ALLE_MINER=$(ls *.algos)
+    unset ALLE_MINER
+    ALLE_MINER=($(ls *.algos))
+    ALLE_MINER=(${ALLE_MINER[@]%%[.]algos})
 
     shopt -s lastpipe
     unset NH_CC_Algos
-    unset i;   declare -i i=0
-    for minerName in ${ALLE_MINER}; do
+    for minerName in ${ALLE_MINER[@]}; do
         read m_name m_version <<<"${minerName//#/ }"
-        m_version=${m_version%.algos}
         #
         # Hier der "." ist in Variablennamen nicht erlaubt.
         # Deshalb wandeln wir für die interne Indexierung der assoziativen Arrays alle "." in "_".
@@ -69,8 +69,7 @@ _set_ALLE_MINER_from_path () {
             fi
         done
 
-        i+=1
-    done  ## for minerName in ${ALLE_MINER}
+    done  ## for minerName in ${ALLE_MINER[@]}
     cd ${workdir} >/dev/null
 }
 
@@ -91,27 +90,27 @@ _set_ALLE_MINER_from_path_no_longer () {
 }
 
 #
-# ${miner_name} und ${miner_version} müssen schon gesetzt sein.
+# ${miner_name} und ${miner_version} müssen als Parameter $1 und $2 übergeben werden!!!
 # $IMPORTANT_BENCHMARK_JSON muss gesetzt sein
 #
 _split_into_Available_and_Missing_Miner_Algo_Arrays () {
-    declare -n  actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
+    declare -n  actInternalAlgos="Internal_${1}_${2//\./_}_Algos"
 
-    declare -n          deleteIt="Missing_${miner_name}_${miner_version//\./_}_Algos";     unset deleteIt
-    declare -ag                  "Missing_${miner_name}_${miner_version//\./_}_Algos"
-    declare -n   actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
+    declare -n          deleteIt="Missing_${1}_${2//\./_}_Algos";     unset deleteIt
+    declare -ag                  "Missing_${1}_${2//\./_}_Algos"
+    declare -n   actMissingAlgos="Missing_${1}_${2//\./_}_Algos"
 
-    declare -n          deleteIt="Available_${miner_name}_${miner_version//\./_}_Algos";     unset deleteIt
-    declare -ag                  "Available_${miner_name}_${miner_version//\./_}_Algos"
-    declare -n actAvailableAlgos="Available_${miner_name}_${miner_version//\./_}_Algos"
+    declare -n          deleteIt="Available_${1}_${2//\./_}_Algos";     unset deleteIt
+    declare -ag                  "Available_${1}_${2//\./_}_Algos"
+    declare -n actAvailableAlgos="Available_${1}_${2//\./_}_Algos"
 
     unset algos
     declare -a algos=( "${!actInternalAlgos[@]}" )
     if [ ${#algos[@]} -gt 0 ]; then
         for lfdAlgo in ${algos[@]}; do
             sed -n -e '/"Name": "'${lfdAlgo}'",/{
-                 N;N;N;/"MinerName": "'${miner_name}'",/{
-                     N;/"MinerVersion": "'${miner_version}'",/{Q100}}};
+                 N;N;N;/"MinerName": "'${1}'",/{
+                     N;/"MinerVersion": "'${2}'",/{Q100}}};
                  ${Q99}' \
                 ${IMPORTANT_BENCHMARK_JSON}
             found=$?
@@ -143,11 +142,15 @@ _read_in_ALL_Internal_Available_and_Missing_Miner_Algo_Arrays () {
     # Die MissingAlgos könnte man in einer automatischen Schleife benchmarken lassen,
     # bis es keine MissingAlgos mehr gibt.
 
-    for minerName in ${ALLE_MINER}; do
-        read miner_name miner_version <<<"${minerName//#/ }"
-        miner_version=${miner_version%.algos}
-        declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
-        _split_into_Available_and_Missing_Miner_Algo_Arrays
+    if [ ${#_test_} -gt 0 ]; then
+        declare -p ALLE_MINER
+    fi
+    for minerName in "${ALLE_MINER[@]}"; do
+        read m_name m_version <<<"${minerName//#/ }"
+        if [ ${#_test_} -gt 0 ]; then
+            echo "\$minerName: $minerName"
+            echo "\$m_name: $m_name, \$m_version: $m_version"
+        fi
+        _split_into_Available_and_Missing_Miner_Algo_Arrays ${m_name} ${m_version}
     done
-
 }

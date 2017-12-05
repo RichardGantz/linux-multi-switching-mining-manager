@@ -14,6 +14,8 @@
 # ALGO_IDs[ $algo ]
 ################################################################################
 
+_ALGOINFOS_INCLUDED=1
+
 # Als Alarm, dass Webseite nicht abgerufen werden kann
 _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
 {
@@ -55,7 +57,7 @@ _notify_about_NO_VALID_ALGO_NAMES_kMGTP_JSON()
 function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
     declare -i jsonValid=0
     searchPattern='^[{]"result":[{]"simplemultialgo":\['
-    jsonValid=$(curl "https://api.nicehash.com/api?method=simplemultialgo.info" 2>/dev/null \
+    jsonValid=$(curl "https://api.nicehash.com/api?method=simplemultialgo.info" \
                        | tee ${algoID_KURSE_PORTS_WEB} \
                        | grep -c -e "$searchPattern" )
     if [ ${jsonValid} -eq 0 ]; then
