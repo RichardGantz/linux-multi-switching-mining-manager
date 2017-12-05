@@ -1,12 +1,19 @@
 Beschreibung
 ---------
+Überblick des Projektes:
+- Einbeziehung der Solar Energie
+- Einbeziheung der Energiekosten Solarstrom(Einspeisevergütung), (Solar_Akku_Strom) und Netzstrom
+- Berechnung der Energie Kosten der einzelnen Grafikkarten zu den jeweiligen möglichen Algorythmen
+- Feststellung der Leistung der Graffikkarten normal-,unter- und übertaktet und dazugehörigen Verbrauch zu jedem Algorythmus
+- Berechnung des Gewinns unter Einbeziehung sämtlicher faktoren und kombinationen
+- Starten/Stoppen der Berechnung von Algorythmen je Graffikkarte einzelnd für sich
 
 
 Nötige System Programme
 ---------
 - Debian Jessie (oder gleichwertig)
 - Curl
-- Nvidia Cuda Treiber
+- Nvidia Cuda 8.0 Treiber
 - su -c "apt_get update ; apt-get install libnotify-bin"
 
 
