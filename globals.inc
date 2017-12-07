@@ -12,7 +12,7 @@ LINUX_MULTI_MINING_ROOT=$(pwd)
 cd ${_WORKDIR_} >/dev/null
 
 # Die SLEEP Zeit nach dem Abbruch eines Miners in Sekunden. Experimentell, .5 bis 3 ???
-Erholung=.001
+Erholung=.9
 
 # Das wäre die zu bevorzugende Reihenfolge, wenn man die losses ("usa") als ungünstigst ansieht.
 LOCATION=( "eu" "br" "in" "jp" "hk" "usa" )
@@ -55,6 +55,7 @@ declare -Ag DO_AUTO_BENCHMARK_FOR
 if [ $HOME == "/home/richard" ]; then
     NoCards=true
     PATH=${PATH}:${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle
+    Erholung=.001
 fi
 
 # Diese Funktion ist bequem, aber langsamer als die Member eines Arrays in einer for-Schleife zu verbinden.

@@ -106,6 +106,7 @@ _split_into_Available_and_Missing_Miner_Algo_Arrays () {
 
     unset algos
     declare -a algos=( "${!actInternalAlgos[@]}" )
+    [ -n "${_test_}" ] && declare -p algos
     if [ ${#algos[@]} -gt 0 ]; then
         for lfdAlgo in ${algos[@]}; do
             sed -n -e '/"Name": "'${lfdAlgo}'",/{
@@ -142,9 +143,7 @@ _read_in_ALL_Internal_Available_and_Missing_Miner_Algo_Arrays () {
     # Die MissingAlgos könnte man in einer automatischen Schleife benchmarken lassen,
     # bis es keine MissingAlgos mehr gibt.
 
-    if [ ${#_test_} -gt 0 ]; then
-        declare -p ALLE_MINER
-    fi
+    [ -n "${_test_}" ] && declare -p ALLE_MINER
     for minerName in "${ALLE_MINER[@]}"; do
         read m_name m_version <<<"${minerName//#/ }"
         if [ ${#_test_} -gt 0 ]; then

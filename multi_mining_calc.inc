@@ -428,8 +428,6 @@ _read_in_All_ALGO_WATTS_MINESin () {
         declare -n actAlgoWatt="GPU${index[$idx]}Watts"
         declare -n actAlgoMines="GPU${index[$idx]}Mines"
 
-        # Damit ist sichergestellt, dass gpu_gv-algo.sh mit dem Schreiben ALLER Daten fertig ist.
-        while [ -f ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.lock ]; do echo "Waiting..." >/dev/null; done
         if [ -s ${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in ]; then
             unset READARR
             readarray -n 0 -O 0 -t READARR <${uuid[${index[$idx]}]}/ALGO_WATTS_MINES.in

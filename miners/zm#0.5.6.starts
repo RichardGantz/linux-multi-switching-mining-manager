@@ -8,28 +8,36 @@
 
 minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/zm_0.5.6"
 
-LIVE_START_CMD='%s/%s --dev %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --logfile %s --time'
+# Laut Doku sicherheitshalber der server vorne und die options hinten:
+#Usage:
+# zm --server hostname --port port_nr --user user_name
+#    [--pass password] [options]...
+#LIVE_START_CMD='%s/%s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time --logfile %s'
+LIVE_START_CMD='%s/%s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time'
 LIVE_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
-    "gpu_idx"
     "algo"
     "continent"
     "NH_DOMAIN"
     "algo_port"
     "worker"
-    "LIVE_LOGFILE"
+    "gpu_idx"
+#    "LIVE_LOGFILE"
 )
 
-BENCH_START_CMD='%s/%s --dev %s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x--logfile %s --time'
-BENCH_PARAMETERSTACK=(
-    "minerfolder"
-    "miner_name"
-    "gpu_idx"
-    "algo"
-    "continent"
-    "NH_DOMAIN"
-    "algo_port"
-    "worker"
-    "BENCHLOGFILE"
-)
+# Wenn kein BENCH_START_CMD angegeben ist, wird nur LIVE Benchmarked.
+#
+#BENCH_START_CMD='%s/%s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time --logfile %s'
+#BENCH_START_CMD='%s/%s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time'
+#BENCH_PARAMETERSTACK=(
+#    "minerfolder"
+#    "miner_name"
+#    "algo"
+#    "continent"
+#    "NH_DOMAIN"
+#    "algo_port"
+#    "worker"
+#    "gpu_idx"
+##    "BENCHLOGFILE"
+#)
