@@ -4,7 +4,7 @@
 # Wir nutzen Zeiten ohne Internet oder den Ausfal von NiceHash dazu,
 # alle fehlenden Benchmark-Werte im OFFLINE-Modus zu ermitteln.
 #
-# Wir erzeugen fälschlicherweise die Datei I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t und starten
+# Wir erzeugen fälschlicherweise die Datei ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t und starten
 # Für jede GPU jeden fehlenden Miner-Algo mit folgendem Kommando:
 #
 #                   bench_30s_2.sh -a ${gpu_idx} ${algorithm}
@@ -70,7 +70,7 @@ done
 #set -- "${POSITIONAL[@]}" # restore positional parameters
 
 function _delete_temporary_files () {
-    rm -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+    rm -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 _delete_temporary_files
 
@@ -153,7 +153,7 @@ gpu_idx_list="${index[@]}"
 ################################################################################
 ################################################################################
 
-touch I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+touch ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 
 [ ${debug} -eq 1 ] && echo "Internet Connection Lost - Fake etabliert"
 
@@ -192,4 +192,4 @@ for gpu_idx in ${index[@]}; do
     done
 done
 
-rm -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+rm -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
