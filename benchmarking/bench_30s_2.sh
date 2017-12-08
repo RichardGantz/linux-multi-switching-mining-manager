@@ -599,7 +599,7 @@ gpu_idx_list="${index[@]}"
 #   Deshalb holen wir die Daten nur dann selbst, wenn die algoID_KURSE_PORTS_WEB älter als 120 Sekunden ist.
 #   Denn dann läuft die algo_multi_abfrage.sh nicht
 live_mode="lo"
-if [[ -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
     live_mode="o"
 else
     if [ ! -s ${algoID_KURSE_PORTS_WEB} ] \
@@ -702,8 +702,19 @@ else
     miner_version=${minerVersion[$(($choice-1))]}
 fi
 
+################################################################################
+#
+# Ab hier steht der Miner fest und die Variablen  miner_name und miner_version dürfen NICHT MEHR VERÄNDERT WERDEN!
+#
+################################################################################
+
 declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
 declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
+
+# Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
+# definiert sind, damit die Aufrufmechanik für alle Miner gleich ist.
+source ../miners/${miner_name}#${miner_version}.starts
+
 
 ####################################################################################
 ################################################################################
@@ -755,6 +766,12 @@ if [ -s ../GLOBAL_ALGO_DISABLED ]; then
     done
 fi
 
+if [ -z "actInternalAlgos[${algo}]" ]; then
+    [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 99
+    echo "Der Algo ${algo} ist DISABLED und kann im Moment nicht betestet werden."
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+    exec $0 ${initialParameters}
+fi
 
 # Checken, ob wir für alle Algos auch schon Werte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json haben
 # Diejenigen Algos anzeigen, zu denen es noch keine Eintragsmöglichkeit gibt.
@@ -900,17 +917,13 @@ maxWATT=0
 ###
 ################################################################################
 
-# Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
-# definiert sind, damit die Aufrufmechanik für alle gleich ist.
-source ../miners/${miner_name}#${miner_version}.starts
-
 #[ "${KURSE[$algo]}" == "0" ] && live_mode=${live_mode//l/}
 [ "${KURSE[$algo]}" == "0" ] && live_mode="o"
 [ -z "${BENCH_START_CMD}" ]  && live_mode=${live_mode//o/}
 
 if [ -z "$live_mode" ]; then
     # Weder LIVE-Mode noch OFFLINE-Mode möglich
-    [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 1
+    [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 99
     echo "Weder der LIVE-Mode (wegen Kurs=0) noch der OFFLINE-Mode (wegen fehlendem BENCH_START_CMD) sind im Moment möglich."
     read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
     exec $0 ${initialParameters}
@@ -1060,6 +1073,8 @@ if [ $NoCards ]; then
         if [[ "${miner_name}" == "miner" ]]; then
             #sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log >${BENCHLOGFILE}
             cp -f equihash.log ${BENCHLOGFILE}
+	elif [[ "${miner_name}" == "zm" ]]; then
+	    printf ""
         else
             cp test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
             # cp test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
