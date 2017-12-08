@@ -228,6 +228,10 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # tempazb + 12: PowerLimit
     # tempazb + 13: LessThreads
 
+    # Haben wir in den Testfällen ohne Internet entdeckt, dass dieses Array dann leer ist.
+    # Irgendeinen Wert brauchen wir aber, also nehmen wir einfach 777, bis er beim nächsten Benchmark mit Internet-Zugang korrigiert wird.
+    if [[ ${#ALGO_IDs[${algo}]}   -eq 0 ]]; then ALGO_IDs[${algo}]=777; fi
+
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
     if [ ${tempazb} -gt 1 ] ; then
         #
@@ -601,6 +605,16 @@ gpu_idx_list="${index[@]}"
 live_mode="lo"
 if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
     live_mode="o"
+    # Ohne Internetverbindung wird die Funktion _read_in_ALGO_PORTS_KURSE nicht aufgerufen,
+    # wodurch die folgenden Arrays leer und nicht definiert sind.
+    # Da wir die ALGO_ID des Algo aber auch in die benchmark.JSON schreiben, haben wir ein Problem, das wir lösen,
+    #    indem wir die ALGO_ID auf 777 setzen und wissen, dass das falsch ist.
+    # Das selbe machen wir unten mit dem algo_port. Der wird im Offline-Modus sowieso nicht benötigt.
+    # Der nächste Benchmark mit Internetverbindung wird diesen Wert automatisch korrigieren
+    #unset ALGOs;    declare -ag ALGOs
+    #unset KURSE;    declare -Ag KURSE
+    #unset PORTs;    declare -Ag PORTs
+    #unset ALGO_IDs; declare -Ag ALGO_IDs
 else
     if [ ! -s ${algoID_KURSE_PORTS_WEB} ] \
            || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s)+120)) -lt $(date +%s) ]]; then
@@ -766,9 +780,9 @@ if [ -s ../GLOBAL_ALGO_DISABLED ]; then
     done
 fi
 
-if [ -z "actInternalAlgos[${algo}]" ]; then
+if [ -z "${actInternalAlgos[${algo}]}" ]; then
     [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 99
-    echo "Der Algo ${algo} ist DISABLED und kann im Moment nicht betestet werden."
+    echo "Der Algo ${algo} ist DISABLED und kann im Moment nicht getestet werden."
     read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
     exec $0 ${initialParameters}
 fi
@@ -918,7 +932,7 @@ maxWATT=0
 ################################################################################
 
 #[ "${KURSE[$algo]}" == "0" ] && live_mode=${live_mode//l/}
-[ "${KURSE[$algo]}" == "0" ] && live_mode="o"
+[ -z "${KURSE[$algo]}" -o "${KURSE[$algo]}" == "0" ] && live_mode="o"
 [ -z "${BENCH_START_CMD}" ]  && live_mode=${live_mode//o/}
 
 if [ -z "$live_mode" ]; then
@@ -1007,6 +1021,8 @@ continent="eu"        # Noch nicht vollständig implementiert!      <-----------
 worker="1060"         # Noch nicht vollständig implementiert!      <--------------------------------------
 
 algo_port=${PORTs[${algo}]}
+if [ $NoCards ]; then algo_port=777; fi
+
 
 # Jetzt bauen wir den Benchmakaufruf zusammen, der in dem .inc entsprechend vorbereitet ist.
 # 1. Erzeugung der Parameterliste
@@ -1053,7 +1069,7 @@ esac
 echo "---> DER START DES MINERS SIEHT SO AUS: <---"
 echo "${minerstart} >>${BENCHLOGFILE} &"
 
-if [ ! ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
+if [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]; then
     read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
 fi
 
@@ -1073,8 +1089,8 @@ if [ $NoCards ]; then
         if [[ "${miner_name}" == "miner" ]]; then
             #sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log >${BENCHLOGFILE}
             cp -f equihash.log ${BENCHLOGFILE}
-	elif [[ "${miner_name}" == "zm" ]]; then
-	    printf ""
+        elif [[ "${miner_name}" == "zm" ]]; then
+            printf ""
         else
             cp test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
             # cp test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
