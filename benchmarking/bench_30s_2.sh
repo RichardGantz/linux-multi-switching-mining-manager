@@ -16,7 +16,7 @@
 [[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source ../globals.inc
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
-debug=0
+declare -i debug=0
 
 # Damit bei vorzeitigem Abbruch und nicht gültigem Variableninhalt/-zustand kein Mist in die .json geschrieen wird,
 # setzen wir dieses Flag erst genau dann, wenn das Benchmarking auch tatsächlich losgeht.
@@ -381,21 +381,17 @@ function _On_Exit () {
         echo "Beenden des Miners..."
         kill -15 $(< "ccminer.pid")
 
-        # 2 Sekunden warten... Auf was?
-        # Vielleicht, bis der ccminer.pid - Prozess weg ist
-        # UND, damit sich die Karte nicht "verschluckt",
-        #      wenn gleich ein neuer Miner gestartet werden sollte, wie das im multi_mining_betrieb der Fall ist
-        if [ ! $NoCards ]; then
-            sleep 1
-        fi  ## $NoCards
-
         # Bis jetzt könnten Werte in das $BENCHLOGFILE hineingekommen sein.
         # Das ist vor allem für den Tweak-Fall interessant, weil der das $BENCHLOGFILE nochmal
         # durchgehen muss! Denn es könnte noch ein Wert dazu gekommen sein!
         # ---> BITTE NOCHMAL NACHPROGRAMMIEREN!                      <---
         # ---> MUSS DAS BENCHFILE AUCH IM TWEAKMODE NOCHMAL SCANNEN! <---
         #
-        BENCH_OR_TWEAK_END=$(date --utc +%s)
+        BENCH_OR_TWEAK_END=$(date +%s)
+
+        if [ ! $NoCards ]; then
+            sleep $Erholung
+        fi
 
         echo "Beenden des Logger-Terminals..."
         kill_pids=$(ps -ef \
@@ -487,15 +483,10 @@ function _On_Exit () {
         printf " Summe HASH   : %12s; Messwerte: %5s\n" ${hashSum:0:$(($(expr index "$hashSum" ".")+2))} $hashCount
         printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} ${temp_einheit}
 
-        # Das stimmt im Falle des Tweakens nicht so genau.
-        # Hier sollten wir nur die Dauer seit der letzten Parameteränderung messen, ODER ???
-        #
-        # --->   IST EVENTUELL NOCH ZU KORRIGIEREN   <---
-        # hASH_DURATION=$((${BENCH_OR_TWEAK_END}-${bENCH_DATE}))
-        #
-        # Wir korrigieren das jetzt mal:
-        # Die Wattwerte werden auf jeden Fall sekündlich ermittelt!
-        hASH_DURATION=${wattCount}
+        # bENCH_START wird direkt vor dem Start des Miners gesetzt.
+        # Im Falle des Tweakens wird bENCH_START nach jedem Tweak-Kommando neu gesetzt und der hashCount auf 0 zurückgesetzt.
+        # Die Differenz aus ${BENCH_OR_TWEAK_END} und ${bENCH_START} ist also die tatsächliche Dauer zur Ermittlung der Anzahl an hashCount Werten
+        hASH_DURATION=$((${BENCH_OR_TWEAK_END}-${bENCH_START}))
 
         # Es sind ja wenigstens avgHASH und avgWATT ermittelt worden.
         _edit_BENCHMARK_JSON_and_put_in_the_new_values
@@ -607,18 +598,23 @@ gpu_idx_list="${index[@]}"
 # Allerdings macht das im laufenden Betrieb schon die algo_multi_abfrage.sh, der wir NICHT dazwischenfunken wollen.
 #   Deshalb holen wir die Daten nur dann selbst, wenn die algoID_KURSE_PORTS_WEB älter als 120 Sekunden ist.
 #   Denn dann läuft die algo_multi_abfrage.sh nicht
-if [ ! -s ${algoID_KURSE_PORTS_WEB} ] \
-       || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s)+120)) -lt $(date --utc +%s) ]]; then
-    declare -i secs=1
-    _prepare_ALGO_PORTS_KURSE_from_the_Web
-    while [ $? -eq 1 ]; do
-        echo "Waiting for valid File ${algoID_KURSE_PORTS_WEB} from the Web, Second Nr. $secs"
-        sleep 1
-        let secs++
+live_mode="lo"
+if [[ -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+    live_mode="o"
+else
+    if [ ! -s ${algoID_KURSE_PORTS_WEB} ] \
+           || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s)+120)) -lt $(date +%s) ]]; then
+        declare -i secs=1
         _prepare_ALGO_PORTS_KURSE_from_the_Web
-    done
+        while [ $? -eq 1 ]; do
+            echo "Waiting for valid File ${algoID_KURSE_PORTS_WEB} from the Web, Second Nr. $secs"
+            sleep 1
+            let secs++
+            _prepare_ALGO_PORTS_KURSE_from_the_Web
+        done
+    fi
+    _read_in_ALGO_PORTS_KURSE
 fi
-_read_in_ALGO_PORTS_KURSE
 
 ################################################################################
 ################################################################################
@@ -706,6 +702,9 @@ else
     miner_version=${minerVersion[$(($choice-1))]}
 fi
 
+declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
+declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
+
 ####################################################################################
 ################################################################################
 ###
@@ -720,6 +719,43 @@ fi
 ###
 ################################################################################
 
+# Vorher ausfiltern aller GLOBAL und Dauerhaft disabled Algos, denn sie sollen nicht angeboten werden
+# und die Automatik soll sie nicht durchführen
+#    Zunächst die über BENCH_ALGO_DISABLED Algos rausnehmen...
+if [ -s ../BENCH_ALGO_DISABLED ]; then
+    unset BENCH_ALGO_DISABLED_ARR
+    cat ../BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR
+    for lfdAlgorithm in ${BENCH_ALGO_DISABLED_ARR[@]}; do
+        unset actInternalAlgos[${lfdAlgorithm}*]
+        actMissingAlgos=( ${actMissingAlgos[@]/${lfdAlgorithm}*/} )
+        [ $debug -eq 1 ] && echo "Algo ${lfdAlgorithm} wegen des Vorhandensein in der Datei BENCH_ALGO_DISABLED herausgenommen."
+    done
+fi
+
+#    Zusätzlich die über GLOBAL_ALGO_DISABLED Algos rausnehmen...
+if [ -s ../GLOBAL_ALGO_DISABLED ]; then
+    unset GLOBAL_ALGO_DISABLED_ARR
+    cat ../GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+    for ((i=0; $i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
+
+        unset disabled_algos_GPUs
+        read -a disabled_algos_GPUs <<<${GLOBAL_ALGO_DISABLED_ARR[$i]//:/ }
+        DisAlgo=${disabled_algos_GPUs[0]}
+        if [ ${#disabled_algos_GPUs[@]} -gt 1 ]; then
+            # Nur für bestimmte GPUs disabled. Wenn die eigene GPU nicht aufgeführt ist, übergehen
+            [[ ! ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ^.*:${gpu_uuid} ]] && unset DisAlgo
+        fi
+        if [ -n "${DisAlgo}" ]; then
+            unset actInternalAlgos[${DisAlgo}]
+            for (( a=0; $a<${#actMissingAlgos[@]}; a++ )); do
+                [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ] && unset actMissingAlgos[$a]
+            done
+            [ $debug -eq 1 ] && echo "Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
+        fi
+    done
+fi
+
+
 # Checken, ob wir für alle Algos auch schon Werte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json haben
 # Diejenigen Algos anzeigen, zu denen es noch keine Eintragsmöglichkeit gibt.
 # Das wurde nach dem Einlesen in ALLE_MINER gemacht und es wurden auch die beiden Arrays
@@ -727,10 +763,9 @@ fi
 #     "Available_${miner_name}_${miner_version//\./_}_Algos" erstellt,
 #     die die Namen der entsprechenden algos als Werte haben.
 if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
-    declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
-    if [ ${#actMissingAlgos[@]} -gt 0 ]; then
-        for algo in ${actMissingAlgos[@]}; do
-            printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${algo}
+    if [ -n "${actMissingAlgos[@]}" ]; then
+        for lfdAlgo in ${actMissingAlgos[@]}; do
+            printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${lfdAlgo}
         done
     fi
 fi
@@ -745,7 +780,6 @@ fi
 # die man ohne Funktion rufen kann? Könnte man sich einen Funktionsaufruf sparen.
 unset InternalAlgos
 declare -A InternalAlgos
-declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
 if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 && ${#gpu_idx} -gt 0 && ${#algorithm} -gt 0 ]]; then
     for lfdAlgo in "${!actInternalAlgos[@]}"; do
         InternalAlgos[${lfdAlgo}]=${actInternalAlgos[${lfdAlgo}]}
@@ -866,12 +900,31 @@ maxWATT=0
 ###
 ################################################################################
 
-live_mode="l"
-if [ "${KURSE[$algo]}" == "0" ]; then
-    live_mode="o"
-fi
-if [ ! ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
-    if [ "${live_mode}" == "l" ]; then
+# Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
+# definiert sind, damit die Aufrufmechanik für alle gleich ist.
+source ../miners/${miner_name}#${miner_version}.starts
+
+#[ "${KURSE[$algo]}" == "0" ] && live_mode=${live_mode//l/}
+[ "${KURSE[$algo]}" == "0" ] && live_mode="o"
+[ -z "${BENCH_START_CMD}" ]  && live_mode=${live_mode//o/}
+
+if [ -z "$live_mode" ]; then
+    # Weder LIVE-Mode noch OFFLINE-Mode möglich
+    [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 1
+    echo "Weder der LIVE-Mode (wegen Kurs=0) noch der OFFLINE-Mode (wegen fehlendem BENCH_START_CMD) sind im Moment möglich."
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+    exec $0 ${initialParameters}
+elif [ "$live_mode" == "l" ]; then
+    # Ausschliesslich LIVE mode möglich
+    [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ] && \
+        echo "Im Moment ist nur der LIVE-Mode möglich, automatische Einstellung auf LIVE-Mode."
+elif [ "$live_mode" == "o" ]; then
+    # Ausschliesslich OFFLINE mode möglich
+    [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ] && \
+        echo "Im Moment ist nur der OFFLINE-Mode möglich, automatische Einstellung auf OFFLINE-Mode."
+else
+    if [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]; then
+        # Benutzer kann eine Auswahl treffen.
         echo ""
         echo "Noch eine letzte Frage:"
         echo "Willst Du LIVE oder OFFLINE Benchmarken oder Tunen?"
@@ -881,7 +934,9 @@ if [ ! ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
             [[ "${live_mode}" =~ ${REGEXPAT} ]] && break
         done
     else
-        echo "Paying ist im Moment auf 0, deshalb Umschaltung auf OFFLINE Benchmarking"
+        # Automatik bevorzugt den LIVE-Mode, weil die Kosten für den Test so oder so anfallen und im Live-Mode
+        #           wenigstens noch ein paar SHares abgeliefert und bezahlt werden.
+        live_mode="l"
     fi
 fi
 
@@ -930,7 +985,8 @@ done
 
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle gleich ist.
-source ../miners/${miner_name}#${miner_version}.starts
+# Musste wegen der LIVE/OFFLINE-Abfrage weiter oben includiert werden
+#source ../miners/${miner_name}#${miner_version}.starts
 
 # ---> Die folgenden Variablen müssen noch vollständig implementiert werden! <---
 # "LOCATION eu, usa, hk, jp, in, br"  <--- von der Webseite https://www.nicehash.com/algorithm
@@ -1016,7 +1072,7 @@ fi  ## $NoCards
 # Wir könnten also überlegen, ob wir Endesekunde - Startsekunde als Messdauer für die Hashwerte festhalten?
 # Wir geben es mal beides aus.
 # Dann sehen wir, wie stark eine eventuelle Diskrepanz auftritt
-bENCH_START=$(date --utc +%s)
+bENCH_START=$(date +%s)
 BENCHMARKING_WAS_STARTED=1
 
 ${minerstart} >>${BENCHLOGFILE} &
@@ -1060,6 +1116,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
         TWEAK_CMD_LOG_AGE=$(stat -c %Y ${TWEAK_CMD_LOG})
         if [ $new_TweakCommand_available -lt ${TWEAK_CMD_LOG_AGE} ]; then
             new_TweakCommand_available=${TWEAK_CMD_LOG_AGE}
+            bENCH_START=${TWEAK_CMD_LOG_AGE}
             # Ermittle das gerade gegebene Tweaking-Kommando
             tweak_msg="$(tail -n 1 ${TWEAK_CMD_LOG})"
             if [ ${#tweak_msg} -gt 0 ]; then

@@ -47,7 +47,7 @@ find . -depth -name \*.pid -delete
 
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
-ERRLOG=$(basename $0 .sh).err
+export ERRLOG=$(basename $0 .sh).err
 
 function _delete_temporary_files () {
     rm -f ${ERRLOG} ${SYNCFILE} \
@@ -90,7 +90,7 @@ function _On_Exit () {
     _terminate_all_log_ptys
     [[ ${#pstreePID} -gt 0 ]] && kill ${pstreePID}
     # Temporäre Dateien löschen
-    if [ $debug -eq 0 ]; then _delete_temporary_files; fi
+    [[ $debug -eq 0 ]] && _delete_temporary_files
     rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
@@ -129,12 +129,10 @@ rm -f ${RUNNING_STATE}
 # und dann algo_multi_abfrage.sh
 
 exec 2>>${ERRLOG}
-set-title 'Multi Mining Control Center'
 # Error-Kanal in eigenes Terminal ausgeben
 unset ii; declare -i ii=0
 unset LOG_PTY_CMD; declare -ag LOG_PTY_CMD
 LOG_PTY_CMD[999]="tail -f ${ERRLOG}"
-#LOG_PTY_CMD[999]="set-title 'MultiMining Error Channel Output'; tail -f ${ERRLOG}"
 ofsX=$((ii*60+50))
 ofsY=$((ii*30+50))
 let ii++

@@ -156,12 +156,12 @@ function _disable_algo () {
 ################################################################################
 ####################################################################################
 function _terminate_Logger_Terminal () {
-    printf "Beenden des Logger-Terminals ${MINER} ... "
+    printf "Beenden des Logger-Terminals alias ${MINER} ... "
     kill_pids=$(ps -ef \
           | grep -e "${Bench_Log_PTY_Cmd}" \
           | grep -v 'grep -e ' \
           | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-    if [ ! "$kill_pids" == "" ]; then
+    if [ -n "$kill_pids" ]; then
         kill $kill_pids # >/dev/null
         printf "done.\n"
     else
@@ -170,23 +170,36 @@ function _terminate_Logger_Terminal () {
 }
 
 function _terminate_Miner () {
-    printf "Beenden des Miner alias ${algorithm} ... "
-    kill_pids=$(ps -ef   \
-         | grep -e "${minerstart}" \
-         | grep -v 'grep -e ' \
-         | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-    if [ ! "$kill_pids" == "" ]; then
-        kill $kill_pids # >/dev/null
-        printf "done.\n"
-        sleep $Erholung                           # "Erholung" vor dem Neustart
-    else
-        printf "NOT FOUND!!!\n"
+    printf "Beenden des Miners           alias ${algorithm} ... "
+    MINER_pid=$(< ${MINER}.pid)
+    if [ -n "${MINER_pid}" ]; then
+        printf "Beenden des Miners           alias ${algorithm} mit PID ${MINER_pid} ... "
+        kill_pid=$(ps -ef | gawk -e '$2 == '${MINER_pid}' && /'${minerstart}'/ {print $2; exit }')
+        if [ -n "$kill_pid" ]; then
+            kill $kill_pid
+            if [[ $? -eq 0 ]]; then
+                printf "KILL SIGNAL SUCCESSFULLY SENT.\n"
+                sleep $Erholung                               # "Erholung" vor einem Neustart
+            else
+                kill -9 $kill_pid
+                if [[ $? -eq 0 ]]; then
+                    printf "KILL SIGNAL SUCCESSFULLY SENT, but had to be \"kill -9 $kill_pid\" !\n"
+                    sleep $Erholung                           # "Erholung" vor einem Neustart
+                else
+                    printf "KILL SIGNAL COULD NOT BE SENT SUCCESSFULLY, even not \"kill -9 $kill_pid\" !\n"
+                fi
+            fi
+        else
+            printf "PID ${MINER_pid} NOT FOUND IN PROCESS TABLE!!!\n"
+            printf "GPU #${gpu_idx}: $(basename $0): PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE!!!\n" \
+                | tee -a ${ERRLOG}
+        fi
     fi
     rm -f ${MINER}.pid
 }
 
 function _delete_temporary_files () {
-    [[ ${#MINER} -gt 0 ]] && rm -f ${MINER}.retry ${MINER}.booos  ${MINER}.pid
+    [[ -n "${MINER}" ]] && rm -f ${MINER}.retry ${MINER}.booos
 }
 _delete_temporary_files
 rm -f ${BENCHLOGFILE}
@@ -251,7 +264,7 @@ if [ $NoCards ]; then
             cp -f ../benchmarking/equihash.log ${BENCHLOGFILE}
         else
             # cp ../benchmarking/test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
-             cp ../benchmarking/test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
+            cp ../benchmarking/test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
             # cp ../booos ${BENCHLOGFILE}
         fi
     fi
@@ -270,8 +283,8 @@ declare -i inetLost_detected=0
 while :; do
     if [[ -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
         echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) \
-             "GPU #${gpu_idx}: Abbruch des Miners alias ${algorithm} wegen NO INTERNET..." \
-            | tee -a ../log_ConLoss log_ConLoss_${algorithm} \
+             "GPU #${gpu_idx}: $(basename $0): Abbruch des Miners alias ${algorithm} wegen NO INTERNET..." \
+            | tee -a ../log_ConLoss log_ConLoss_${algorithm} ${ERRLOG} \
                   >>${BENCHLOGFILE}
         break
     fi
@@ -304,11 +317,11 @@ while :; do
 
     hashCount=$(cat ${BENCHLOGFILE} \
                   | tee >(grep -c -m1 -e "${CONEXPR//[|]/\\|}" >${MINER}.retry) \
-                        >(gawk -v BOO="${BOOEXPR}" -v YES="${YESEXPR}" -e '
-                               BEGIN { booos = 0; yeses = 0 }
-                               $0 ~ BOO { booos = booos + 1; next }
-                               $0 ~ YES { yeses = yeses + 1; booos = 0 }
-                               END { print booos " " yeses }' >${MINER}.booos) \
+                        >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+                               BEGIN { yeses=0; booos=0; seq_booos=0 }
+                               $0 ~ BOO { booos++; seq_booos++; next }
+                               $0 ~ YES { yeses++; seq_booos=0 }
+                               END { print seq_booos " " booos " " yeses }' >${MINER}.booos) \
                   | sed -e 's/ *(yes!)$//g' \
                   | grep -c "/s$")
 
@@ -330,7 +343,7 @@ while :; do
         if [ $inetLost_detected -gt 0 ]; then
             # Das Internet war mal kurzzeitig weg und vermutlich die Ursache für den Server-Abbruch.
             # In diesem Fall brauchen wir den Server nicht zu wechseln, sondern können den Miner mit denselben
-            # Einstellungen einfach neu starten.
+            # Einstellungen einfach neu starten, um die von ihm selbst gewählte Wartezeit von 30s abzukürzen.
             _terminate_Logger_Terminal
             _terminate_Miner
 
@@ -437,7 +450,7 @@ while :; do
     ###
     ################################################################################
 
-    read booos yeses <<<$(< ${MINER}.booos)
+    read booos sum_booos sum_yeses <<<$(< ${MINER}.booos)
     if [[ ${booos} -ge 10 ]]; then
         nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
         nowSecs=$(date +%s)
@@ -472,7 +485,7 @@ while :; do
     ###
     ################################################################################
 
-    if [[ ${hashCount} -eq 0 ]] && [[ ${secs} -ge 90 ]]; then
+    if [[ ${hashCount} -eq 0 ]] && [[ ${secs} -ge 320 ]]; then
         nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
         nowSecs=$(date +%s)
 
@@ -481,7 +494,7 @@ while :; do
 
         # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
         echo ${nowDate} ${nowSecs} \
-             "GPU #${gpu_idx}: Abbruch des Miners alias ${algorithm} wegen 90s ohne Hashwerte." \
+             "GPU #${gpu_idx}: Abbruch des Miners alias ${algorithm} wegen 320s ohne Hashwerte." \
             | tee -a ../log_No_Hash log_No_Hash_${algorithm} \
                   >>${BENCHLOGFILE}
         break

@@ -75,43 +75,41 @@ _check_InternetConnection () {
     local detected=$(date "+%F %H:%M:%S")
     for ipaddr in ${InetPingStack[@]}; do
         ping -q -c 1 -W 1 $ipaddr &>/dev/null
-        [[ $? -eq 0 ]] && detected=""; break
+        [[ $? -eq 0 ]] && return
     done
-    if [ ${#detected} -gt 0 ]; then
-        # Solange diese Datei existiert, kann jeder wissen, dass die Internet-Verbindung unterbrochen ist.
-        touch I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
-        msg1="### INTERNET CONNECTION LOST ###"
-        msg2="Waiting for response from one of the 4 choosen IP-Addresses..."
-        notify-send -t 10000 -u critical "$msg1" "$msg2"
-        echo "${detected} $msg1" >>.InternetConnectionLost.log
-        declare -i secs=1
-        while :; do
-            echo "${msg2}, Ping-Cycle Nr. $secs"
-            for ipaddr in ${InetPingStack[@]}; do
-                printf "$ipaddr... "
-                ping -c 1 -W 1 $ipaddr &>/dev/null
-                [[ $? -eq 0 ]] && break 2
-            done
-            printf "\n"
-            let secs++
+    # Solange diese Datei existiert, kann jeder wissen, dass die Internet-Verbindung unterbrochen ist.
+    touch I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+    msg1="### INTERNET CONNECTION LOST ###"
+    msg2="Waiting for response from one of the 4 choosen IP-Addresses..."
+    notify-send -u critical "$msg1" "$msg2"
+    echo "${detected} $msg1" | tee -a ${ERRLOG} >>.InternetConnectionLost.log
+    local -i secs=1
+    while :; do
+        echo "${msg2}, Ping-Cycle Nr. $secs"
+        for ipaddr in ${InetPingStack[@]}; do
+            printf "$ipaddr... "
+            ping -c 1 -W 1 $ipaddr &>/dev/null
+            [[ $? -eq 0 ]] && break 2
         done
-        echo $(date "+%F %H:%M:%S") "Internet Connection established" >>.InternetConnectionLost.log
-        rm -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
-    fi
+        printf "\n"
+        let secs++
+    done
+    printf "\n$(date \"+%F %H:%M:%S\") Internet Connection established\n" | tee -a ${ERRLOG} >>.InternetConnectionLost.log
+    rm -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 
-
-while [ 1 -eq 1 ] ; do
-
-    _check_InternetConnection
+_check_InternetConnection
+declare -i SECS=31 nowSecs
+while :; do
 
     # Neue Algo Kurse aus dem Netz
     # Gültiges Ergebnis .json File fängt so an:
     # {"result":{"simplemultialgo":[
     # und muss genau 1 mal gefunden werden
     echo "------------------   Nicehash-Kurse           ----------------------"
-    _prepare_ALGO_PORTS_KURSE_from_the_Web
+    _prepare_ALGO_PORTS_KURSE_from_the_Web; RC=$?
     echo "--------------------------------------------------------------------"
+    [[ $RC -ne 0 ]] && echo "$(basename $0): $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) api-Abruf nicht erfolgreich." | tee -a ${ERRLOG}
     
     # abfrage des BTC-EUR Kurs von bitcoin.de (html)
 
@@ -170,5 +168,13 @@ while [ 1 -eq 1 ] ; do
     # Erstaunlicherweise kommt es oft vor, dass das manche noch in der selben Sekunde machen,
     # in der auch $SYNCFILE getouched wurde.
 
-    sleep 31
+    # Anstatt nur 31s lang zu schlafen, prüfen wir sekündlich ie Internetverbindung...
+    # sleep 31
+    SleepingStart=$(date --utc --reference=${SYNCFILE} +%s)
+
+    while :; do
+        _check_InternetConnection
+        nowSecs=$(date +%s)
+        [[ $(( ${nowSecs} - ${SleepingStart} )) -ge ${SECS} ]] && sleep 1 || break
+    done
 done
