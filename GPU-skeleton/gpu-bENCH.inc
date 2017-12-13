@@ -175,62 +175,64 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     if [ ${#bENCH_SRC} -eq 0 ]; then bENCH_SRC=${IMPORTANT_BENCHMARK_JSON}.tee_bENCH_SRC; fi
     shopt -s lastpipe
     gawk -e '$1 ~ /"Name":/ \
-                 { algo          = substr( tolower($2), 2, length($2)-3 ); \
-                   getline;                                       # NiceHashID    \
-                   algo_id       = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # MinerBaseType \
-                   getline;                                       # MinerName \
-                   miner_name    = substr( $2, 2, length($2)-3 ); \
-                   getline;                                       # MinerVersion \
-                   miner_version = substr( $2, 2, length($2)-3 ); \
-                   getline;                                       # BenchmarkSpeed \
-                   benchspeed    = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # ExtraLaunchParameters \
-                   extra_params  = substr( $2, 2, length($2)-3 ); \
-                   getline;                                       # WATT \
-                   watt          = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # MAX_WATT \
-                   MAX_WATT      = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # HASHCOUNT \
-                   HASHCOUNT     = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # HASH_DURATION \
-                   HASH_DURATION = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # BENCH_DATE \
-                   BENCH_DATE    = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # BENCH_KIND \
-                   BENCH_KIND    = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # MinerFee \
-                   MinerFee      = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # GRAFIK_CLOCK \
-                   grafik_clock  = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # MEMORY_CLOCK \
-                   memory_clock  = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # FAN_SPEED \
-                   fan_speed     = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # POWER_LIMIT \
-                   power_limit   = substr( $2, 1, length($2)-1 ); \
-                   getline;                                       # LESS_THREADS \
-                   less_threads  = substr( $2, 1, length($2)-0 ); \
-                   algorithm = algo "#" miner_name "#" miner_version; \
-                   if ( BENCH_KIND == 888 ) \
-                      { algorithm = algorithm "#888" }; \
-                   print algorithm;     \
-                   print benchspeed;    \
-                   print watt;          \
-                   print MAX_WATT;      \
-                   print HASHCOUNT;     \
-                   print HASH_DURATION; \
-                   print BENCH_DATE;    \
-                   print BENCH_KIND;    \
-                   print MinerFee;      \
-                   print extra_params;  \
-                   print grafik_clock;  \
-                   print memory_clock;  \
-                   print fan_speed;     \
-                   print power_limit;   \
-                   print less_threads;  \
-                   next \
-                 }' ${IMPORTANT_BENCHMARK_JSON} \
+       { algo = substr( tolower($2), 2, length($2)-3 )
+         if ( length( algo ) > 0 ) {
+            getline                                       # NiceHashID
+            algo_id       = substr( $2, 1, length($2)-1 )
+            getline                                       # MinerBaseType
+            getline                                       # MinerName
+            miner_name    = substr( $2, 2, length($2)-3 )
+            getline                                       # MinerVersion
+            miner_version = substr( $2, 2, length($2)-3 )
+            getline                                       # BenchmarkSpeed
+            benchspeed    = substr( $2, 1, length($2)-1 )
+            getline                                       # ExtraLaunchParameters
+            extra_params  = substr( $2, 2, length($2)-3 )
+            getline                                       # WATT
+            watt          = substr( $2, 1, length($2)-1 )
+            getline                                       # MAX_WATT
+            MAX_WATT      = substr( $2, 1, length($2)-1 )
+            getline                                       # HASHCOUNT
+            HASHCOUNT     = substr( $2, 1, length($2)-1 )
+            getline                                       # HASH_DURATION
+            HASH_DURATION = substr( $2, 1, length($2)-1 )
+            getline                                       # BENCH_DATE
+            BENCH_DATE    = substr( $2, 1, length($2)-1 )
+            getline                                       # BENCH_KIND
+            BENCH_KIND    = substr( $2, 1, length($2)-1 )
+            getline                                       # MinerFee
+            MinerFee      = substr( $2, 1, length($2)-1 )
+            getline                                       # GRAFIK_CLOCK
+            grafik_clock  = substr( $2, 1, length($2)-1 )
+            getline                                       # MEMORY_CLOCK
+            memory_clock  = substr( $2, 1, length($2)-1 )
+            getline                                       # FAN_SPEED
+            fan_speed     = substr( $2, 1, length($2)-1 )
+            getline                                       # POWER_LIMIT
+            power_limit   = substr( $2, 1, length($2)-1 )
+            getline                                       # LESS_THREADS
+            less_threads  = substr( $2, 1, length($2)-0 )
+            algorithm = algo "#" miner_name "#" miner_version
+            if ( BENCH_KIND == 888 )
+               { algorithm = algorithm "#888" }
+            print algorithm
+            print benchspeed
+            print watt
+            print MAX_WATT
+            print HASHCOUNT
+            print HASH_DURATION
+            print BENCH_DATE
+            print BENCH_KIND
+            print MinerFee
+            print extra_params
+            print grafik_clock
+            print memory_clock
+            print fan_speed
+            print power_limit
+            print less_threads
+            next
+         }
+       }' ${IMPORTANT_BENCHMARK_JSON} \
         | tee $bENCH_SRC \
         | readarray -n 0 -O 0 -t READARR
     constAnzahlParameter=15

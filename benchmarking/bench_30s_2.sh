@@ -805,7 +805,7 @@ else
     #     "Available_${miner_name}_${miner_version//\./_}_Algos" erstellt,
     #     die die Namen der entsprechenden algos als Werte haben.
     #if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
-    if [ -n "${actMissingAlgos[@]}" ]; then
+    if [ ${#actMissingAlgos[@]} -gt 0 ]; then
         for lfdAlgo in ${actMissingAlgos[@]}; do
             printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${lfdAlgo}
         done
