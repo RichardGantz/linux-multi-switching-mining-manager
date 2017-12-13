@@ -170,11 +170,10 @@ function _terminate_Logger_Terminal () {
 }
 
 function _terminate_Miner () {
-    printf "Beenden des Miners           alias ${algorithm} ... "
     MINER_pid=$(< ${MINER}.pid)
     if [ -n "${MINER_pid}" ]; then
-        printf "Beenden des Miners           alias ${algorithm} mit PID ${MINER_pid} ... "
-        kill_pid=$(ps -ef | gawk -e '$2 == '${MINER_pid}' && /'${minerstart}'/ {print $2; exit }')
+        printf "Beenden des Miners alias ${algorithm} mit PID ${MINER_pid} ... "
+        kill_pid=$(ps -ef | gawk -e '$2 == '${MINER_pid}' && /'"${minerstart//\//\\/}"'/ {print $2; exit }')
         if [ -n "$kill_pid" ]; then
             kill $kill_pid
             if [[ $? -eq 0 ]]; then
@@ -191,8 +190,7 @@ function _terminate_Miner () {
             fi
         else
             printf "PID ${MINER_pid} NOT FOUND IN PROCESS TABLE!!!\n"
-            printf "GPU #${gpu_idx}: $(basename $0): PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE!!!\n" \
-                | tee -a ${ERRLOG}
+            printf "GPU #${gpu_idx}: $(basename $0): PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE!!!\n" >>${ERRLOG}
         fi
     fi
     rm -f ${MINER}.pid
@@ -262,6 +260,8 @@ if [ $NoCards ]; then
         if [[ "${miner_name}" == "miner" ]]; then
             #sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log >${BENCHLOGFILE}
             cp -f ../benchmarking/equihash.log ${BENCHLOGFILE}
+        elif [[ "${miner_name}" == "zm" ]]; then
+            printf ""
         else
             # cp ../benchmarking/test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
             cp ../benchmarking/test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
@@ -281,7 +281,7 @@ fi  ## $NoCards
 
 declare -i inetLost_detected=0
 while :; do
-    if [[ -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+    if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
         echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) \
              "GPU #${gpu_idx}: $(basename $0): Abbruch des Miners alias ${algorithm} wegen NO INTERNET..." \
             | tee -a ../log_ConLoss log_ConLoss_${algorithm} ${ERRLOG} \
@@ -320,9 +320,13 @@ while :; do
                         >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
                                BEGIN { yeses=0; booos=0; seq_booos=0 }
                                $0 ~ BOO { booos++; seq_booos++; next }
-                               $0 ~ YES { yeses++; seq_booos=0 }
+                               $0 ~ YES { yeses++; seq_booos=0;
+                                            if (match( $NF, /[+*]+/ ) > 0)
+                                               { yeses+=(RLENGTH-1) }
+                                          }
                                END { print seq_booos " " booos " " yeses }' >${MINER}.booos) \
                   | sed -e 's/ *(yes!)$//g' \
+                  | gawk -e "${detect_zm_hash_count}" \
                   | grep -c "/s$")
 
     ################################################################################
@@ -334,7 +338,7 @@ while :; do
 
     if [[ $(< ${MINER}.retry) -eq 1 ]]; then
         echo "GPU #${gpu_idx}: Connection loss detected..."
-        if [[ -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+        if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
             let inetLost_detected++
             continue
         fi

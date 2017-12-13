@@ -11,6 +11,10 @@ until [ -d benchmarking ] && [ -d miners ] && [ -d GPU-skeleton ]; do cd ..; don
 LINUX_MULTI_MINING_ROOT=$(pwd)
 cd ${_WORKDIR_} >/dev/null
 
+# Wir verwenden oft "readarray" am Ende einer Pipe. Deshalb wollen wir, dass diese Option global verfügbar ist.
+# An jeder Stelle im Source-Code, wo diese Zeile gefunden wird, kann sie also entfernt werden.
+shopt -s lastpipe
+
 # Die SLEEP Zeit nach dem Abbruch eines Miners in Sekunden. Experimentell, .5 bis 3 ???
 Erholung=.9
 
@@ -25,7 +29,17 @@ InetPingStack=(
 )
 
 export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
+
+# Ein Branch wird den letzten Stand für ausschließlich NiceHash halten.
+# Da muss es diese Variable noch geben.
 NH_DOMAIN="nicehash.com"
+
+# Die Pools, bzw. Anbieter, die wir am besten an den Servernamen unterscheiden können
+# 0 bedeutet: Disabled
+# 1 bedeutet: Enabled, wird abgefragt und berechnet und ge-MinerShelld
+declare -Ag DOMAIN
+DOMAIN["nicehash.com"]=0
+DOMAIN["supernova.cc"]=1
 
 ### gpu-abfrage.sh spezifische Variablen
 SYSTEM_FILE="${LINUX_MULTI_MINING_ROOT}/gpu_system.out"
@@ -37,6 +51,8 @@ RUNNING_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_ALGO_RUNNING_STATE"
 ### algo_multi_abfrage.sh spezifische Variablen
 algoID_KURSE_PORTS_WEB="${LINUX_MULTI_MINING_ROOT}/KURSE.json"
 algoID_KURSE_PORTS_ARR="${LINUX_MULTI_MINING_ROOT}/KURSE_PORTS.in"
+COIN_PRICING_WEB="${LINUX_MULTI_MINING_ROOT}/WhatToMine.json"
+COIN_PRICING_ARR="${LINUX_MULTI_MINING_ROOT}/WhatToMine.in"
 
 SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
 
@@ -49,6 +65,29 @@ GRID[1]="solar"
 GRID[2]="solar_akku"
 
 declare -Ag DO_AUTO_BENCHMARK_FOR
+
+# Für die bech_30s_2.sh und MinerShell.sh zum Zählen der hashCount's
+# Der Output des "zm" Equihash Miners sieht so aus:
+#2017-11-28 17:20:15|>  GPU0  68C  Sol/s: 493.9  Sol/W: 1.87  Avg: 493.9  I/s: 267.3  Sh: 0.00   . .   
+#2017-11-28 17:20:55|   GPU0  70C  Sol/s: 496.0  Sol/W: 1.86  Avg: 494.1  I/s: 265.3  Sh: 0.00   . .   
+#2017-11-28 17:21:15|>  GPU0  69C  Sol/s: 497.5  Sol/W: 1.86  Avg: 495.0  I/s: 264.5  Sh: 0.75   1.00 52  +
+#2017-11-28 17:21:35|   GPU0  69C  Sol/s: 498.9  Sol/W: 1.87  Avg: 495.8  I/s: 264.9  Sh: 1.19   1.00 53  +
+#2017-11-28 17:21:55|   GPU0  69C  Sol/s: 496.7  Sol/W: 1.87  Avg: 495.9  I/s: 264.4  Sh: 1.49   1.00 49  +
+#
+#$1         $2          $3    $4   $5     $6     $7     $8    $9   $10    $11  $12    $13 $14    $15  $16 $NF
+#
+# Und dieser Filter macht aus den o.g. Zeilen die folgenden:
+#493.9 Sol/s
+#494.1 Sol/s
+#495.0 Sol/s
+#495.8 Sol/s
+#495.9 Sol/s
+#
+detect_zm_hash_count='BEGIN { hash=10 }
+/GPU[[:digit:]] +[[:digit:]]+C +Sol\/s: [[:digit:].]+ +Sol\/W: [[:digit:].]+ +Avg: [[:digit:].]+ +I\/s: [[:digit:].]+ +Sh: [[:digit:].]+/ \
+    { print $hash " Sol/s"; next }
+{ print }
+'
 
 # Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
 # und müssen sich auf den Inhalt fixer Dateien beziehen.
@@ -80,17 +119,13 @@ function _reserve_and_lock_file () {
 ####################################################
 function _read_in_actual_RUNNING_STATE () {
     if [ -f ${RUNNING_STATE} ]; then
-        shopt_cmd_before=$(shopt -p lastpipe)
-        shopt -s lastpipe
-
         unset RUNNING_STATE_CONTENT
-        #unset AlgoDisabled; declare -Ag AlgoDisabled
         unset RunningGPUid; declare -Ag RunningGPUid
         unset WasItEnabled; declare -Ag WasItEnabled
         unset RunningWatts; declare -Ag RunningWatts
         unset WhatsRunning; declare -Ag WhatsRunning
         cat ${RUNNING_STATE} \
-            | grep -e "^GPU-\|^AlgoDisabled" \
+            | grep -e "^GPU-" \
             | readarray -n 0 -O 0 -t RUNNING_STATE_CONTENT
 
         for (( i=0; $i<${#RUNNING_STATE_CONTENT[@]}; i++ )); do
@@ -100,20 +135,8 @@ function _read_in_actual_RUNNING_STATE () {
                 WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
                 RunningWatts[${RunningUUID}]=${Watt}
                 WhatsRunning[${RunningUUID}]=${RunningAlgo}
-            elif [ "${RUNNING_STATE_CONTENT[$i]:0:12}" == "AlgoDisabled" ]; then
-                unset AlgoName sortThem allDisabled
-                read -a AlgoName <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
-                read -a sortThem <<<${AlgoDisabled[${AlgoName[1]}]//:/ }
-                sortThem=("${sortThem[@]:2}" "${AlgoName[@]:2}")
-                rm -f sortThem;        for sortIt in "${sortThem[@]}"; do echo "$sortIt" >>sortThem; done
-                rest=$(cat sortThem | sort -u )
-                rm -f sortThem
-                readarray -t allDisabled <<<${rest//\n/ }
-                AlgoDisabled[${AlgoName[1]}]="AlgoDisabled:${AlgoName[1]}:${allDisabled// /:}"
             fi
         done
-
-        ${shopt_cmd_before}
 
         if [[ ${verbose} == 1 ]]; then
             if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
@@ -124,17 +147,6 @@ function _read_in_actual_RUNNING_STATE () {
                     echo "War sie Enabled? $((${WasItEnabled[$lfdUUID]} == 1))"
                     echo "Wieviel Watt   : ${RunningWatts[$lfdUUID]}"
                     echo "Running Algo   : ${WhatsRunning[$lfdUUID]}"
-                done
-            fi
-            if [[ ${#AlgoDisabled[@]} -gt 0 ]]; then
-                echo "---> Temporarily Disabled Algos"
-                for algoName in ${!AlgoDisabled[@]}; do
-                    unset AlgoName
-                    read -a AlgoName <<<"${AlgoDisabled[$algoName]//:/ }"
-                    echo "$algoName:"
-                    for (( lfdAlgo=2; $lfdAlgo<${#AlgoName[@]}; lfdAlgo++ )); do
-                        echo "    ${AlgoName[$lfdAlgo]}"
-                    done
                 done
             fi
         fi

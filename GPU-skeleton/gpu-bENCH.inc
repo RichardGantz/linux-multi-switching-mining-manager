@@ -85,6 +85,24 @@ function _expand_IMPORTANT_BENCHMARK_JSON ()
                  next } \
            {print}' ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK >${IMPORTANT_BENCHMARK_JSON}
 
+    #
+    # 3. Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um die Felder
+    #    "DefaultPowerLimit"   (wenn beim Benchmarking = 0 ist, muss es dort ein mal abgefragt werden!)
+    #    "hashCountPerSeconds" (als Quotient aus hashCount und HASH_DURATION, 4 Stellen hinter dem Komma)
+    #    "BenchMode"           ( "l" für LIVE oder "o" für OFFLINE
+    #    
+    # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien mehr gibt.
+    #
+    grep -m1 -c "\"DefaultPowerLimit\": " ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK &>/dev/null \
+        || gawk -e 'BEGIN {FS=":"} \
+           match( $0, /"PowerLimit": / )\
+               { print $0;        \
+                 print "      \"DefaultPowerLimit\": 0,";   \
+                 print "      \"hashCountPerSeconds\": 0,";  \
+                 print "      \"BenchMode\": 0,";  \
+                 next } \
+           {print}' ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK >${IMPORTANT_BENCHMARK_JSON}
+
 }
 
 _read_IMPORTANT_BENCHMARK_JSON_in()
@@ -159,6 +177,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     gawk -e '$1 ~ /"Name":/ \
                  { algo          = substr( tolower($2), 2, length($2)-3 ); \
                    getline;                                       # NiceHashID    \
+                   algo_id       = substr( $2, 1, length($2)-1 ); \
                    getline;                                       # MinerBaseType \
                    getline;                                       # MinerName \
                    miner_name    = substr( $2, 2, length($2)-3 ); \

@@ -26,9 +26,6 @@ arrayRedeclareTest=0
 
 # Ein paar Funktionen zur Verwaltung der Algos, die für alle oder nur für bestimmte GPU-UUIDs disabled sind.
 # Es gibt die Funktionen
-#    _add_entry_into_AlgoDisabled                      $algo [$gpu_uuid]
-#    _remove_entry_from_AlgoDisabled                   $algo [$gpu_uuid]
-#    "yes" or "no" = $( _is_algo_disabled_for_gpu_uuid $algo [$gpu_uuid] )
 #    _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 source gpu-abfrage.inc
 
@@ -45,7 +42,6 @@ source multi_mining_calc.inc
 #    GPU{ $gpu_idx }Mines[]=            Platz für alle Mines
 #    uuidEnabledSOLL[ $gpu_uuid ]=      1 oder 0 für ENABLED oder DISABLED
 #    NumEnabledGPUs=                    Anzahl aller ENABLED GPUs
-#    AlgoDisabled[$algo]=               STRING mit GPU-UUIDs und/oder * für momentan für Alle GPUs disabled
 _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 
 ###############################################################################################
@@ -177,64 +173,59 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                 #          "$algo#$miner_name#$miner_version"
                 # Uns interessiert nur der NH-AlgoName $algo:
                 read actAlgoName muck <<<"${actGPUAlgos[$algoIdx]//#/ }"
-                # Ist der AlgoDisabled?
-                _valid_algo_="yes"
-                if [ ${#AlgoDisabled[${actAlgoName}]} -gt 0 ]; then
-                    #echo "Untersuche Algo: ${actAlgoName}"
-                    #echo "AlgoDisbled-STRING: " ${AlgoDisabled[${actAlgoName}]}
-                    # Ist ein "*" enthalten oder die aktuelle gpu_uuid?
-                    if [[ "${AlgoDisabled[${actAlgoName}]}" =~ ^.*(\*) && ${#BASH_REMATCH[1]} -gt 0 ]] \
-                    || [[ "${AlgoDisabled[${actAlgoName}]}" =~ ^.*(${uuid[${index[$idx]}]}) && ${#BASH_REMATCH[1]} -gt 0 ]]; then     
-                        ACTUAL_REAL_PROFIT="-"
-                        _valid_algo_="no"
-                        echo "------------------------------> Algo: ${actAlgoName} IST GERADE DISABLED !!!"
+
+                # ---> Ist der AlgoDisabled? <---
+                # ---> Ist der AlgoDisabled? <---
+                # ---> Ist der AlgoDisabled? <---
+                # An dieser Stelle haben wir den alten Code rausgeworfen.
+                # Wahrscheinlich muss auch kein Neuer rein, weil die GPUs die Disabeld Algos gar nicht erst zur Berechnung anbieten.
+                #
+                #_valid_algo_="yes"
+                #if [[ ${_valid_algo_} == "yes" ]]; then
+                _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
+                    ${SolarWattAvailable} ${actAlgoWatt[$algoIdx]} "${actAlgoMines[$algoIdx]}"
+                # Wenn das NEGATIV ist, muss der Algo dieser Karte übergangen werden. Uns interessieren nur diejenigen,
+                # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
+                if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
+                    # ---> ARRAYPUSH 3 <---
+                    if [[ ${arrayRedeclareTest} -eq 1 ]]; then
+                        profitableAlgoIndexes=(${profitableAlgoIndexes[@]} ${algoIdx})
+                    else
+                        profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
                     fi
                 fi
-                if [[ ${_valid_algo_} == "yes" ]]; then
-                    _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
-                        ${SolarWattAvailable} ${actAlgoWatt[$algoIdx]} "${actAlgoMines[$algoIdx]}"
-                    # Wenn das NEGATIV ist, muss der Algo dieser Karte übergangen werden. Uns interessieren nur diejenigen,
-                    # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
-                    if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
-                        # ---> ARRAYPUSH 3 <---
-                        if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                            profitableAlgoIndexes=(${profitableAlgoIndexes[@]} ${algoIdx})
-                        else
-                            profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
-                        fi
+                if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
+                    MAX_PROFIT_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
+                    # ---> ARRAYPUSH 3a <---
+                    msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+                    if [[ ${arrayRedeclareTest} -eq 1 ]]; then
+                        MAX_PROFIT_MSG_STACK=(${MAX_PROFIT_MSG_STACK[@]} ${msg})
+                    else
+                        MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
                     fi
-                    if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
-                        MAX_PROFIT_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
-                        # ---> ARRAYPUSH 3a <---
-                        msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-                        if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                            MAX_PROFIT_MSG_STACK=(${MAX_PROFIT_MSG_STACK[@]} ${msg})
-                        else
-                            MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
-                        fi
-                    fi
+                fi
 
-                    # (17.11.2017)
-                    # Wir halten jetzt auch die MAX_FP_MINES und die dabei verbrauchten Watt in MAX_FP_WATTS fest
-                    # Das sind Daten, die wir "nebenbei" festhalten für den Fall,
-                    #     dass IM MOMENT (für den kommenden Zyklus) GARANTIERT KEINE NETZPOWER BEZOGEN WERDEN MUSS
-                    OLD_MAX_FP_MINES=${MAX_FP_MINES}
-                    MAX_FP_MINES=$(echo "scale=8; if ( ${actAlgoMines[$algoIdx]} > ${MAX_FP_MINES} ) \
+                # (17.11.2017)
+                # Wir halten jetzt auch die MAX_FP_MINES und die dabei verbrauchten Watt in MAX_FP_WATTS fest
+                # Das sind Daten, die wir "nebenbei" festhalten für den Fall,
+                #     dass IM MOMENT (für den kommenden Zyklus) GARANTIERT KEINE NETZPOWER BEZOGEN WERDEN MUSS
+                OLD_MAX_FP_MINES=${MAX_FP_MINES}
+                MAX_FP_MINES=$(echo "scale=8; if ( ${actAlgoMines[$algoIdx]} > ${MAX_FP_MINES} ) \
                                                { print ${actAlgoMines[$algoIdx]} } \
                                           else { print ${MAX_FP_MINES} }" \
-                                          | bc )
-                    if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
-                        MAX_FP_WATTS=${actAlgoWatt[$algoIdx]}
-                        MAX_FP_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
-                        # ---> ARRAYPUSH 3b <---
-                        msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
-                        if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                            MAX_FP_MSG_STACK=(${MAX_FP_MSG_STACK[@]} ${msg})
-                        else
-                            MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
-                        fi
+                                      | bc )
+                if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
+                    MAX_FP_WATTS=${actAlgoWatt[$algoIdx]}
+                    MAX_FP_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
+                    # ---> ARRAYPUSH 3b <---
+                    msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+                    if [[ ${arrayRedeclareTest} -eq 1 ]]; then
+                        MAX_FP_MSG_STACK=(${MAX_FP_MSG_STACK[@]} ${msg})
+                    else
+                        MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
                     fi
                 fi
+                #fi
             done
 
             profitableAlgoIndexesCnt=${#profitableAlgoIndexes[@]}

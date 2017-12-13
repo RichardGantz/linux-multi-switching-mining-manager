@@ -160,13 +160,6 @@ while : ; do
     #       werden berücksichtigt, vor allem sind das die Daten über den generellen Beachtungszustand
     #       von GPUs und Algorithmen.
     #       GPUs können als ENABLED (1) oder DISABLED (0) gesetzt werden
-    #       Algorithmen können ebenfalls als "Disabled" geführt werden mit einem Eintrag "AlgoDisabled:$algoName:*"
-    # WARNUNG: Mit dem Eintrag "AlgoDisabled:$algoName:*" oder "AlgoDisabled:$algoName:$gpu_uuid" sollte
-    #          SEHR, SEHR vorsichtig umgegangen werden.
-    #          Diese Angaben hier werden in den RUNNING_STATE
-    #          mit aufgenommen und kommen da nur durch MANUELLEN EINGRIFF wieder raus,
-    #          wenn die AUTOMATISCHE Verwaltung nicht zufälligerweise den Algorithmus wieder einschalten.
-    #          Das passiert aber nur für die nächsten 31s, DANN IST DER EINTRAG WIEDER DRIN!
     _func_gpu_abfrage_sh
 
     #
@@ -737,10 +730,6 @@ while : ; do
     if [[ ${verbose} == 1 ]]; then
         echo "-------------------------------------------------"
     fi
-
-    for algoName in ${!AlgoDisabled[@]}; do
-        printf "${AlgoDisabled[$algoName]}\n" >>${RUNNING_STATE}
-    done
 
     # Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
     rm -f ${RUNNING_STATE}.lock                      # ... und wieder freigeben
