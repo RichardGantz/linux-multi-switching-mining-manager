@@ -12,7 +12,8 @@ _LOGANALYSIS_INCLUDED=1
 # Das könnte uns vielleicht auch dazu veranlassen, die "Country" zu wechseln ("eu" bzw. "us")
 
 # Regexp Patterns, die den Abbruch oder das nicht Zustandekommen der Verbindung
-# mit dem Server signalisieren und sofortige Aktion erfordern (meist für grep, evtl. auch sed)
+# mit dem Server signalisieren und sofortige Aktion erfordern
+#     (meist für grep, evtl. auch sed, wo manche Meta-Zeichen geschützt werden müssen)
 NOT_CONNECTED_MSGs=(
     # "ccminer"
     # [2017-11-20 15:36:59] Starting on stratum+tcp://nist5.eu.nicehash.com:3340
@@ -22,6 +23,10 @@ NOT_CONNECTED_MSGs=(
     'retry after 30 seconds$'
     # equihash "miner"
     'Lost connection with the server'
+    # equihash "zm"
+    '#  connection closed by server '
+    '#  server not responding - retrying'
+    'SSL_connect failed '
     # cryptonight "xmrMiner" (Windows-Name "xmr-stak")
     ' : SOCKET ERROR - '
 )
@@ -40,28 +45,29 @@ NOT_ACCEPTED_MSGs=(
     'accepted.*[(]booooo[)]$'
     # equihash "miner"
     #INFO 16:09:23: GPU0 Rejected share 870ms [A:16576, R:41] <-- ist der not accept vom equihash
-    'GPU[[:digit:]]+ Rejected share '
+    'GPU[[:digit:]] Rejected share '
+    # equihash "zm"
+    '  GPU[[:digit:]]  rejected share: \\['
     # cryptonight "xmrMiner" (Windows-Name "xmr-stak")
     ' : Result rejected by the pool[.]$'
 )
 
 # Regexp Patterns, die gezählt werden müssen und erst nach einer bestimmten Anzahl eine Aktion erfordern
-# (meist für gawk)
+# (meist für gawk, daher kein Schützen verschiedener Meta-Zeichen nötig)
 # Hier: "ANGENOMMEN" - Meldungen
 YES_ACCEPTED_MSGs=(
     # "ccminer"
-    #2017-11-20 18:00:37] accepted: 0/1 (diff 9.171), 1608.05 MH/s (booooo)
-    #[2017-11-20 18:00:37] reject reason: Invalid extranonce2 size.
-    #[2017-11-20 18:00:39] GPU #0: Zotac GTX 980 Ti, 1576.93 MH/s
-    #[2017-11-20 18:00:39] accepted: 0/2 (diff 46.701), 1597.67 MH/s (booooo)
-    #[2017-11-20 18:00:39] reject reason: Invalid extranonce2 size.
-    #"^.*accepted.*\(booooo\)$"
-    '[(]yes![)]$'
+    #[2017-11-17 19:31:25] GPU #0: Zotac GTX 980 Ti, 6884.15 MH/s
+    #[2017-11-17 19:31:27] accepted: 16/16 (diff 63.041), 6806.88 MH/s (yes!)
+    #[2017-11-17 19:31:29] GPU #0: Zotac GTX 980 Ti, 6852.19 MH/s
+    'accepted.*[(]yes![)]$'
     # equihash "miner"
     #INFO 19:41:25: GPU0 Accepted share 47ms [A:17909, R:41]
     #INFO 19:41:27: GPU0 Accepted share 50ms [A:17910, R:41]
     #INFO 19:41:35: GPU0 Accepted share 51ms [A:17911, R:41]
-    'GPU[[:digit:]]+ Accepted share '
+    'GPU[[:digit:]] Accepted share '
+    # equihash "zm"
+    ' [+*]+$'
     # cryptonight "xmrMiner" (Windows-Name "xmr-stak")
     ' : Result accepted by the pool[.]$'
 )

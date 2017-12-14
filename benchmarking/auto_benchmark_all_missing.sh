@@ -49,7 +49,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo $0 <<EOF '[-w|--min-watt-seconds TIME] 
+            echo $0 <<EOF '
+                 [-w|--min-watt-seconds TIME] 
                  [-m|--min-hash-count HASHES] 
                  [-d|--debug-infos] 
                  [-h|--help]'
@@ -129,7 +130,6 @@ echo $$ >$(basename $0 .sh).pid
 #            GPU${gpu_idx}Watts[]=          # declaration only
 #            GPU${gpu_idx}Mines[]=          # declaration only
 #     uuidEnabledSOLL[${gpu_uuid}]=         # 0/1
-#        AlgoDisabled[${algo}]=             # STRING with all Info
 #
 # UND:
 #      Stellt sicher, dass aktuelle gpu-bENCH.sh Dateien in den GPU-UUID Verzeichnissen sind.

@@ -64,17 +64,7 @@
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
 
-# Ein paar Funktionen zur Verwaltung der Algos, die für alle oder nur für bestimmte GPU-UUIDs disabled sind.
-# Es gibt das Array AlgoDisabled[$algo], das den entsprechenden STRING in der Form
-#    "AlgoDisabled:equihash:GPU-7...:*:GPU-4..." oder
-#    "AlgoDisabled:equihash:GPU-7...:GPU-4..."   oder
-#    "AlgoDisabled:equihash:*:GPU-4..."          oder
-#    "AlgoDisabled:equihash:GPU-4..."            oder
-#    "AlgoDisabled:equihash:*"                   oder, oder, oder ... enthalten.
-# Es gibt die Funktionen
-#    _add_entry_into_AlgoDisabled                      $algo [$gpu_uuid]
-#    _remove_entry_from_AlgoDisabled                   $algo [$gpu_uuid]
-#    "yes" or "no" = $( _is_algo_disabled_for_gpu_uuid $algo [$gpu_uuid] )
+# Erst mal die beiden Funktionen _read_in_SYSTEM_FILE_and_SYSTEM_STATEin und _update_SYSTEM_STATEin_if_necessary
 source gpu-abfrage.inc
 
 function _func_gpu_abfrage_sh () {

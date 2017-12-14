@@ -94,7 +94,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo $0 <<EOF '[-w|--min-watt-seconds TIME] 
+            echo $0 <<EOF '
+                 [-w|--min-watt-seconds TIME] 
                  [-m|--min-hash-count HASHES] 
                  [-t|--tweak-mode] 
                  [-p|--full-power-mode] 
@@ -227,10 +228,6 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # tempazb + 11: GPUTargetFanSpeed
     # tempazb + 12: PowerLimit
     # tempazb + 13: LessThreads
-
-    # Haben wir in den Testfällen ohne Internet entdeckt, dass dieses Array dann leer ist.
-    # Irgendeinen Wert brauchen wir aber, also nehmen wir einfach 777, bis er beim nächsten Benchmark mit Internet-Zugang korrigiert wird.
-    if [[ ${#ALGO_IDs[${algo}]}   -eq 0 ]]; then ALGO_IDs[${algo}]=777; fi
 
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
     if [ ${tempazb} -gt 1 ] ; then
@@ -437,7 +434,10 @@ function _On_Exit () {
         ####################################################################
         #    Aufbereitung der Werte zum Schreiben in die benchmark_*.json
         #
-        temp_einheit=$(cat ${BENCHLOGFILE} | sed -e 's/ *(yes!)$//g' | grep -m1 "/s$" \
+        temp_einheit=$(cat ${BENCHLOGFILE} \
+                              | sed -e 's/ *(yes!)$//g' \
+                              | gawk -e "${detect_zm_hash_count}" \
+                              | grep -m1 "/s$" \
                               | gawk -e '/H\/s$/ {print "H/s"; next}{print "Sol/s"}')
         if [ ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
             ###
@@ -445,9 +445,10 @@ function _On_Exit () {
             ###
             hashCount=$(cat ${BENCHLOGFILE}  \
                       | sed -e 's/ *(yes!)$//g' \
-                      | grep "/s$" \
+                      | gawk -e "${detect_zm_hash_count}" \
+                      | grep -e "/s$" \
                       | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
-                                   | tee temp_hash_bc_input | bc >temp_hash_sum )\
+                                   | tee temp_hash_bc_input | bc >temp_hash_sum ) \
                       | wc -l \
                      )
             # ... dann die WattLog
@@ -559,7 +560,6 @@ if [ ! -d test ]; then mkdir test; fi
 #            GPU${gpu_idx}Watts[]=          # declaration only
 #            GPU${gpu_idx}Mines[]=          # declaration only
 #     uuidEnabledSOLL[${gpu_uuid}]=         # 0/1
-#        AlgoDisabled[${algo}]=             # STRING with all Info
 #
 # UND:
 #      Stellt sicher, dass aktuelle gpu-bENCH.sh Dateien in den GPU-UUID Verzeichnissen sind.
@@ -608,13 +608,17 @@ if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
     # Ohne Internetverbindung wird die Funktion _read_in_ALGO_PORTS_KURSE nicht aufgerufen,
     # wodurch die folgenden Arrays leer und nicht definiert sind.
     # Da wir die ALGO_ID des Algo aber auch in die benchmark.JSON schreiben, haben wir ein Problem, das wir lösen,
-    #    indem wir die ALGO_ID auf 777 setzen und wissen, dass das falsch ist.
-    # Das selbe machen wir unten mit dem algo_port. Der wird im Offline-Modus sowieso nicht benötigt.
-    # Der nächste Benchmark mit Internetverbindung wird diesen Wert automatisch korrigieren
+    #    indem wir das Array ALGO_ID hier definieren wie es am 29.10.2017 definiert war.
+    # Den algo_port setzen wir unten auf 777, bis wir eine Datei mit den entsprechenden Angaben gefunden haben.
+    #    Der algo_port wird im Offline-Modus sowieso nicht benötigt.
+    #
     #unset ALGOs;    declare -ag ALGOs
     #unset KURSE;    declare -Ag KURSE
     #unset PORTs;    declare -Ag PORTs
     #unset ALGO_IDs; declare -Ag ALGO_IDs
+    if [ ${#ALGO_IDs[@]} -eq 0 ]; then
+        _set_ALGO_IDs_in_Offline_Mode
+    fi
 else
     if [ ! -s ${algoID_KURSE_PORTS_WEB} ] \
            || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s)+120)) -lt $(date +%s) ]]; then
@@ -719,6 +723,7 @@ fi
 ################################################################################
 #
 # Ab hier steht der Miner fest und die Variablen  miner_name und miner_version dürfen NICHT MEHR VERÄNDERT WERDEN!
+# Im --auto Mode ist ab hier zusätzlich auch $algo gültig und darf NICHT MEHR VERÄNDERT WERDEN!
 #
 ################################################################################
 
@@ -740,7 +745,7 @@ source ../miners/${miner_name}#${miner_version}.starts
 
 ################################################################################
 ###
-###          4.1. Anzeige aller fehlenden Algos, die möglich wären
+###          4.0. Die Algos, die DISABLED sind aus der Menge der zu betrachtenden Algos herausnehmen
 ###
 ################################################################################
 
@@ -773,28 +778,34 @@ if [ -s ../GLOBAL_ALGO_DISABLED ]; then
         if [ -n "${DisAlgo}" ]; then
             unset actInternalAlgos[${DisAlgo}]
             for (( a=0; $a<${#actMissingAlgos[@]}; a++ )); do
-                [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ] && unset actMissingAlgos[$a]
+                if [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ]; then
+                    unset actMissingAlgos[$a]
+                    # Es konnte nur einen Eintrag mit diesem Key geben, deshalb um der Performance willen Abbruch der Schleife
+                    break
+                fi
             done
             [ $debug -eq 1 ] && echo "Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
         fi
     done
 fi
 
-if [ -z "${actInternalAlgos[${algo}]}" ]; then
-    [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 99
-    echo "Der Algo ${algo} ist DISABLED und kann im Moment nicht getestet werden."
-    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
-    exec $0 ${initialParameters}
-fi
+################################################################################
+###
+###          4.1. Anzeige aller fehlenden Algos, die möglich wären
+###
+################################################################################
 
-# Checken, ob wir für alle Algos auch schon Werte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json haben
-# Diejenigen Algos anzeigen, zu denen es noch keine Eintragsmöglichkeit gibt.
-# Das wurde nach dem Einlesen in ALLE_MINER gemacht und es wurden auch die beiden Arrays
-#     "Missing_${miner_name}_${miner_version//\./_}_Algos" und
-#     "Available_${miner_name}_${miner_version//\./_}_Algos" erstellt,
-#     die die Namen der entsprechenden algos als Werte haben.
-if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
-    if [ -n "${actMissingAlgos[@]}" ]; then
+if [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
+    [ -z "${actInternalAlgos[${algo}]}" ] && exit 99
+else
+    # Checken, ob wir für alle Algos auch schon Werte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json haben
+    # Diejenigen Algos anzeigen, zu denen es noch keine Eintragsmöglichkeit gibt.
+    # Das wurde nach dem Einlesen in ALLE_MINER gemacht und es wurden auch die beiden Arrays
+    #     "Missing_${miner_name}_${miner_version//\./_}_Algos" und
+    #     "Available_${miner_name}_${miner_version//\./_}_Algos" erstellt,
+    #     die die Namen der entsprechenden algos als Werte haben.
+    #if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
+    if [ ${#actMissingAlgos[@]} -gt 0 ]; then
         for lfdAlgo in ${actMissingAlgos[@]}; do
             printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${lfdAlgo}
         done
@@ -1066,9 +1077,16 @@ esac
 ###
 ################################################################################
 
+if [ ! -x ${minerfolder}/${miner_name} ]; then
+    echo "OOOooops... das binary Exectable des Miners ${miner_name} ist nicht im Pfad ${minerfolder}/${miner_name} zu finden!"
+    [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 99
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+    exec $0 ${initialParameters}
+fi
+
 echo "---> DER START DES MINERS SIEHT SO AUS: <---"
 echo "${minerstart} >>${BENCHLOGFILE} &"
-
+echo ""
 if [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]; then
     read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
 fi
@@ -1137,6 +1155,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
     ### Hashwerte nachsehen und zählen
     hashCount=$(cat ${BENCHLOGFILE} \
                        | sed -e 's/ *(yes!)$//g' \
+                       | gawk -e "${detect_zm_hash_count}" \
                        | grep -c "/s$")
     if [ $hashCount -ge $MIN_HASH_COUNT ]; then countHashes=0; fi
 
@@ -1187,6 +1206,7 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             hashCount=$(cat ${BENCHLOGFILE} \
                       | tail -n +$hash_line \
                       | sed -e 's/ *(yes!)$//g' \
+                      | gawk -e "${detect_zm_hash_count}" \
                       | grep -e "/s$" \
                       | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
                                    | tee temp_hash_bc_input | bc >temp_hash_sum ) \
@@ -1205,9 +1225,10 @@ while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REA
             #         | sed -e 's/\x1B[[][[:digit:]]*m//g' \
             hashCount=$(cat ${BENCHLOGFILE} \
                       | sed -e 's/ *(yes!)$//g' \
-                      | grep "/s$" \
+                      | gawk -e "${detect_zm_hash_count}" \
+                      | grep -e "/s$" \
                       | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
-                                   | tee temp_hash_bc_input | bc >temp_hash_sum )\
+                                   | tee temp_hash_bc_input | bc >temp_hash_sum ) \
                       | wc -l \
                      )
             # ... dann die WattLog

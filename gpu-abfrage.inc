@@ -3,72 +3,6 @@
 # Ein paar Funktionen und auch Überlegungen und Dokumentation zur GPU Systemabfrage und deren Abbild im Arbeitsspeicher
 #
 
-# Der Eintrag AlgoDisabled[${algo}] enthält immer und zu jeder Zeit den Inhalt
-#     der auch die in die Datei ${SYSTEM_STATE}.in auszugebenden Zeile als String
-#
-# Dieser String ist folgendermaßen aufgebaut:
-#     "^AlgoDisabled:$NH_AlgoName  und optional dahinter [ ":*" ] [ ":${gpu_uuid}" ]..."
-#     z.B.   "AlgoDisabled:equihash:GPU-7...:*:GPU-4..."
-#            Was bedeuten würde:
-#            Im Moment ist der Algo "equihash" generell für alle GPUs diabled, weil z.B. die Server nicht erreichbar sind.
-#            Sollten die Server wieder verfügbar sein, ist es der Wunsch von "GPU-7..." und "GPU-4..."
-#                den equihash immer noch nicht bearbeiten zu wollen und disabled zu belassen.
-#            Jede GPU kann hier definitiv für sich Algos ein- oder ausschalten.
-#
-# Übergeben werden müssen:
-#     $1 : $algo
-#     $2 : $uuid oder * oder nichts für Alle GPUs, also Generell Disabled wegen Serverausfall, etc.
-# Der * steht für generell disabled und wird auch im Falle $2 == "" angenommen.
-#
-
-# HINZUFÜGEN eines Algo zu dem AlgoDisabled[${algo}] STRING
-_add_entry_into_AlgoDisabled () {
-    local algo=$1
-    local gpu_uuid=$2
-    if [ ${#2} -eq 0 ]; then gpu_uuid='*'; fi
-    strEntry=":${gpu_uuid}"
-    if [ -n ${AlgoDisabled[${algo}]} ]; then
-        # Erst sicher entfernen...
-        AlgoDisabled[${algo}]=${AlgoDisabled[${algo}]//"${strEntry}"/}
-        # ... dann einfach anfügen
-        AlgoDisabled[${algo}]+="${strEntry}"
-    else
-        AlgoDisabled[${algo}]="AlgoDisabled:${algo}:${gpu_uuid}"
-    fi
-}
-
-# ENTFERNEN eines Algo aus dem AlgoDisabled[${algo}] STRING
-_remove_entry_from_AlgoDisabled () {
-    local algo=$1
-    local gpu_uuid=$2
-    if [ ${#2} -eq 0 ]; then gpu_uuid='*'; fi
-    strEntry=":${gpu_uuid}"
-    if [ -n "${AlgoDisabled[${algo}]}" ]; then
-        # Erst sicher entfernen...
-        AlgoDisabled[${algo}]="${AlgoDisabled[${algo}]//"${strEntry}"/}"
-        if [ "${AlgoDisabled[${algo}]}" == "AlgoDisabled:${algo}" ]; then
-            unset AlgoDisabled[${algo}]
-        fi
-    fi
-}
-
-# Abfrage, ob algo für spezielle oder alle GPUs gesperrt ist
-# Die Antwort von $( _is_algo_disabled_for_gpu_uuid ) ist "yes" oder "no" !!!
-_is_algo_disabled_for_gpu_uuid () {
-    local algo=$1
-    local gpu_uuid=$2
-    local found
-    local returnMessage="no"
-    if [ ${#2} -eq 0 ]; then gpu_uuid='*'; fi
-    if [ -n "${AlgoDisabled[${algo}]}" ]; then
-        found=$(echo "${AlgoDisabled[${algo}]}" | grep -c ":${gpu_uuid//\*/\*}" )
-        if [ $found -gt 0 ]; then
-            returnMessage="yes"
-        fi
-    fi
-    echo $returnMessage
-}
-
 # SYSTEM_STATE muss natürlich gesetzt sein.
 # Und alle anderen Systemarrays ebenfalls, sonst sind wir total aufgeschmissen.
 # Diese Funktion sollte nur nach einem frischen Aufbau aller Assoziativen Arrays gerufen werden.
@@ -104,29 +38,6 @@ _update_SYSTEM_STATEin_if_necessary () {
             enabledState=${uuidEnabledSOLL[${uuid[${index[$i]}]}]}
         fi
         echo "${uuid[${index[$i]}]}:${name[${index[$i]}]}:${enabledState}"                    >>${SYSTEM_STATE}.out
-    done
-
-    # Wir pflegen AlgoDisabled hier drin MANUELL und deshalb
-    # müssen wir diejenigen auch wieder mit ausgeben, die wir eingelesen haben.
-    # Bei jeder Neuerzeugung der Datei SYSTEM_STATE müssen die hinten angehängt werden.
-    echo ''                                                                                    >>${SYSTEM_STATE}.out
-    echo '# Algorithmen können hier MANUELL ausgeschaltet werden, was gefährlich sein kann,' >>${SYSTEM_STATE}.out
-    echo '#    wenn man vergisst, dass man sie hier ausgeschaltet hat!'                      >>${SYSTEM_STATE}.out
-    echo '# Für jeden disabled Algorithmus gibt es NUR 1 ZEILE!'                             >>${SYSTEM_STATE}.out
-    echo '# Die einzelnen FELDER sind durch DOPPELPUNKTE getrennt.'                          >>${SYSTEM_STATE}.out
-    echo '# Das 1. Feld MUSS IMMER lauten: "AlgoDisabled" (ohne Anführungsstriche)'          >>${SYSTEM_STATE}.out
-    echo '# Das 2. Feld MUSS IMMER der ALGONAME sein.'                                       >>${SYSTEM_STATE}.out
-    echo '# Dann folgen die GPU-UUIDs und/oder "*" (ohne Anführungsstriche) für ALLE'        >>${SYSTEM_STATE}.out
-    echo '# Der "*" kann auch zusammen mit GPUs gelistet sein.'                              >>${SYSTEM_STATE}.out
-    echo '# Der "*" kommt ins Spiel, wenn ein Algorithmus generell nicht abgeliefert werden kann'>>${SYSTEM_STATE}.out
-    echo '# Er sollte hier also nur drin sein, wenn man ihn generell nicht mehr minen möchte'>>${SYSTEM_STATE}.out
-    echo '# Ein Beispiel:'                                                                   >>${SYSTEM_STATE}.out
-    echo '# AlgoDisabled:scrypt:GPU-84f7ca95-d215-185d-7b27-a7f017e776fb'                    >>${SYSTEM_STATE}.out
-    echo ''                                                                                    >>${SYSTEM_STATE}.out
-    echo '"AlgoDisabled" : AlgoName : * oder GPU-UUID : * oder GPU-UUID : * oder GPU-UUID'   >>${SYSTEM_STATE}.out
-    echo '============================================================================='     >>${SYSTEM_STATE}.out
-    for algoName in ${!AlgoDisabled[@]}; do
-        echo "${AlgoDisabled[$algoName]}"                                                    >>${SYSTEM_STATE}.out
     done
 
     # Sollten die Dateien ${SYSTEM_STATE}.out und ${SYSTEM_STATE}.in sich jetzt unterscheiden,
@@ -181,15 +92,12 @@ _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
     #     (Hier ist erst mal nur das Einlesen mitgemacht, weil der Code schon im multi_mining_calc.sh so drin war.)
     unset SYSTEM_STATE_CONTENT
     unset uuidEnabledSOLL;  declare -Ag uuidEnabledSOLL
-    unset AlgoDisabled;     declare -Ag AlgoDisabled
     unset NumEnabledGPUs;   declare -ig NumEnabledGPUs
     if [ -s ${SYSTEM_STATE}.in ]; then
         cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
-        shopt_cmd_before=$(shopt -p lastpipe)
-        shopt -s lastpipe
         cat ${SYSTEM_STATE}.in               \
             | grep -v "^#"                   \
-            | grep -e "^GPU-\|^AlgoDisabled" \
+            | grep -e "^GPU-" \
             | readarray -n 0 -O 0 -t SYSTEM_STATE_CONTENT
 
         for (( i=0; $i<${#SYSTEM_STATE_CONTENT[@]}; i++ )); do
@@ -199,18 +107,8 @@ _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
                     | read UUID GenerallyEnabled
                 declare -ig uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
                 NumEnabledGPUs+=${GenerallyEnabled}
-            elif [ "${SYSTEM_STATE_CONTENT[$i]:0:12}" == "AlgoDisabled" ]; then
-                unset AlgoName
-                read -a AlgoName <<<"${SYSTEM_STATE_CONTENT[$i]//:/ }"
-                if [ ${#AlgoName[@]} -eq 2 ] && [ "${AlgoName[0]}" == "AlgoDisabled" ]; then
-                    # Bestimmt den * vergessen oder nicht mal ein echter Algoname?
-                    AlgoDisabled[${AlgoName[1]}]="AlgoDisabled:${AlgoName[1]}:*"
-                else
-                    AlgoDisabled[${AlgoName[1]}]="${SYSTEM_STATE_CONTENT[$i]}"
-                fi
             fi
         done
-        ${shopt_cmd_before}
     fi
 }
 

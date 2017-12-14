@@ -37,6 +37,7 @@ echo $$ >$(basename $0 .sh).pid
 [[ ${#_ALGOINFOS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 
 function _On_Exit () {
+    # WhatToMine.* \
     rm -f ${algoID_KURSE_PORTS_WEB} ${algoID_KURSE_PORTS_ARR} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} \
        KURSE.in ALGO_NAMES.json ALGO_NAMES.in \
        I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t \
@@ -101,6 +102,9 @@ _check_InternetConnection () {
 _check_InternetConnection
 declare -i SECS=31 nowSecs
 while :; do
+
+    # Webabfrage für supernova
+    #_prepare_COIN_PRICING_from_the_Web
 
     # Neue Algo Kurse aus dem Netz
     # Gültiges Ergebnis .json File fängt so an:
