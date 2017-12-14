@@ -730,6 +730,8 @@ fi
 declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
 declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
 
+[ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && read algo rest <<< ${algorithm//#/ }
+
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle Miner gleich ist.
 source ../miners/${miner_name}#${miner_version}.starts
