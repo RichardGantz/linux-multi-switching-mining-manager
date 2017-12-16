@@ -198,3 +198,9 @@ WhatToMine\.json
 algo_ids\.awk
 
 \.test\.sh
+
+BittrexSummaries.in
+
+BittrexSummaries.json
+
+BTC_EUR_kurs\.http
