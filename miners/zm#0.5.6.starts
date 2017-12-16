@@ -12,32 +12,41 @@ minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/zm_0.5.6"
 #Usage:
 # zm --server hostname --port port_nr --user user_name
 #    [--pass password] [options]...
-#LIVE_START_CMD='%s/%s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time --logfile %s'
-LIVE_START_CMD='%s/%s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time'
+#LIVE_START_CMD='%s/%s --server %s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time --logfile %s'
+LIVE_START_CMD='%s/%s --server %s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time'
 LIVE_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
-    "algo"
-    "continent"
-    "NH_DOMAIN"
+    "coin_or_algoContinent"
+    "domain"
     "algo_port"
     "worker"
     "gpu_idx"
 #    "LIVE_LOGFILE"
 )
 
+function PREP_LIVE_PARAMETERSTACK () {
+    declare -g coin_or_algoContinent="${algo}"
+    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${algo}.${continent}"
+}
+
 # Wenn kein BENCH_START_CMD angegeben ist, wird nur LIVE Benchmarked.
 #
-#BENCH_START_CMD='%s/%s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time --logfile %s'
-#BENCH_START_CMD='%s/%s --server %s.%s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time'
-#BENCH_PARAMETERSTACK=(
-#    "minerfolder"
-#    "miner_name"
-#    "algo"
-#    "continent"
-#    "NH_DOMAIN"
-#    "algo_port"
-#    "worker"
-#    "gpu_idx"
-##    "BENCHLOGFILE"
-#)
+#BENCH_START_CMD='%s/%s --server %s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time --logfile %s'
+BENCH_START_CMD='%s/%s --server %s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time'
+BENCH_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "coin_or_algoContinent"
+    "domain"
+    "algo_port"
+    "worker"
+    "gpu_idx"
+#    "BENCHLOGFILE"
+)
+
+function PREP_BENCH_PARAMETERSTACK () {
+    declare -g coin_or_algoContinent="${algo}"
+    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${algo}.${continent}"
+}
+

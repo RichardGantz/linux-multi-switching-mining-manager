@@ -268,7 +268,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
         #
         #################################################################################
 
-        # Einlesen aller Dateien NiceHash#${miner_name}.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
+        # Einlesen aller Dateien ${miner_name}#Coin2Algo.names, die die Zuordnung der NH-Namen (Algo/Coin) zu den CC-Namen (Algorithmus) enthält
         # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
         # in ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
         #

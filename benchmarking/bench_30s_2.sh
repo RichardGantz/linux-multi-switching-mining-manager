@@ -675,9 +675,9 @@ IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 ################################################################################
 
 # Gibt es eine ALGO-NAMEN - KONVERTIERUNGSTABELLEN von NiceHash Algonamen zu $miner_name Algonamen?
-# ---> Datei NiceHash#${miner_name}.names <---
+# ---> Datei ${miner_name}#Coin2Algo.names <---
 #      Diese Datei zu pflegen ist wichtig!
-# Einlesen der Datei NiceHash#${miner_name}.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
+# Einlesen der Datei ${miner_name}#Coin2Algo.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
 # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
 # In ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
 
@@ -860,7 +860,7 @@ else
         # Au weia, ... noch gar keine Algos einlesen können.
         error_msg="Sorry, dieser Miner weiss nicht, welche Algos er minen kann.\n"
         error_msg+="Es gibt weder eine Datei ../miners/${miner_name}#${miner_version}.algos\n"
-        error_msg+="noch eine Namenkonvertierungsdatei ../miners/NiceHash#${miner_name}.names\n"
+        error_msg+="noch eine Namenkonvertierungsdatei ../miners/${miner_name}#Coin2Algo.names\n"
         error_msg+="ODER die Dateien sind vorhanden, aber leer."
         error_msg+="Bitte erst eine oder beide dieser Dateien erstellen.\n"
         printf ${error_msg}
