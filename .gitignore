@@ -186,3 +186,15 @@ log_No_Hash
 ping_Runde\.log
 
 zm\.log
+
+benchmarking/I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+
+I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+
+WhatToMine\.in
+
+WhatToMine\.json
+
+algo_ids\.awk
+
+\.test\.sh

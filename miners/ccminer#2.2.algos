@@ -1,3 +1,14 @@
+################################################################################################################
+# Diese Strings/Worte sind, egal wie sie vom Superpool auch genannt werden, IMMER Bestandteil des Servernamens
+#
+# ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG:
+#          Sobald NiceHash und suprnova hier einen gleichen String/Wort/Namen verwenden,
+#          können wir die Domains für diesen Fall nicht mehr sauber unterscheiden,
+#          ohne weitere Programmlogik an bestimmten Stellen hinzuzufügen!
+#          BITTE DARAN DENKEN UND BESCHEID SAGEN!!!
+################################################################################################################
+#
+# NiceHash: Im Arbeitsspeicher gespeichert im Assoziativen Array ALGOs[@]
 x11
 x13
 keccak
@@ -21,3 +32,17 @@ x11gost
 sia
 blake2s
 skunk
+# suprnova: Im Arbeitsspeicher gespeichert im Assoziativen Array COINS[@]
+zen
+zec
+mona
+vtc
+stak
+xzc
+dcr
+dgbg
+dgbq
+geo
+eth
+ubiq
+exp
