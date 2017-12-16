@@ -32,15 +32,14 @@ export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
 
 # Ein Branch wird den letzten Stand für ausschließlich NiceHash halten.
 # Da muss es diese Variable noch geben.
-domain="nicehash.com"
+NH_DOMAIN="nicehash.com"
 
 # Die Pools, bzw. Anbieter, die wir am besten an den Servernamen unterscheiden können
 # 0 bedeutet: Disabled
 # 1 bedeutet: Enabled, wird abgefragt und berechnet und ge-MinerShelld
-declare -Ag DOMAINS
-DOMAINS["nicehash.com"]=0
-DOMAINS["suprnova.cc"]=1
-declare domain="suprnova.cc"
+declare -Ag DOMAIN
+DOMAIN["nicehash.com"]=0
+DOMAIN["supernova.cc"]=1
 
 ### gpu-abfrage.sh spezifische Variablen
 SYSTEM_FILE="${LINUX_MULTI_MINING_ROOT}/gpu_system.out"
@@ -52,12 +51,8 @@ RUNNING_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_ALGO_RUNNING_STATE"
 ### algo_multi_abfrage.sh spezifische Variablen
 algoID_KURSE_PORTS_WEB="${LINUX_MULTI_MINING_ROOT}/KURSE.json"
 algoID_KURSE_PORTS_ARR="${LINUX_MULTI_MINING_ROOT}/KURSE_PORTS.in"
-rm -f "${LINUX_MULTI_MINING_ROOT}/BTCEURkurs"
-BTC_EUR_KURS_WEB="${LINUX_MULTI_MINING_ROOT}/BTC_EUR_kurs.http"
 COIN_PRICING_WEB="${LINUX_MULTI_MINING_ROOT}/WhatToMine.json"
 COIN_PRICING_ARR="${LINUX_MULTI_MINING_ROOT}/WhatToMine.in"
-COIN_TO_BTC_EXCHANGE_WEB="${LINUX_MULTI_MINING_ROOT}/BittrexSummaries.json"
-COIN_TO_BTC_EXCHANGE_ARR="${LINUX_MULTI_MINING_ROOT}/BittrexSummaries.in"
 
 SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
 

@@ -15,8 +15,9 @@
 #    "minerfolder"
 #    "miner_name"
 #    "gpu_idx"
-#    "coin_or_algoContinent"
-#    "domain"
+#    "algo"
+#    "continent"
+#    "NH_DOMAIN"
 #    "algo_port"
 #    "worker"
 #    "LIVE_LOGFILE" : "InternalAlgos[${algo}]"
@@ -44,9 +45,8 @@ algo_port=$4
 worker=$5
 declare -A InternalAlgos[$algo]=$6
 gpu_uuid=$7
-domain=$8
 # Rest ist Nvidia GPU Default Tuning CmdStack
-shift 8
+shift 7
 command_string=$*
 read -a CmdStack <<<"${command_string}"
 declare -i i
@@ -121,7 +121,7 @@ function _build_minerstart_commandline () {
     # ---> Die folgenden Variablen müssen noch vollständig implementiert werden! <---
     # "LOCATION eu, usa, hk, jp, in, br"  <--- von der Webseite https://www.nicehash.com/algorithm
     # Wird übergeben, aber:# Noch nicht vollständig implementiert!      <--------------------------------------
-    #continent="eu"        # Noch nicht vollständig implementiert!      <------- NiceHash ONLY ----------------
+    #continent="eu"        # Noch nicht vollständig implementiert!      <--------------------------------------
     #worker="1060"         # Noch nicht vollständig implementiert!      <--------------------------------------
 
     # Diese Funktion musste leider erfunden werden wegen der internen anderen Algonamen,
@@ -190,7 +190,7 @@ function _terminate_Miner () {
             fi
         else
             printf "PID ${MINER_pid} NOT FOUND IN PROCESS TABLE!!!\n"
-            printf "GPU #${gpu_idx}: ${This}.sh: PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE!!!\n" >>${ERRLOG}
+            printf "GPU #${gpu_idx}: $(basename $0): PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE!!!\n" >>${ERRLOG}
         fi
     fi
     rm -f ${MINER}.pid
@@ -214,13 +214,12 @@ function _On_Exit () {
     if [ $debug -eq 0 ]; then
         _delete_temporary_files
     fi
-    rm -f ${This}.pid
+    rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
 
 # Aktuelle eigene PID merken
-This=$(basename $0 .sh)
-echo $$ >${This}.pid
+echo $$ >$(basename $0 .sh).pid
 
 
 declare -i secs=0
@@ -240,7 +239,7 @@ echo   ${nowDate} ${nowSecs}
 echo   "Kurze Zusammenfassung:"
 echo   "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll gestartet werden."
 echo   "Das ist der Miner,      der ausgewählt ist : ${miner_name} ${miner_version}"
-echo   "das ist der Coin/Algo,  der ausgewählt ist : ${algo}"
+echo   "das ist der NH-Algo,    der ausgewählt ist : ${algo}"
 printf "das ist der \$algorithm, der ausgewählt ist : ${algorithm}"
 [[ ${#muck888} -gt 0 ]] && printf "#${muck888}"
 printf "\n"
@@ -284,7 +283,7 @@ declare -i inetLost_detected=0
 while :; do
     if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
         echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) \
-             "GPU #${gpu_idx}: ${This}.sh: Abbruch des Miners alias ${algorithm} wegen NO INTERNET..." \
+             "GPU #${gpu_idx}: $(basename $0): Abbruch des Miners alias ${algorithm} wegen NO INTERNET..." \
             | tee -a ../log_ConLoss log_ConLoss_${algorithm} ${ERRLOG} \
                   >>${BENCHLOGFILE}
         break
@@ -371,98 +370,80 @@ while :; do
             inetLost_detected=0
             continue
         else
-            case "${domain}" in
+            # Wechsel des "continent" bzw. der LOCATION und Neustart des Miners sind ERFORDERLICH
+            #   ODER Abbruch, wenn ALLE Verbindungs-Wechsel nicht funktioniert haben.
 
-                "nicehash.com")
-                    # Wechsel des "continent" bzw. der LOCATION und Neustart des Miners sind ERFORDERLICH
-                    #   ODER Abbruch, wenn ALLE Verbindungs-Wechsel nicht funktioniert haben.
+            # Erst mal: Einstellung des Zeigers auf die vermeintlich nächste Location ohne Gewähr...
+            let location_ptr=$((++location_ptr%${#LOCATION[@]}))
 
-                    # Erst mal: Einstellung des Zeigers auf die vermeintlich nächste Location ohne Gewähr...
-                    let location_ptr=$((++location_ptr%${#LOCATION[@]}))
+            # Abbruchbedingung
+            # Also: Sind wir schon alle "continents" durchgegangen und stehen wir daher - nach der Erhöhung -
+            #       auf dem selben $location_ptr, von dem wir ursprüngöich (initial) ausgegangen sind?
+            if [ $location_ptr -eq $initial_location_ptr ]; then
 
-                    # Abbruchbedingung
-                    # Also: Sind wir schon alle "continents" durchgegangen und stehen wir daher - nach der Erhöhung -
-                    #       auf dem selben $location_ptr, von dem wir ursprüngöich (initial) ausgegangen sind?
-                    if [ $location_ptr -eq $initial_location_ptr ]; then
+                ################################################################################
+                ###
+                ###          ENDGÜLTIGER Abbruch, alle "continent"e durchgegangen ohne Erfolg
+                ###
+                ################################################################################
 
-                        ################################################################################
-                        ###
-                        ###          ENDGÜLTIGER Abbruch, alle "continent"e durchgegangen ohne Erfolg
-                        ###
-                        ################################################################################
+                # Ausserdem wollen wir, wenn wir in diesem Lebenszyklus ALLE durchgegangen sind
+                # wieder mit dem Besten beginnen, denn dann war ganz grob was faul
+                if [ $location_ptr -ne 1 ]; then   # Ist location_ptr jetzt auf 1, dann steht die 0 schon in der Datei.
+                    # In allen anderen Fällen setzen wir ihn auf 0 == "eu"
+                    location_ptr=0
+                    continent=${LOCATION[${location_ptr}]}
+                    echo "# Keiner war erreichbar, deshalb nextes mal von vorne mit dem Besten..." >>act_continent_${algorithm}
+                    echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}                        >>act_continent_${algorithm}
+                fi
 
-                        # Ausserdem wollen wir, wenn wir in diesem Lebenszyklus ALLE durchgegangen sind
-                        # wieder mit dem Besten beginnen, denn dann war ganz grob was faul
-                        if [ $location_ptr -ne 1 ]; then   # Ist location_ptr jetzt auf 1, dann steht die 0 schon in der Datei.
-                            # In allen anderen Fällen setzen wir ihn auf 0 == "eu"
-                            location_ptr=0
-                            continent=${LOCATION[${location_ptr}]}
-                            echo "# Keiner war erreichbar, deshalb nextes mal von vorne mit dem Besten..." >>act_continent_${algorithm}
-                            echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}                        >>act_continent_${algorithm}
-                        fi
+                # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
+                _disable_algo
 
-                        # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
-                        _disable_algo
+                # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
+                echo ${nowDate} ${nowSecs} \
+                     "GPU #${gpu_idx}: BEENDEN des Miners alias ${algorithm} wegen NiceHash Servers WORLDWIDE unavailable." \
+                    | tee -a ../log_ConLoss log_ConLoss_${algorithm} \
+                          >>${BENCHLOGFILE}
+                break
 
-                        # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
-                        echo ${nowDate} ${nowSecs} \
-                             "GPU #${gpu_idx}: BEENDEN des Miners alias ${algorithm} wegen NiceHash Servers WORLDWIDE unavailable." \
-                            | tee -a ../log_ConLoss log_ConLoss_${algorithm} \
-                                  >>${BENCHLOGFILE}
-                        break
+            else
+                ################################################################################
+                ###
+                ###          Abbruch des nicht mehr funktioierenden "continent"
+                ###
+                ################################################################################
+                echo ${nowDate} ${nowSecs} "GPU #${gpu_idx}: Abbruch des Miners alias ${algorithm}..." \
+                    | tee -a ../log_ConLoss log_ConLoss_${algorithm} \
+                          >>${BENCHLOGFILE}
+                _terminate_Logger_Terminal
+                _terminate_Miner
+                # Vielleicht noch das ${BENCHLOGFILE} sichern vor dem Überschreiben zur "Beweissicherung"
+                cat ${BENCHLOGFILE} >>${LOGPATH}/mining_$(date "+%Y%m%d_%H%M%S")_ABORTED_BEFORE_RESTART.log
 
-                    else
-                        ################################################################################
-                        ###
-                        ###          Abbruch des nicht mehr funktioierenden "continent"
-                        ###
-                        ################################################################################
-                        echo ${nowDate} ${nowSecs} "GPU #${gpu_idx}: Abbruch des Miners alias ${algorithm}..." \
-                            | tee -a ../log_ConLoss log_ConLoss_${algorithm} \
-                                  >>${BENCHLOGFILE}
-                        _terminate_Logger_Terminal
-                        _terminate_Miner
-                        # Vielleicht noch das ${BENCHLOGFILE} sichern vor dem Überschreiben zur "Beweissicherung"
-                        cat ${BENCHLOGFILE} >>${LOGPATH}/mining_$(date "+%Y%m%d_%H%M%S")_ABORTED_BEFORE_RESTART.log
+                ################################################################################
+                ###
+                ###          Neuer "continent"
+                ###
+                ################################################################################
 
-                        ################################################################################
-                        ###
-                        ###          Neuer "continent"
-                        ###
-                        ################################################################################
+                continent=${LOCATION[${location_ptr}]}
 
-                        continent=${LOCATION[${location_ptr}]}
+                nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+                nowSecs=$(date +%s)
+                echo "# Neuer Continent \"$continent\" nach Verbindungsabbruch des ${algorithm}" >>act_continent_${algorithm}
+                echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}                          >>act_continent_${algorithm}
 
-                        nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-                        nowSecs=$(date +%s)
-                        echo "# Neuer Continent \"$continent\" nach Verbindungsabbruch des ${algorithm}" >>act_continent_${algorithm}
-                        echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}                          >>act_continent_${algorithm}
-
-                        # BENCHLOGFILE neu beginnen...
-                        echo ${nowDate} ${nowSecs} \
-                             "GPU #${gpu_idx}: ... und Neustart des Miners alias ${algorithm} nach Continent-Wechsel zu \"${continent}\"..." \
-                            | tee -a ../log_ConLoss log_ConLoss_${algorithm} \
-                                  >${BENCHLOGFILE}
-                        if [ $NoCards ]; then
-                            cat ../benchmarking/test/bnch_retry_catch_fake.log >>${BENCHLOGFILE}
-                        fi  ## $NoCards
-                        continue
-                    fi
-                    ;;
-
-                "suprnova.cc")
-                    # Abbruch des Miners nach disablen des Algos
-                    # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
-                    _disable_algo
-
-                    # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
-                    echo ${nowDate} ${nowSecs} \
-                         "GPU #${gpu_idx}: BEENDEN des Miners alias ${algorithm} wegen NiceHash Servers WORLDWIDE unavailable." \
-                        | tee -a ../log_ConLoss log_ConLoss_${algorithm} \
-                              >>${BENCHLOGFILE}
-                    break
-                    ;;
-            esac
+                # BENCHLOGFILE neu beginnen...
+                echo ${nowDate} ${nowSecs} \
+                     "GPU #${gpu_idx}: ... und Neustart des Miners alias ${algorithm} nach Continent-Wechsel zu \"${continent}\"..." \
+                    | tee -a ../log_ConLoss log_ConLoss_${algorithm} \
+                          >${BENCHLOGFILE}
+                if [ $NoCards ]; then
+                    cat ../benchmarking/test/bnch_retry_catch_fake.log >>${BENCHLOGFILE}
+                fi  ## $NoCards
+                continue
+            fi
         fi
     fi
 

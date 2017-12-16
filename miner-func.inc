@@ -37,7 +37,7 @@ _set_ALLE_MINER_from_path () {
         declare -n actInternalAlgos="Internal_${m_name}_${m_version//\./_}_Algos"
 
         # Erst die Ausnahme-Namen, wenn es welche gibt...
-        internalAlgoNames=$(ls ${m_name}#Coin2Algo.names 2>/dev/null)
+        internalAlgoNames=$(ls NiceHash#${m_name}.names 2>/dev/null)
         if [ ${#internalAlgoNames} -gt 0 ]; then
             cat ${internalAlgoNames} | grep -v -e '^#' | readarray -n 0 -O 0 -t NH_CC_Algos
             # Aufbau des Arrays Internal_${miner_name}_${miner_version}_Algos
@@ -51,7 +51,7 @@ _set_ALLE_MINER_from_path () {
 
         # .. dann kommen die restlichen NiceHash-Algonamen dazu,
         #    falls es noch welche gibt, die nicht schon erfasst wurden.
-        miner_algos=$(cat ${m_name}#${m_version}.algos | grep -v -e '^#' ) &>/dev/null
+        miner_algos=$(< ${m_name}#${m_version}.algos) &>/dev/null
         for nh_algo in ${miner_algos}; do
             # 
             # Für die speziellen Miner, die zwei Algorithmen laufen lassen können.
@@ -63,12 +63,30 @@ _set_ALLE_MINER_from_path () {
             # Hier der ":" ist in Variablennamen nicht erlaubt... Moment mal...
             # ---> Die Combined Algos kommen nicht in Variablennamen vor, nur als "Key" von Assoziativen Arrays.
             # ---> Und da schadet der ":" gar nicht. Deshalb lassen wir das mal so.
-            nh_algo=${nh_algo//:/SOS}
-            [ -z "${actInternalAlgos[${nh_algo}]}" ] && actInternalAlgos[${nh_algo}]="${nh_algo}"
+            #nh_algo=${nh_algo//:/SOS}
+            if [ "${actInternalAlgos[${nh_algo}]}" == "" ]; then
+                actInternalAlgos[${nh_algo}]="${nh_algo}"
+            fi
         done
 
     done  ## for minerName in ${ALLE_MINER[@]}
     cd ${workdir} >/dev/null
+}
+
+# Hat eine bestimmte Berechtigung, aber es könnten Miner ohne Versionsangabe dabei "übrig" bleiben.
+# Das ist prinzipiell in Ordnung. Es gibt eben nur 1 Version dieses Miners und die ist der Nullstring ""
+# In den Strings sieht das dann so aus: "${algo}#${miner_name}#" ??? <--- Glaube nicht, dass das stimmt!
+#    --->   Muss erst überprüft werden. Das abschließende "#" könnte fehlen.
+#    --->   Und wie der "read" auf reine Spaces am Ende reagiert, muss auch sichergestellt sein
+_set_ALLE_MINER_from_path_no_longer () {
+    rm -f t_a_$$
+    cd $1
+    ls *.algos *.names \
+        | tee >(grep \.algos | grep -o -e '^[^#]*' >>t_a_$$) \
+        | grep -e NiceHash# | sed -e 's/NiceHash#//;s/\.names$//' >>t_a_$$
+    ALLE_MINER=$(sort t_a_$$ | uniq)
+    cd - >/dev/null
+    rm -f t_a_$$
 }
 
 #
