@@ -1,0 +1,29 @@
+Pool Infos
+
+Miner Software Benutzer und Passwort angaben
+-u Benutzername.worker
+-p Passwort
+
+
+Nice Hash Pools
+Bei NH ist der Benutzername -u "BTC" immer die  BTC adresse und Passwort -p "x"
+[Anmeldedaten]
+-u BTC-Adresse.Worker
+-p x
+
+
+Suprnova Pool
+Bei SN ist setzt sich der Benutzername durch das "Weblogin.Worker" (welches bei SN erst erstellt werden muss nach der Seiten anmeldung und registrierung) und dem Passwort "Worker Passwort"
+[Anmeldedaten]
+-u Weblogin.Worker
+-p Worker Passwort
+
+Intern bei Suprnova muss zu jedem Coin die ensprechende Wallet Adresse zum Coin hinterlegt werden so dass man auszahlungen in dem ensprechenden Coin bekommen kann.
+
+Miningpoolhub
+Hier ist auch eine Registrierung erforderlich, dort bekommt man eine id welches beim Benutzernamen angegeben werden muss.
+[Anmeldedaten]
+-u [id].workername
+-p x
+
+Intern bei Miningpoolhub muss zu jedem Coin die ensprechende Wallet Adresse zum Coin hinterlegt werden so dass man auszahlungen in dem ensprechenden Coin bekommen kann.
