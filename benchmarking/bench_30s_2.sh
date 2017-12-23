@@ -1018,6 +1018,7 @@ if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
     miner_name=${minerChoice[$(($choice-1))]}
     miner_version=${minerVersion[$(($choice-1))]}
 fi
+MINER=${miner_name}#${miner_version}
 
 ################################################################################
 #
@@ -1221,7 +1222,9 @@ if [ ! "${live_mode}" == "o" ]; then
                     algoMines=$(echo "scale=8;   ${bENCH[$algorithm]}  \
                                                * ${KURSE[$ccoin]}  \
                                                / ${k_base}^3  \
-                                               * ( 100 - "${PoolFee[${ppool}]}" ) / 100 \
+                                               * ( 100 - "${PoolFee[${ppool}]}" )    \
+                                               * ( 100 - "${MINER_FEES[${MINER}]}" ) \
+                                               / 10000
                                  " | bc )
                     menuMines=( ${menuMines[@]} "${algoMines}" )
                 else
@@ -1248,7 +1251,9 @@ if [ ! "${live_mode}" == "o" ]; then
                     # "Mines" in BTC berechnen
                     algoMines=$(echo "scale=8;   86400 * ${BlockReward[${ccoin}]} * ${Coin2BTC_factor[${ccoin}]}   \
                                                / ( ${BlockTime[${ccoin}]} * (1 + ${CoinHash[${ccoin}]} / ${bENCH[$algorithm]}) ) \
-                                               * ( 100 - "${PoolFee[${ppool}]}" ) / 100 \
+                                               * ( 100 - "${PoolFee[${ppool}]}" )    \
+                                               * ( 100 - "${MINER_FEES[${MINER}]}" ) \
+                                               / 10000
                                  " | bc )
                     menuMines=( ${menuMines[@]} "${algoMines}" )
                 else

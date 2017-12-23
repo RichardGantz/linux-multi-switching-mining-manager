@@ -16,6 +16,20 @@ _MINERFUNC_INCLUDED=1
 #
 # Alle Algos aller Miner- und Versionsnummern werden in alle Mining_${m_name}_${m_version//\./_}_Algos eingelesen
 #
+_read_in_minerFees_to_MINER_FEES () {
+    local minerRow minerFee minerName
+    unset READARR
+    unset MINER_FEES; declare -Ag MINER_FEES
+
+    cat ${LINUX_MULTI_MINING_ROOT}/miners/all.miner.fees \
+	| grep -E -v -e "^#|^$"  \
+	| readarray -n 0 -O 0 -t READARR
+    for ((i=0; $i<${#READARR[@]}; i++)) ; do
+	echo ${READARR[$i]}
+	MINER_FEES[${READARR[$i]%:*}]=${READARR[$i]#*:}
+    done
+}
+
 _set_ALLE_MINER_from_path () {
     local workdir=$(pwd)
     cd $1
@@ -52,6 +66,7 @@ _set_ALLE_MINER_from_path () {
         done
 
     done  ## for minerName in ${ALLE_MINER[@]}
+    _read_in_minerFees_to_MINER_FEES
     cd ${workdir} >/dev/null
 }
 
@@ -134,3 +149,4 @@ _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays () {
         _split_into_Available_and_Missing_Miner_Algo_Arrays ${m_name} ${m_version}
     done
 }
+

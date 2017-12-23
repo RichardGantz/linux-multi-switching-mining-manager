@@ -306,7 +306,7 @@ while :; do
     #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
     if [[ $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds < $(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s) ]]; then
         echo "GPU #${gpu_idx}: ###---> Updating Arrays bENCH[] and WATTs[] (and more) from $IMPORTANT_BENCHMARK_JSON"
-        _read_IMPORTANT_BENCHMARK_JSON_in
+        _read_IMPORTANT_BENCHMARK_JSON_in without_miners
     fi
 
     # Die Reihenfolge der Dateierstellungen durch ../algo_multi_abfrage.sh ist:
@@ -499,6 +499,8 @@ while :; do
         done
 
         read algo miner_name miner_version muck888 <<<${algorithm//#/ }
+        MINER=${miner_name}#${miner_version}
+
         # Das matched beides ein ganzes Wort
         #REGEXPAT="\<${algo}\>"
         REGEXPAT="\b${algo}\b"
@@ -517,7 +519,9 @@ while :; do
                     algoMines=$(echo "scale=8;   ${bENCH[$algorithm]}  \
                                                * ${KURSE[$algo]}  \
                                                / ${k_base}^3  \
-                                               * ( 100 - "${PoolFee[${pool}]}" ) / 100 \
+                                               * ( 100 - "${PoolFee[${pool}]}" )     \
+                                               * ( 100 - "${MINER_FEES[${MINER}]}" ) \
+                                               / 10000
                                  " | bc )
                     printf "$algorithm\n${WATTS[$algorithm]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
                 else
@@ -540,7 +544,9 @@ while :; do
                     # "Mines" in BTC berechnen
                     algoMines=$(echo "scale=8;   86400 * ${BlockReward[$algo]} * ${Coin2BTC_factor[$algo]}   \
                                                / ( ${BlockTime[$algo]} * (1 + ${CoinHash[$algo]} / ${bENCH[$algorithm]}) ) \
-                                               * ( 100 - "${PoolFee[${pool}]}" ) / 100 \
+                                               * ( 100 - "${PoolFee[${pool}]}" )     \
+                                               * ( 100 - "${MINER_FEES[${MINER}]}" ) \
+                                               / 10000
                                  " | bc )
                     # Wenn gerade nichts für den Algo bezahlt wird, übergehen:
                     [[ ((${algoMines//\./} > 0)) ]] \
