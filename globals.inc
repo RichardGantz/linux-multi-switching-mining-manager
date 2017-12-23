@@ -43,7 +43,7 @@ BOERSE["bittrex"]=0.25
 BOERSE["cryptopia"]=0.2
 POOLS["nh"]="nicehash.com";             PoolFee["nh"]=3.5      PoolActive["nh"]=1
 #      sn = 0 + BOERSE["bittrex"]  0,25 oder BOERSE["cryptopia"] 0.2
-POOLS["sn"]="suprnova.cc";              PoolFee["sn"]=0.25     PoolActive["sn"]=1
+POOLS["sn"]="suprnova.cc";              PoolFee["sn"]=0.25     PoolActive["sn"]=0
 #      mh= 0,9 + BOERSE["bittrex"] 0,25 oder BOERSE["cryptopia"] 0.2
 POOLS["mh"]="hub.miningpoolhub.com";    PoolFee["mh"]=1.15     PoolActive["mh"]=0
 
