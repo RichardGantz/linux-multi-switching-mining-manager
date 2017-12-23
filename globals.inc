@@ -30,17 +30,25 @@ InetPingStack=(
 
 export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
 
-# Ein Branch wird den letzten Stand für ausschließlich NiceHash halten.
-# Da muss es diese Variable noch geben.
-domain="nicehash.com"
-
-# Die Pools, bzw. Anbieter, die wir am besten an den Servernamen unterscheiden können
+# Die Pools, bzw. Abgabestellen, die wir am besten an einem Kürzel erkennen
+#     und die in verschiedenen Domains zu Hause sind.
+# Assoziative Arrays, die durch das Pool-Kürzel $pool indexiert werden
 # 0 bedeutet: Disabled
 # 1 bedeutet: Enabled, wird abgefragt und berechnet und ge-MinerShelld
-declare -Ag DOMAINS
-DOMAINS["nicehash.com"]=0
-DOMAINS["suprnova.cc"]=1
-declare domain="suprnova.cc"
+declare -Ag OfflineInfo POOLS PoolFee PoolActive BOERSE
+OfflineInfo["nh"]="all.nicehash"
+OfflineInfo["sn"]="all.suprnova"
+OfflineInfo["mh"]="all.miningpoolhub"
+BOERSE["bittrex"]=0.25
+BOERSE["cryptopia"]=0.2
+POOLS["nh"]="nicehash.com";             PoolFee["nh"]=3.5      PoolActive["nh"]=1
+#      sn = 0 + BOERSE["bittrex"]  0,25 oder BOERSE["cryptopia"] 0.2
+POOLS["sn"]="suprnova.cc";              PoolFee["sn"]=0.25     PoolActive["sn"]=1
+#      mh= 0,9 + BOERSE["bittrex"] 0,25 oder BOERSE["cryptopia"] 0.2
+POOLS["mh"]="hub.miningpoolhub.com";    PoolFee["mh"]=1.15     PoolActive["mh"]=0
+
+declare pool="sn"
+declare domain=${POOLS["sn"]}
 
 ### gpu-abfrage.sh spezifische Variablen
 SYSTEM_FILE="${LINUX_MULTI_MINING_ROOT}/gpu_system.out"
@@ -59,6 +67,8 @@ COIN_PRICING_ARR="${LINUX_MULTI_MINING_ROOT}/WhatToMine.in"
 COIN_TO_BTC_EXCHANGE_WEB="${LINUX_MULTI_MINING_ROOT}/BittrexSummaries.json"
 COIN_TO_BTC_EXCHANGE_ARR="${LINUX_MULTI_MINING_ROOT}/BittrexSummaries.in"
 
+MINER_FEES="${LINUX_MULTI_MINING_ROOT}/miners/all.miner.fees"
+
 SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
 
 # Wie rechnet NiceHash und die Miner, wenn sie sagen GH/s?
@@ -70,6 +80,7 @@ GRID[1]="solar"
 GRID[2]="solar_akku"
 
 declare -Ag DO_AUTO_BENCHMARK_FOR
+TWEAK_CMD_START_PARAMS="${LINUX_MULTI_MINING_ROOT}/benchmarking/.start_params_for_tweak_commands_sh"
 
 # Für die bech_30s_2.sh und MinerShell.sh zum Zählen der hashCount's
 # Der Output des "zm" Equihash Miners sieht so aus:

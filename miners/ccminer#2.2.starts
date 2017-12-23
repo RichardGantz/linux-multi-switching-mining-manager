@@ -16,13 +16,13 @@ LIVE_PARAMETERSTACK=(
     "domain"
     "algo_port"
     "worker"
-    "InternalAlgos[${algo}]"
+    "MiningAlgos[${coin}]"
 )
 
 function PREP_LIVE_PARAMETERSTACK () {
-    LIVE_PARAMETERSTACK[-1]="InternalAlgos[${algo}]"
-    declare -g coin_or_algoContinent="${algo}"
-    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${algo}.${continent}"
+    LIVE_PARAMETERSTACK[-1]="MiningAlgos[${coin}]"
+    declare -g coin_or_algoContinent="${coin}"
+    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${coin}.${continent}"
 }
 
 BENCH_START_CMD='%s/%s --devices %s -a %s --no-color --benchmark'
@@ -30,10 +30,10 @@ BENCH_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
     "gpu_idx"
-    "InternalAlgos[${algo}]"
+    "MiningAlgos[${coin}]"
 )
 
 function PREP_BENCH_PARAMETERSTACK () {
-    BENCH_PARAMETERSTACK[-1]="InternalAlgos[${algo}]"
+    BENCH_PARAMETERSTACK[-1]="MiningAlgos[${coin}]"
 }
 

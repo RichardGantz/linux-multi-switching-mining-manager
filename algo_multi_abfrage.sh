@@ -75,7 +75,7 @@ _check_InternetConnection
 declare -i SECS=31 nowSecs
 while :; do
 
-    if [ ${DOMAINS["suprnova.cc"]} -eq 1 ]; then
+    if [ ${PoolActive["sn"]} -eq 1 ]; then
 	echo "------------------   WhatToMine BLOCK_REWARD  ----------------------"
 	_prepare_COIN_PRICING_from_the_Web; RC=$?
 	echo "--------------------------------------------------------------------"
@@ -87,7 +87,7 @@ while :; do
 	[[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) COIN-BTC-Faktor Abruf nicht erfolgreich." | tee -a ${ERRLOG}
     fi
 
-    if [ ${DOMAINS["nicehash.com"]} -eq 1 ]; then
+    if [ ${PoolActive["nh"]} -eq 1 ]; then
 	echo "------------------   Nicehash-Kurse           ----------------------"
 	_prepare_ALGO_PORTS_KURSE_from_the_Web; RC=$?
 	echo "--------------------------------------------------------------------"

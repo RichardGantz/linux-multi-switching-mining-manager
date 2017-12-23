@@ -9,7 +9,12 @@
 # 
 # ## benchmark aufruf vom ccminer mit allen algoryhtmen welcher dieser kann
 #   Vor--benchmark um einen ersten überblick zu bekommen über algos und hashes
-# 
+#
+# Exit-Stati im --auto Mode:
+#   99: No benchmark possible
+#   98: No algo_port found
+#   97: No coins for miningAlgo available - Kann eigentlich nicht auftreten. Bzw. man könnte coin=${miningAlgo} setzen (für CCminer)
+#   96: Keine Kombination aus Coin und MiningAlgo in den Offline-Dateien gefunden.
 #if [ $# -eq 0 ]; then kill -9 $$; fi
 
 # GLOBALE VARIABLEN, nützliche Funktionen
@@ -27,7 +32,7 @@ BENCHMARKING_WAS_STARTED=0
 # wird diese Datei kurz vor dem sleep 1 in der Endlosschleife erzeugt.
 # tweak_commands.sh setzt den kill -15 Befehl dann nur ab, wenn diese Datei existiert.
 # Sobald der Prozess aus dem Sleep kommt, verarbeitet er das Signal und schließt die Berechnungen ab.
-READY_FOR_SIGNALS=benchmarker_ready_for_kill_signal
+READY_FOR_SIGNALS=.$$_benchmarker_ready_for_kill_signal
 
 declare -i t_base=3             # Messintervall in Sekunden für Temperatur, Clocks und Power in Sekunden
 
@@ -131,6 +136,219 @@ EOF
 done
 #set -- "${POSITIONAL[@]}" # restore positional parameters
 
+#########################################################################
+# Auswertung der 2 Logdateien: Die des Miners und die eigene Wattmessung
+# Benötigt werden die folgenden Variablen:
+#     $hash_line
+#     $watt_line
+# Danach sind die folgenden Variablen gültig:
+#     hashCount
+#     wattCount
+#     hashSum
+#     wattSum
+#     maxWATT
+#     avgHASH
+#     avgWATT
+#     quotient
+#     hashCountPerSeconds
+function _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
+    #
+    # 1. Zähle die Messwerte ab der ersten Zeile des Messzyklus (hashCount bzw. wattCount)...
+    # 2. Bilde gleichzeitig die Summe der Werte...
+    # 3. Halte gleichzeitig den maximalen Wattwert fest...
+    #
+    # Zuerst die BenchLog mit den Hashwerten...
+    hashCount=$(cat ${BENCHLOGFILE} \
+              | tail -n +$hash_line \
+              | sed -e 's/ *(yes!)$//g' \
+              | gawk -e "${detect_zm_hash_count}" \
+              | grep -e "/s$" \
+              | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
+                             | tee ${temp_hash_bc} | bc >${temp_hash_sum} ) \
+              | wc -l \
+             )
+    # ... dann die WattLog
+    wattCount=$(cat "${WATTSLOGFILE}" \
+              | tail -n +$watt_line \
+              | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >${temp_watt_sum} ) \
+                    >(gawk -M -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print max}' >${WATTSMAXFILE} ) \
+              | wc -l \
+             )
+    hashSum=$(< ${temp_hash_sum})
+    wattSum=$(< ${temp_watt_sum})
+
+    if [ ${hashCount} -gt 0 -a $wattCount -gt 0 -a $hASH_DURATION -gt 0 ]; then
+        echo "scale=2; \
+              avghash     = $hashSum / $hashCount;     \
+              avgwatt     = $wattSum / $wattCount;     \
+              quotient    = avghash  / avgwatt;        \
+              hashpersecs = $hashSum / $hASH_DURATION; \
+              print avghash, \" \", avgwatt, \" \", quotient, \" \", hashpersecs" | bc \
+            | read avgHASH avgWATT quotient hashCountPerSeconds
+    else
+        avgHASH=0; avgWATT=0; quotient=0; hashCountPerSeconds=0
+    fi
+    maxWATT=$(< "${WATTSMAXFILE}")
+}
+
+#########################################################################
+#
+#             Das ist der Kern der Endlosschleife
+#             -----------------------------------
+#
+# 
+#
+#########################################################################
+function _measure_one_whole_WattsHashes_Cycle () {
+    ###------------------------------------------------------------------
+    ### 1. Wattwert messen und in Datei protokollieren
+    ###------------------------------------------------------------------
+    if [ ! $NoCards ]; then
+        nvidia-smi --id=${gpu_idx} --query-gpu=power.draw --format=csv,noheader \
+            | gawk -e 'BEGIN {FS=" "} {print $1}' >>${WATTSLOGFILE}
+    else
+        echo $((222 + 2 * $wattCount)) >>${WATTSLOGFILE}
+    fi
+
+    ###------------------------------------------------------------------
+    ### 2. Die Flags für die Minimum Zählwerte prüfen und löschen
+    ###------------------------------------------------------------------
+
+    ### Wenn die Minimum Wattwerte Anzahl erreicht ist, signalisiere das durch zurücksetzen der Flagge
+    wattCount=$(cat "${WATTSLOGFILE}" \
+              | tail -n +$watt_line \
+              | wc -l \
+             )
+    [ $wattCount -ge $MIN_WATT_COUNT ] && countWatts=0
+
+    ### Hashwerte aus dem Hintergrund nachsehen, nur die Zeilen zählen und Flagge setzen, sobald die Minimum Hashwerte erreicht sind.
+    hashCount=$(cat ${BENCHLOGFILE} \
+              | tail -n +$hash_line \
+              | sed -e 's/ *(yes!)$//g' \
+              | gawk -e "${detect_zm_hash_count}" \
+              | grep -c "/s$"
+             )
+    [ $hashCount -ge $MIN_HASH_COUNT ] && countHashes=0
+
+    ###------------------------------------------------------------------
+    ### 3. Die Flags für die Minimum Zählwerte prüfen und löschen
+    ###------------------------------------------------------------------
+
+    if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
+        ###
+        ### TWEAKING MODE
+        ###
+        TWEAK_CMD_LOG_AGE=$(stat -c %Y ${TWEAK_CMD_LOG})
+        if [ $new_TweakCommand_available -lt ${TWEAK_CMD_LOG_AGE} ]; then
+            #
+            # Ein neuer Messzyklus muss initiaisiert werden.
+            # Das betrifft eigentlich auch die Minimalwerte-Verwaltung, die eigentlich auch beim Tweaken gelten sollten.
+            # Es macht Sinn, immer auf mindestens 20 Hashwerte und 30 Sekunden Laufzeit zu achten, nicht wahr?
+            #
+            new_TweakCommand_available=${TWEAK_CMD_LOG_AGE}
+            bENCH_START=${TWEAK_CMD_LOG_AGE}
+
+            #
+            # Diese Flaaggen auf 1 heisst: Die Minimum-Zähler sind wieder scharf.
+            # Mal sehen, ob wir das auch realisiert bekommen, dass die _On_Exit Routine das berücksichtigt.
+            #
+            countHashes=1
+            countWatts=1
+
+            # Hole das gerade gegebene Tweaking-Kommando aus der Logdatei
+            tweak_msg="$(tail -n 1 ${TWEAK_CMD_LOG})"
+            if [ ${#tweak_msg} -gt 0 ]; then
+                #
+                # Merken, welche Tweak-Kommandos insgesamt gegeben wurden. Array ist Unique, das heisst: Ein Member pro Kommando
+                #
+                TWEAK_MSGs["${tweak_msg%=*}"]="${tweak_msg}"
+
+                #
+                # Vorbereiten des Suchmusters, damit das Kommando auch gefunden werden kann.
+                # Unglücklicherweise enthalten manche Kommandos Zeichen, die von einer RegExp ganz anders interpretiert werden.
+                # Das Kommando könnte nicht gefunden werden...
+                #     ---> Bitte prüfen:
+                #     ---> ... es sei denn, man bekäme es hin, dass ein harter Stringvergleich gemacht wird, ohne dass
+                #     ---> die Metazeichen interpretiert werden.
+                # Hier realisieren wir das, indem wir die Metazeichen mit einem Backslash versehen und sie so vor der Interpretation
+                #      als Metazeichen schützen.
+                #      Zu schützende Zeichen sind bisher die folgenden: "[", "]", "."
+                #
+                tweak_pat="${tweak_msg//[[]/\\[}"
+                tweak_pat="${tweak_pat//[\]]/\\]}"
+                tweak_pat="${tweak_pat//[.]/\.}"
+                if [ $NoCards ]; then
+                    # Hänge ein paar andere Werte an die Logdateien - zum Testen
+                    cat test/more_hash_values.fake >>${BENCHLOGFILE}
+                    #cat more_watt_values.fake >>${WATTSLOGFILE}
+                fi
+
+                #
+                # Suchen des letzten Kommandos in den beiden Logfiles für Hash- und Wattwerte und Ausgabe der Zeilennummer,
+                #        die der Zeile mit dem Kommando folgt.
+                #        grep -n schreibt die Zeilennummer gefolgt von einem "-" vor jede gefundene Zeile.
+                #        tail -n 1 wartet die allerletzte gefundene Zeile ab.
+                #        gawk spaltet die Zeile am "-" auf und $1 ist die Zeilennummer des Kommandos und muss um 1 erhöht werden.
+                #
+                hash_line=$(cat ${BENCHLOGFILE} \
+                          | grep -n -e "${tweak_pat}" \
+                          | tail -n 1 \
+                          | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+                         )
+                watt_line=$(cat "${WATTSLOGFILE}" \
+                          | grep -n -e "${tweak_pat}" \
+                          | tail -n 1 \
+                          | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+                         )
+                
+                #
+                # Hinweis für den Benutzer, dass ein neuer Zyklus beginnt.
+                #
+                printf "${tweak_msg}\n" \
+                    | tee -a ${TWEAKLOGFILE}
+                printf "Hashwerte ab jetzt ab Zeile $hash_line und Wattwerte ab Zeile $watt_line\n" \
+                    | tee -a ${TWEAKLOGFILE}
+            fi
+        fi  ## if [ $new_TweakCommand_available -lt ${TWEAK_CMD_LOG_AGE} ]
+        
+        hASH_DURATION=$(($(date +%s)-${bENCH_START}))
+        _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages
+
+        if [ $((queryCnt++ % ${t_base})) -eq 0 ]; then
+            _query_actual_Power_Temp_and_Clocks
+            # Möglich sind: ( "Graphics" "SM" "Memory" "Video" )
+            # ("Power Draw" "Power Limit" "Default Power Limit" "Enforced Power Limit" "Min Power Limit" "Max Power Limit")
+            printf "%5iMHz/%5iMHz %5iMHz/%5iMHz %7sW/%7sW %3i°C\n" \
+                   ${actClocks["Graphics"]} ${maxClocks["Graphics"]} \
+                   ${actClocks["Memory"]}   ${maxClocks["Memory"]} \
+                   ${actPowers["Power Limit"]:0:$(($(expr index ${actPowers["Power Limit"]} ".")+2))} \
+                   ${actPowers["Max Power Limit"]:0:$(($(expr index ${actPowers["Max Power Limit"]} ".")+2))} \
+                   ${actTemp} \
+                | tee -a ${TWEAKLOGFILE}
+        fi
+        printf "%12s H; %#12s W; %#10s H/W\n" \
+               ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} \
+               ${avgWATT:0:$(($(expr index "${avgWATT}" ".")+2))} \
+               ${quotient:0:$(($(expr index "${quotient}" ".")+2))} \
+            | tee -a ${TWEAKLOGFILE}
+    else
+        ###
+        ### "Normal" BENCHMARK MODE
+        ###
+        printf "%3s Hashwerte von mindestens $MIN_HASH_COUNT und %3s Wattwerte von mindestens $MIN_WATT_COUNT\n" \
+               ${hashCount} ${wattCount}
+    fi
+
+    # Eine Sekunde pausieren vor dem nächsten Wattwert.
+    # Jetzt auch bereit für Unterbrechnungen bzw. Beenden der Messzyklen
+    echo "I'm going to sleep now" >${READY_FOR_SIGNALS}
+    sleep 1
+    # Jetzt sind ale Funktionen geladen, bekannt und definiert.
+    # Eine Sekunde Messung ist wenigstens sauber gelaufen. Alle Variablen sind konsistent.
+    BENCHMARKING_WAS_STARTED=1
+    rm -f ${READY_FOR_SIGNALS}
+}
+
 function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     ####################################################################################
     ###
@@ -139,7 +357,7 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     ####################################################################################
 
     # 
-    # ccminer log vom algo test/benchmark_$algo_${gpu_uuid}.log 
+    # ccminer log vom coin test/benchmark_$coin_${gpu_uuid}.log 
     # 
     #[2017-10-28 16:46:56] 1 miner thread started, using 'lyra2v2' algorithm.
     #[2017-10-28 16:46:56] GPU #0: Intensity set to 20, 1048576 cuda threads
@@ -158,10 +376,6 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     #[2017-10-28 16:40:04] Total: 8997.08 kH/s
 
 
-    # Der Zeitstempel dieser Messung, nach dem Herausfallen aus dem Sleep am Ende der Endlosschleife,
-    # dem Eintritt in die On_Exit() Routine, dem kill <ccminer.pid und 1 Sekunde sleep.
-    bENCH_DATE=$BENCH_OR_TWEAK_END
-
     # Die WATT-Werte noch zu Integern machen und dabei aufrunden
     avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
     maxWATT=$((${maxWATT/%[.][[:digit:]]*}+1))
@@ -169,27 +383,27 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     declare -i tempazb=0
     # Full Power ($?=100) oder Effizienz Messung ($?=99)
     [[ ${bENCH_KIND} -eq 888 ]] \
-        && sed_search='/"Name": "'${algo}'",/{                   # if found ${algo}
-             N;N;N;/"MinerName": "'${miner_name}'",/{            # appe(N)d 3 lines; if found ${miner_name}
-                 N;/"MinerVersion": "'${miner_version}'",/{      # appe(N)d 1 line;  if found ${miner_version}
-                     N;N;N;N;N;N;N;N;/"BENCH_KIND": 888,/{       # appe(N)d 8 lines; if found BENCH_KIND 888
-             =;Q100}}}};                                         # (=) print line-number; Quit and set $?=100
-             ${Q99}                                              # on last line Quit and set $?=99 (NOT FOUND)
+        && sed_search='/"Name": "'${miningAlgo}'",/{           # if found ${miningAlgo}
+                 N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 1 line;  if found ${miner_name}
+                 N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
+                     N;N;N;N;N;N;N;/"BENCH_KIND": 888,/{       # appe(N)d 7 lines; if found BENCH_KIND 888
+             =;Q100}}}};                                       # (=) print line-number; Quit and set $?=100
+             ${Q99}                                            # on last line Quit and set $?=99 (NOT FOUND)
              ' \
-        || sed_search='/"Name": "'${algo}'",/{                   # if found ${algo}
-             N;N;N;/"MinerName": "'${miner_name}'",/{            # appe(N)d 3 lines; if found ${miner_name}
-                 N;/"MinerVersion": "'${miner_version}'",/{      # appe(N)d 1 line;  if found ${miner_version}
-                     N;N;N;N;N;N;N;N;/"BENCH_KIND": 888,/d;{     # appe(N)d 8 lines; if found 888, (d)elete and continue
-             =;Q100}}}};                                         # otherwise (=) print line-number; Quit and set $?=100
-             ${Q99}                                              # on last line Quit and set $?=99 (NOT FOUND)
+        || sed_search='/"Name": "'${miningAlgo}'",/{           # if found ${miningAlgo}
+                 N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 1 line;  if found ${miner_name}
+                 N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
+                     N;N;N;N;N;N;N;/"BENCH_KIND": 888,/d;{     # appe(N)d 7 lines; if found 888, (d)elete and continue
+             =;Q100}}}};                                       # otherwise (=) print line-number; Quit and set $?=100
+             ${Q99}                                            # on last line Quit and set $?=99 (NOT FOUND)
              '
     sed -n -e "${sed_search}" \
         ${IMPORTANT_BENCHMARK_JSON} \
-        > tempazb
+        >${TEMPAZB_FILE}
     _Q_=$?
-    # Die BenchmarkSpeed Zeile haben wir auf der Suche nach dem 888 um 7 Zeilen überschritten.
+    # Die BenchmarkSpeed Zeile haben wir auf der Suche nach dem 888 um 6 Zeilen überschritten.
     # Deshalb müssen wir die abziehen, FALLS er etwas gefunden hat (Q100)
-    [[ ${_Q_} -eq 100 ]] && tempazb=$(($(< "tempazb")-7))
+    [[ ${_Q_} -eq 100 ]] && tempazb=$(($(< "${TEMPAZB_FILE}")-6))
 
     #" <-- wegen richtigem Highlightning in meinem proggi ... bitte nicht entfernen
     ## Benchmark Datei bearbeiten "wenn diese schon besteht"(wird erstmal von ausgegangen) und die zeilennummer ausgeben. 
@@ -215,18 +429,18 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     # Die Zeile, die wir nachher suchen ist "BenchmarkSpeed" in die Datei tempabz.
     # Die weiteren Felder liegen entsprechend auf höheren Zeilennummern.
     # tempazb     : BenchmarkSpeed
-    # tempazb +  1: ExtraLaunchParameters
-    # tempazb +  2: WATT
-    # tempazb +  3: MAX_WATT
-    # tempazb +  4: HASHCOUNT
-    # tempazb +  5: HASH_DURATION
-    # tempazb +  6: BENCH_DATE
-    # tempazb +  7: BENCH_KIND
-    # tempazb +  8: MinerFee
-    # tempazb +  9: GPUGraphicsClockOffset[3]
-    # tempazb + 10: GPUMemoryTransferRateOffset[3]
-    # tempazb + 11: GPUTargetFanSpeed
-    # tempazb + 12: PowerLimit
+    # tempazb +  1: WATT
+    # tempazb +  2: MAX_WATT
+    # tempazb +  3: HASHCOUNT
+    # tempazb +  4: HASH_DURATION
+    # tempazb +  5: BENCH_DATE
+    # tempazb +  6: BENCH_KIND
+    # tempazb +  7: GPUGraphicsClockOffset[3]
+    # tempazb +  8: GPUMemoryTransferRateOffset[3]
+    # tempazb +  9: GPUTargetFanSpeed
+    # tempazb + 10: PowerLimit
+    # tempazb + 11: HashCountPerSeconds
+    # tempazb + 12: BenchMode
     # tempazb + 13: LessThreads
 
     # ## in der temp_algo_zeile steht die zeilen nummer zum editieren des hashwertes
@@ -234,119 +448,119 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
         #
         # Das alles dient der Vorbereitung der zeilengenauen Bearbeitung der IMPORTANT_BENCHMARK_JSON
         #
-        echo "Die NiceHashID \"${ALGO_IDs[${algo}]}\" wird nun in der Zeile $((tempazb-4)) eingefügt" 
+
         echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
-        echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+2)) eingefügt"
-        echo "$((tempazb-4))s/: [0-9.]*,$/: ${ALGO_IDs[${algo}]},/"  >sed_insert_on_different_lines_cmd
-        echo     "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"           >>sed_insert_on_different_lines_cmd
-        echo "$((tempazb+2))s/: [0-9.]*,$/: ${avgWATT},/"           >>sed_insert_on_different_lines_cmd
+        echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+1)) eingefügt"
+        echo     "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"            >${TEMPSED_FILE}
+        echo "$((tempazb+1))s/: [0-9.]*,$/: ${avgWATT},/"           >>${TEMPSED_FILE}
         if [[ ${#maxWATT} -ne 0 ]]; then
-            echo "der MAX_WATT Wert ${maxWATT} wird nun in der Zeile $((tempazb+3)) eingefügt"
-            echo "$((tempazb+3))s/: [0-9.]*,$/: ${maxWATT},/"       >>sed_insert_on_different_lines_cmd
+            echo "der MAX_WATT Wert ${maxWATT} wird nun in der Zeile $((tempazb+2)) eingefügt"
+            echo "$((tempazb+2))s/: [0-9.]*,$/: ${maxWATT},/"       >>${TEMPSED_FILE}
         fi
         if [[ ${#hashCount} -ne 0 ]]; then
-            echo "der HASHCOUNT Wert ${hashCount} wird nun in der Zeile $((tempazb+4)) eingefügt"
-            echo "$((tempazb+4))s/: [0-9.]*,$/: ${hashCount},/"     >>sed_insert_on_different_lines_cmd
+            echo "der HASHCOUNT Wert ${hashCount} wird nun in der Zeile $((tempazb+3)) eingefügt"
+            echo "$((tempazb+3))s/: [0-9.]*,$/: ${hashCount},/"     >>${TEMPSED_FILE}
         fi
         if [[ ${#hASH_DURATION} -ne 0 ]]; then
-            echo "der HASH_DURATION Wert ${hASH_DURATION} wird nun in der Zeile $((tempazb+5)) eingefügt"
-            echo "$((tempazb+5))s/: [0-9.]*,$/: ${hASH_DURATION},/" >>sed_insert_on_different_lines_cmd
+            echo "der HASH_DURATION Wert ${hASH_DURATION} wird nun in der Zeile $((tempazb+4)) eingefügt"
+            echo "$((tempazb+4))s/: [0-9.]*,$/: ${hASH_DURATION},/" >>${TEMPSED_FILE}
         fi
         if [[ ${#bENCH_DATE} -ne 0 ]]; then
-            echo "der BENCH_DATE Wert ${bENCH_DATE} wird nun in der Zeile $((tempazb+6)) eingefügt"
-            echo "$((tempazb+6))s/: [0-9.]*,$/: ${bENCH_DATE},/"    >>sed_insert_on_different_lines_cmd
+            echo "der BENCH_DATE Wert ${bENCH_DATE} wird nun in der Zeile $((tempazb+5)) eingefügt"
+            echo "$((tempazb+5))s/: [0-9.]*,$/: ${bENCH_DATE},/"    >>${TEMPSED_FILE}
         fi
         if [[ ${#bENCH_KIND} -ne 0 ]]; then
-            echo "der BENCH_KIND Wert ${bENCH_KIND} wird nun in der Zeile $((tempazb+7)) eingefügt"
-            echo "$((tempazb+7))s/: [0-9.]*,$/: ${bENCH_KIND},/"    >>sed_insert_on_different_lines_cmd
-        fi
-        if [[ ${#minerFee} -ne 0 ]]; then
-            echo "der MinerFee Wert ${minerFee} wird nun in der Zeile $((tempazb+8)) eingefügt"
-            echo "$((tempazb+8))s/: [0-9.]*,$/: ${minerFee},/"      >>sed_insert_on_different_lines_cmd
+            echo "der BENCH_KIND Wert ${bENCH_KIND} wird nun in der Zeile $((tempazb+6)) eingefügt"
+            echo "$((tempazb+6))s/: [0-9.]*,$/: ${bENCH_KIND},/"    >>${TEMPSED_FILE}
         fi
         if [[ ${#grafik_clock} -ne 0 ]]; then
-            echo "der GRAFIK_CLOCK Wert ${grafik_clock} wird nun in der Zeile $((tempazb+9)) eingefügt"
-            echo "$((tempazb+9))s/: [0-9.]*,$/: ${grafik_clock},/"  >>sed_insert_on_different_lines_cmd
+            echo "der GRAFIK_CLOCK Wert ${grafik_clock} wird nun in der Zeile $((tempazb+7)) eingefügt"
+            echo "$((tempazb+7))s/: [0-9.]*,$/: ${grafik_clock},/"  >>${TEMPSED_FILE}
         fi
         if [[ ${#memory_clock} -ne 0 ]]; then
-            echo "der MEMORY_CLOCK Wert ${memory_clock} wird nun in der Zeile $((tempazb+10)) eingefügt"
-            echo "$((tempazb+10))s/: [0-9.]*,$/: ${memory_clock},/" >>sed_insert_on_different_lines_cmd
+            echo "der MEMORY_CLOCK Wert ${memory_clock} wird nun in der Zeile $((tempazb+8)) eingefügt"
+            echo "$((tempazb+8))s/: [0-9.]*,$/: ${memory_clock},/" >>${TEMPSED_FILE}
         fi
         if [[ ${#fan_speed}    -ne 0 ]]; then
-            echo "der FanSpeed Wert ${fan_speed} wird nun in der Zeile $((tempazb+11)) eingefügt"
-            echo "$((tempazb+11))s/: [0-9.]*,$/: ${fan_speed},/"    >>sed_insert_on_different_lines_cmd
+            echo "der FanSpeed Wert ${fan_speed} wird nun in der Zeile $((tempazb+9)) eingefügt"
+            echo "$((tempazb+9))s/: [0-9.]*,$/: ${fan_speed},/"    >>${TEMPSED_FILE}
         fi
         if [[ ${#power_limit}  -ne 0 ]]; then
-            echo "der POWER_LIMIT Wert ${power_limit} wird nun in der Zeile $((tempazb+12)) eingefügt"
-            echo "$((tempazb+12))s/: [0-9.]*,$/: ${power_limit},/"  >>sed_insert_on_different_lines_cmd
+            [ ${power_limit} -eq 0 ] && power_limit=${defPowLim[${gpu_idx}]}
+            echo "der POWER_LIMIT Wert ${power_limit} wird nun in der Zeile $((tempazb+10)) eingefügt"
+            echo "$((tempazb+10))s/: [0-9.]*,$/: ${power_limit},/"  >>${TEMPSED_FILE}
+        fi
+        if [[ ${#hashCountPerSeconds}  -ne 0 ]]; then
+            echo "der HashCountPerSeconds Wert ${hashCountPerSeconds} wird nun in der Zeile $((tempazb+11)) eingefügt"
+            echo "$((tempazb+11))s/: [0-9.]*,$/: ${hashCountPerSeconds},/"  >>${TEMPSED_FILE}
+        fi
+        if [[ ${#benchMode}  -ne 0 ]]; then
+            echo "der BenchMode Wert ${benchMode} wird nun in der Zeile $((tempazb+12)) eingefügt"
+            echo "$((tempazb+12))s/: [lo],$/: ${benchMode},/"  >>${TEMPSED_FILE}
         fi
         if [[ ${#less_threads}  -ne 0 ]]; then
             echo "der LESS_THREADS Wert ${less_threads} wird nun in der Zeile $((tempazb+13)) eingefügt"
-            echo "$((tempazb+13))s/: [0-9.]*$/: ${less_threads}/"   >>sed_insert_on_different_lines_cmd
+            echo "$((tempazb+13))s/: [0-9.]*$/: ${less_threads}/"   >>${TEMPSED_FILE}
         fi
         #
         # Das ist die tatsächliche Bearbeitung der IMPORTANT_BENCHMARK_JSON
         #
-        sed -i -f sed_insert_on_different_lines_cmd ${IMPORTANT_BENCHMARK_JSON}
+        sed -i -f ${TEMPSED_FILE} ${IMPORTANT_BENCHMARK_JSON}
     else
         #
         # Der Algo für diese Minerversion war nicht vorhanden und wird nun zu IMPORTANT_BENCHMARK_JSON hinzugefügt
         #
         BLOCK_FORMAT=(
             '      \"Name\": \"%s\",\n'
-            '      \"NiceHashID\": %s,\n'
-            '      \"MinerBaseType\": %s,\n'
             '      \"MinerName\": \"%s\",\n'
             '      \"MinerVersion\": \"%s\",\n'
             '      \"BenchmarkSpeed\": %s,\n'
-            '      \"ExtraLaunchParameters\": \"%s\",\n'
             '      \"WATT\": %s,\n'
             '      \"MAX_WATT\": %s,\n'
             '      \"HASHCOUNT\": %s,\n'
             '      \"HASH_DURATION\": %s,\n'
             '      \"BENCH_DATE\": %s,\n'
             '      \"BENCH_KIND\": %s,\n'
-            '      \"MinerFee\": %s,\n'
             '      \"GPUGraphicsClockOffset[3]\": %s,\n'
             '      \"GPUMemoryTransferRateOffset[3]\": %s,\n'
             '      \"GPUTargetFanSpeed\": %s,\n'
             '      \"PowerLimit\": %s,\n'
+            '      \"HashCountPerSeconds\": %s,\n'
+            '      \"BenchMode\": %s,\n'
             '      \"LessThreads\": %s\n'
         )
-        if [[ ${#maxWATT}             -eq 0 ]]; then maxWATT=0;         fi
-        if [[ ${#hashCount}           -eq 0 ]]; then hashCount=0;       fi
-        if [[ ${#hASH_DURATION}       -eq 0 ]]; then hASH_DURATION=0;   fi
-        if [[ ${#bENCH_DATE}          -eq 0 ]]; then bENCH_DATE=0;      fi
-        if [[ ${#bENCH_KIND}          -eq 0 ]]; then bENCH_KIND=0;      fi
-        if [[ ${#minerFee}            -eq 0 ]]; then minerFee=0;        fi
-        if [[ ${#miner_base_type}     -eq 0 ]]; then miner_base_type=9; fi
-        if [[ ${#grafik_clock}        -eq 0 ]]; then grafik_clock=0;    fi
-        if [[ ${#memory_clock}        -eq 0 ]]; then memory_clock=0;    fi
-        if [[ ${#fan_speed}           -eq 0 ]]; then fan_speed=0;       fi
-        if [[ ${#power_limit}         -eq 0 ]]; then power_limit=0;     fi
-        if [[ ${#less_threads}        -eq 0 ]]; then less_threads=0;    fi
+        if [[ ${#maxWATT}             -eq 0 ]]; then maxWATT=0;             fi
+        if [[ ${#hashCount}           -eq 0 ]]; then hashCount=0;           fi
+        if [[ ${#hASH_DURATION}       -eq 0 ]]; then hASH_DURATION=0;       fi
+        if [[ ${#bENCH_DATE}          -eq 0 ]]; then bENCH_DATE=0;          fi
+        if [[ ${#bENCH_KIND}          -eq 0 ]]; then bENCH_KIND=0;          fi
+        if [[ ${#grafik_clock}        -eq 0 ]]; then grafik_clock=0;        fi
+        if [[ ${#memory_clock}        -eq 0 ]]; then memory_clock=0;        fi
+        if [[ ${#fan_speed}           -eq 0 ]]; then fan_speed=0;           fi
+        if [[ ${#power_limit} -eq 0 || ${power_limit} -eq 0 ]]; then power_limit=${defPowLim[${gpu_idx}]}; fi
+        if [[ ${#hashCountPerSeconds} -eq 0 ]]; then hashCountPerSeconds=0; fi
+        if [[ ${#benchMode}           -eq 0 ]]; then benchMode=0;           fi
+        if [[ ${#less_threads}        -eq 0 ]]; then less_threads=0;        fi
         BLOCK_VALUES=(
-            ${algo}
-            ${ALGO_IDs[${algo}]}
-            ${miner_base_type}
+            ${miningAlgo}
             ${miner_name}
             ${miner_version}
             ${avgHASH}
-            ""
             ${avgWATT}
             ${maxWATT}
             ${hashCount}
             ${hASH_DURATION}
             ${bENCH_DATE}
             ${bENCH_KIND}
-            ${minerFee}
             ${grafik_clock}
             ${memory_clock}
             ${fan_speed}
             ${power_limit}
+            ${hashCountPerSeconds}
+            ${benchMode}
             ${less_threads}
         )
-        echo "Der Algo wird zur Datei ${IMPORTANT_BENCHMARK_JSON} hinzugefügt"
+        echo "Der MiningAlgo wird zur Datei ${IMPORTANT_BENCHMARK_JSON} hinzugefügt"
         sed -i -e '/^ \+]/,/}$/d'  ${IMPORTANT_BENCHMARK_JSON}
         printf ",   {\n"         >>${IMPORTANT_BENCHMARK_JSON}
         for (( i=0; $i<${#BLOCK_FORMAT[@]}; i++ )); do
@@ -358,14 +572,75 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 }
 
 function _delete_temporary_files () {
-    rm -f uuid bensh_gpu_30s_.index tweak_to_these_logs watt_bensh_30s.out COUNTER temp_hash_bc_input \
-       temp_hash_sum temp_watt_sum watt_bensh_30s_max.out tempazb temp_hash temp_einheit \
-       HASHCOUNTER benching_${gpu_idx}_algo sed_insert_on_different_lines_cmd* ccminer.pid \
-       ${READY_FOR_SIGNALS} MULTI_ALGO_INFO.json boo_count
+    rm -f ${temp_hash_bc} ${temp_hash_sum} ${temp_watt_sum} ${temp_avgs_bc} ${TEMPAZB_FILE} \
+       ${TEMPSED_FILE} ${WATTSMAXFILE} ${WATTSLOGFILE} ${CCMINER_PID} \
+       ${READY_FOR_SIGNALS}
+    [ -s "${TWEAK_CMD_LOG}" ] || rm -f ${TWEAK_CMD_LOG}
 }
-_delete_temporary_files
+#_delete_temporary_files
+
+function _terminate_Miner () {
+    if [ -s "${CCMINER_PID}" ]; then
+        printf "Beenden des Miners... "
+        kill $(< "${CCMINER_PID}")
+        if [ ! $NoCards ]; then
+            sleep $Erholung
+        fi
+        printf "done.\n"
+    fi
+}
+
+function _terminate_Logging_Terminal () {
+    if [ -n "${Bench_Log_PTY_Cmd}" ]; then
+        echo "Beenden des Logger-Terminals..."
+        kill_pids=$(ps -ef \
+               | grep -e "${Bench_Log_PTY_Cmd}" \
+               | grep -v 'grep -e ' \
+               | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
+        if [ -n "$kill_pids" ]; then
+            printf "Killing all ${Bench_Log_PTY_Cmd} processes... "
+            kill $kill_pids
+            printf "done.\n"
+        fi
+    fi
+}
 
 function _On_Exit () {
+    # So wie es aussieht hat nur das erste <Ctrl>-C oder kill -15 eine Auswirkung auf den Prozess.
+    # Er reagiert nicht mehr auf weitere <Ctrl>-C, sondern führt die Routine sauber zu Ende.
+    # Einmal ein EXIT Signal empfangen, führt er die _On_Exit aus ohne auf weitere EXIT's zu hören.
+    printf "\n--------->                   EXIT Signal erhalten                          <---------\n"
+
+    if [ -n "${_On_Exit_Counter_}" ]; then
+        ### ABBRUCH! ABBRUCH! ABBRUCH!
+        ### ABBRUCH! ABBRUCH! ABBRUCH!
+        #   Hier ist die CPU schon mal drin gewesen und kann nur durch einen zweiten kill hier rein gekommen sein.
+        #   Der verzweifelte Versuch des Benutzers vielleicht, den Prozess über <Ctrl>-C abzubrechen,
+        #   wobei es ein erstes mal schon geklappt hat.
+        # 1. Abbruch des Miners
+        [ -s "${CCMINER_PID}" ] && kill -9 $(< "${CCMINER_PID}")
+        
+        # 2. Abbruch des Logger-Terminals
+        kill_pids=$(ps -ef \
+           | grep -e "${Bench_Log_PTY_Cmd}" \
+           | grep -v 'grep -e ' \
+           | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
+        [ -n "$kill_pids" ] && kill -9 $kill_pids
+
+        # 3. Nachricht über die spannende Geschichte, wie es dazu kommen konnte.
+        #    Ein mögliches Szenario: Abbruch der Messung nach dem ersten Messzyklus.
+        #    Programm soll die Messungen zu Ende bringen, bis die Mindestanzehl an Werten ermittelt ist und gültige Werte geschrieben werden können.
+        #    Aber es kommen 90s oder 320s keine Werte oder der Benutzer drückt erneut <Ctrl>-C, weil etwas faul ist.
+        notify-send -u critical "### Es hat einen Eintrag in die Datei FATAL_ERRORS.log gegeben. ###" \
+                 "Bitte bei Gelegenheit prüfen. Die Programmlogik ist ein zweites mal in die _On_Exit() Behandlung gekommen."
+        echo $(date "+%F %H:%M:%S") "${This}.sh: Zwei Starts der _On_Exit-Verarbeitung deutet auf schwere Probleme" >>FATAL_ERRORS.log
+        echo "                    in der Prozesskontrolle hin. Ein Benchmarking konnte nicht abgeschlossen werden." >>FATAL_ERRORS.log
+        echo "                    GPU #${gpu_idx}: ${gpu_uuid}, ${miningAlgo}, ${algorithm}, ${coin_algorithm}" >>FATAL_ERRORS.log
+        
+        # 4. Unbedingtes Ende dieses Prozesses ohne weitere Diskussion...
+        kill -9 $$
+    else declare _On_Exit_Counter_="Hier waren wir schon mal drin"; fi
+
     ####################################################################################
     ###
     ###                        6. AUSWERTUNG DES BENCHMARKING
@@ -374,13 +649,22 @@ function _On_Exit () {
 
     # Als wichtiges Kennzeichen für den Ausstieg, denn da werden die Logdateien gesichert
     # und die Werte in die .json Datei geschrieben.
-    # Das darf nicht geschehen, wenn das Programm vorher abnormal beendet wurde und gar keine Daten erhoben wurden
+    # Das darf nicht geschehen, wenn das Programm vorher abnormal beendet wurde und gar keine Daten erhoben wurden.
+    # Deshalb wird diese Flagge erst gesetzt, wenn der Programmfluss aus dem ersten Sleep erfolgreich herauskommt.
+    # Dann muss midndestens der Minimum-Werte Benchmark vervollständigt werden.
     #
     if [[ ${BENCHMARKING_WAS_STARTED} -eq 1 ]]; then
-        # CCminer stoppen
-        echo "... Wattmessen ist beendet!!" 
-        echo "Beenden des Miners..."
-        kill -15 $(< "ccminer.pid")
+        # Einen eventuell unvollständigen Meszyklus kontrolliert und gültig zu Ende bringen
+        while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] ; do
+            if [ -z "${once}" ]; then
+                echo "---------> Die Messung wird bis zum Erreichen der Minimalwerte fortgesetzt <---------"
+                once=1
+            fi
+            _measure_one_whole_WattsHashes_Cycle
+        done
+
+        _terminate_Miner
+        _terminate_Logging_Terminal
 
         # Bis jetzt könnten Werte in das $BENCHLOGFILE hineingekommen sein.
         # Das ist vor allem für den Tweak-Fall interessant, weil der das $BENCHLOGFILE nochmal
@@ -388,125 +672,98 @@ function _On_Exit () {
         # ---> BITTE NOCHMAL NACHPROGRAMMIEREN!                      <---
         # ---> MUSS DAS BENCHFILE AUCH IM TWEAKMODE NOCHMAL SCANNEN! <---
         #
-        BENCH_OR_TWEAK_END=$(date +%s)
+        echo "... Wattmessen ist beendet!!" 
 
-        if [ ! $NoCards ]; then
-            sleep $Erholung
-        fi
+        # Der Zeitstempel dieser Messung,
+        # ... nach dem Herausfallen aus dem Sleep am Ende der Endlosschleife,
+        # ... dem Eintritt in die On_Exit() Routine,
+        # ... dem kill <${CCMINER_PID}
+        # ... und $Erholung Sekunde sleep.
+        BENCH_OR_TWEAK_END=$(date +%s);
+        LOGFILE_DATE=$(date "+%Y%m%d_%H%M%S")
+        bENCH_DATE=$BENCH_OR_TWEAK_END
 
-        echo "Beenden des Logger-Terminals..."
-        kill_pids=$(ps -ef \
-           | grep -e "${Bench_Log_PTY_Cmd}" \
-           | grep -v 'grep -e ' \
-           | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-        if [ ! "$kill_pids" == "" ]; then
-            printf "Killing all ${Bench_Log_PTY_Cmd} processes... "
-            kill $kill_pids
-            printf "done.\n"
-        fi
+        # bENCH_START wird direkt vor dem Start des Miners gesetzt.
+        # Im Falle des Tweakens wird bENCH_START nach jedem Tweak-Kommando neu gesetzt und der hashCount auf 0 zurückgesetzt.
+        # Die Differenz aus ${BENCH_OR_TWEAK_END} und ${bENCH_START} ist also die tatsächliche Dauer
+        #     zur Ermittlung der Anzahl an hashCount Werten
+        hASH_DURATION=$((${BENCH_OR_TWEAK_END}-${bENCH_START}))
 
-        # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
+        _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages
+
+        ####################################################################
+        #    Aufbereitung der Werte zum Schreiben in die benchmark_*.json
+        #
+
+        # Weil im Logfile die Einheiten gemischt sein können (kH/s bis TH/s) rechnen wir alles in H/s bzw. Sol/s um.
+        #      Diese Basiseinheit merken wir uns in der Variablem $temp_einheit
+        temp_einheit=$(cat ${BENCHLOGFILE} \
+                              | sed -e 's/ *(yes!)$//g' \
+                              | gawk -e "${detect_zm_hash_count}" \
+                              | grep -m1 "/s$" \
+                              | gawk -e '/H\/s$/ {print "H/s"; next}{print "Sol/s"}')
+
+        summary="\nZusammenfassung der ermittelten Werte:\n"
+        summary+="$(printf " Summe WATT   : %12s; Messwerte: %5s\n" $wattSum $wattCount)\n"
+        summary+="$(printf " Durchschnitt : %12s\n" $avgWATT)\n"
+        summary+="$(printf " Max WATT Wert: %12s\n" ${maxWATT})\n"
+        summary+="$(printf " Summe HASH   : %12s; Messwerte: %5s\n" ${hashSum:0:$(($(expr index "$hashSum" ".")+2))} $hashCount)\n"
+        summary+="$(printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} ${temp_einheit})\n"
+        printf "${summary}" | tee -a ${BENCHLOGFILE}
+
+        benchMode=${live_mode}
+
+        # Am Schluss Kopie der Log-Dateien, damit sie nicht verloren gehen, mit dem aktuellen Zeitpunkt
         if [ -f ${BENCHLOGFILE} ]; then
-            # Wir müssen vorläufig keine Escape-Sequenzen mehr ausfiltern
-            # sed -e 's/\x1B[[][[:digit:]]*m//g' ${BENCHLOGFILE} \
-            cp -f ${BENCHLOGFILE} ${LOGPATH}/benchmark_$(date "+%Y%m%d_%H%M%S").log
+            cp -f ${BENCHLOGFILE} ${LOGPATH}/${LOGFILE_DATE}_benchmark.log
         fi
         if [ -f ${TWEAKLOGFILE} ]; then
+            printf "${summary}" >>${TWEAKLOGFILE}
             if [ ${#TWEAK_MSGs[@]} -gt 0 ]; then
-                echo "Letzter Stand aller verwendeten Befehle:" >>${TWEAKLOGFILE}
+                printf "\nLetzter Stand aller verwendeten Befehle:\n" >>${TWEAKLOGFILE}
+                # ACHTUNG: Die nvidiaCmd''s sind ab jetzt (kurz vor Programmende) ZWECKENTFREMDET und können nicht mehr wie geplant verwendet werden
+                for (( nvi=0; $nvi<3; nvi++ )); do
+                    nvidiaCmd[$nvi]="${nvidiaCmd[$nvi]//%i/${gpu_idx}}"
+                done
                 for tweak_msg in "${!TWEAK_MSGs[@]}"; do
                     echo "${TWEAK_MSGs[${tweak_msg}]}" >>${TWEAKLOGFILE}
-                    value=$(echo "${TWEAK_MSGs[${tweak_msg}]}" | grep -o -e '[[:digit:]]\+$')
-                    if [ "${tweak_msg}" == "./nvidia-befehle/smi --id" ]; then
+                    value=$(echo "${TWEAK_MSGs[${tweak_msg}]}" | grep -E -o -e '[[:digit:]]+$')
+                    # Nochmal die Kommandos suchen, um die Werte zuordnen zu können
+                    tweak_pat="${tweak_msg//[[]/\\[}"
+                    tweak_pat="${tweak_pat//[\]]/\\]}"
+                    tweak_pat="${tweak_pat//[.]/\.}"
+                    REGEXPAT="^${tweak_pat}"
+                    if   [[ "${nvidiaCmd[3]}" =~ ${REGEXPAT} ]]; then
                         power_limit=${value}
-                    elif [ "${tweak_msg}" == "nvidia-settings --assign [fan:${gpu_idx}]/GPUTargetFanSpeed" ]; then
+                        [ ${power_limit} -eq 0 ] && power_limit=${defPowLim[${gpu_idx}]}
+                    elif [[ "${nvidiaCmd[2]}" =~ ${REGEXPAT} ]]; then
                         fan_speed=${value}
-                    elif [ "${tweak_msg}" == "nvidia-settings --assign [gpu:${gpu_idx}]/GPUGraphicsClockOffset[3]" ]; then
+                    elif [[ "${nvidiaCmd[0]}" =~ ${REGEXPAT} ]]; then
                         grafik_clock=${value}
                     else
                         memory_clock=${value}
                     fi
                 done
             fi
-            cp ${TWEAKLOGFILE} ${LOGPATH}/tweak_$(date "+%Y%m%d_%H%M%S").log
+            cp ${TWEAKLOGFILE} ${LOGPATH}/${LOGFILE_DATE}_tweak.log
         fi
-
-        ####################################################################
-        #    Aufbereitung der Werte zum Schreiben in die benchmark_*.json
-        #
-        temp_einheit=$(cat ${BENCHLOGFILE} \
-                              | sed -e 's/ *(yes!)$//g' \
-                              | gawk -e "${detect_zm_hash_count}" \
-                              | grep -m1 "/s$" \
-                              | gawk -e '/H\/s$/ {print "H/s"; next}{print "Sol/s"}')
-        if [ ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
-            ###
-            ### BENCHMARKING MODE was invoked
-            ###
-            hashCount=$(cat ${BENCHLOGFILE}  \
-                      | sed -e 's/ *(yes!)$//g' \
-                      | gawk -e "${detect_zm_hash_count}" \
-                      | grep -e "/s$" \
-                      | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
-                                   | tee temp_hash_bc_input | bc >temp_hash_sum ) \
-                      | wc -l \
-                     )
-            # ... dann die WattLog
-            wattCount=$(cat "watt_bensh_30s.out" \
-                      | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >temp_watt_sum ) \
-                            >(gawk -M -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print max}' >watt_bensh_30s_max.out ) \
-                      | wc -l \
-                     )
-            hashSum=$(< temp_hash_sum)
-            wattSum=$(< temp_watt_sum)
-            if [ ${hashCount} -gt 0 ]; then
-                echo "scale=2; \
-                      avghash  = $hashSum / $hashCount; \
-                      avgwatt  = $wattSum / $wattCount; \
-                      quotient = avghash / avgwatt; \
-                      print avghash, \" \", avgwatt, \" \", quotient" | bc \
-                    | read avgHASH avgWATT quotient
-            else
-                avgHASH=0; avgWATT=0; quotient=0
-            fi
-        #else
-            ###
-            ### TWEAKING MODE was invoked
-            ###
-            ### Im Tweaking-Mode sind alle Werte gültig, wurden jede Sekunde aktuell berechnet.
-            ### Bis zum Schluss.
-            ### ---> BITTE NOCH ABSOLUT SICHERSTELLEN, DASS NUR WÄHREND DES SLEEP ABGEBROCHEN WIRD <---
-            ### 
-        fi
-            
-        maxWATT=$(< "watt_bensh_30s_max.out")
-
-        # Ist das wirklich noch nötig?
-        printf " Summe WATT   : %12s; Messwerte: %5s\n" $wattSum $wattCount
-        printf " Durchschnitt : %12s\n" $avgWATT
-        printf " Max WATT Wert: %12s\n" ${maxWATT}
-        printf " Summe HASH   : %12s; Messwerte: %5s\n" ${hashSum:0:$(($(expr index "$hashSum" ".")+2))} $hashCount
-        printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} ${temp_einheit}
-
-        # bENCH_START wird direkt vor dem Start des Miners gesetzt.
-        # Im Falle des Tweakens wird bENCH_START nach jedem Tweak-Kommando neu gesetzt und der hashCount auf 0 zurückgesetzt.
-        # Die Differenz aus ${BENCH_OR_TWEAK_END} und ${bENCH_START} ist also die tatsächliche Dauer zur Ermittlung der Anzahl an hashCount Werten
-        hASH_DURATION=$((${BENCH_OR_TWEAK_END}-${bENCH_START}))
 
         # Es sind ja wenigstens avgHASH und avgWATT ermittelt worden.
         _edit_BENCHMARK_JSON_and_put_in_the_new_values
 
+    else
+        _terminate_Miner
+        _terminate_Logging_Terminal
     fi  ## if [ ${BENCHMARKING_WAS_STARTED} -eq 1 ]
 
-    if [ $debug -eq 0 ]; then
-        _delete_temporary_files
-    fi
-    rm -f $(basename $0 .sh).pid
+    [ $debug -eq 0 ] && _delete_temporary_files
+    rm -f ${This}.pid
 }
 trap _On_Exit EXIT
 
 # Aktuelle eigene PID merken
-echo $$ >$(basename $0 .sh).pid
+This=.$(basename $0 .sh)_$$
+echo $$ >${This}.pid
 if [ ! -d test ]; then mkdir test; fi
 
 ###################################################################################
@@ -602,36 +859,70 @@ gpu_idx_list="${index[@]}"
 # Allerdings macht das im laufenden Betrieb schon die algo_multi_abfrage.sh, der wir NICHT dazwischenfunken wollen.
 #   Deshalb holen wir die Daten nur dann selbst, wenn die algoID_KURSE_PORTS_WEB älter als 120 Sekunden ist.
 #   Denn dann läuft die algo_multi_abfrage.sh nicht
+switch_to_offline_msg="Deshalb wird an dieser Stelle automatisch in den OFFLINE-Mode geschaltet."
 live_mode="lo"
 if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+    echo "Solange keine Internetverbindung besteht, ist nur das OFFLINE-Benchmarking möglich."
+    echo ${switch_to_offline_msg}
     live_mode="o"
-    # Ohne Internetverbindung wird die Funktion _read_in_ALGO_PORTS_KURSE nicht aufgerufen,
-    # wodurch die folgenden Arrays leer und nicht definiert sind.
-    # Da wir die ALGO_ID des Algo aber auch in die benchmark.JSON schreiben, haben wir ein Problem, das wir lösen,
-    #    indem wir das Array ALGO_ID hier definieren wie es am 29.10.2017 definiert war.
-    # Den algo_port setzen wir unten auf 777, bis wir eine Datei mit den entsprechenden Angaben gefunden haben.
-    #    Der algo_port wird im Offline-Modus sowieso nicht benötigt.
-    #
-    #unset ALGOs;    declare -ag ALGOs
-    #unset KURSE;    declare -Ag KURSE
-    #unset PORTs;    declare -Ag PORTs
-    #unset ALGO_IDs; declare -Ag ALGO_IDs
-    if [ ${#ALGO_IDs[@]} -eq 0 ]; then
-        _set_ALGO_IDs_in_Offline_Mode
-    fi
 else
-    if [ ! -s ${algoID_KURSE_PORTS_WEB} ] \
-           || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s)+120)) -lt $(date +%s) ]]; then
-        declare -i secs=1
-        _prepare_ALGO_PORTS_KURSE_from_the_Web
-        while [ $? -eq 1 ]; do
-            echo "Waiting for valid File ${algoID_KURSE_PORTS_WEB} from the Web, Second Nr. $secs"
-            sleep 1
-            let secs++
+    ###############################################################################
+    # Wir laden die Kurse bzw. die Preise rein, weil wir nicht benchmarken wollen,
+    # wenn zur Zeit nichts bezahlt wird.
+    # Zumindest nicht LIVE benchmarken... (Stimmt das ?)
+    #
+    # Wir berücksichtigen hier auch, dass die algo_multi_abfrage.sh laufen könnte,
+    # die ja die Webabrufe macht.
+    # Nur wenn die _WEB Dateien zu alt sind, rufen wir sie selbst ab.
+    ###############################################################################
+    if [ ${PoolActive["nh"]} -eq 1 ]; then
+        echo "------------------   Nicehash-Kurse           ----------------------"
+        if [ ! -s ${algoID_KURSE_PORTS_WEB} ] \
+               || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s)+120)) -lt $(date +%s) ]]; then
+            declare -i secs=1
             _prepare_ALGO_PORTS_KURSE_from_the_Web
-        done
+            while [ $? -eq 1 ]; do
+                echo "Waiting for valid File ${algoID_KURSE_PORTS_WEB} from the Web, Second Nr. $secs"
+                sleep 1
+                let secs++
+                _prepare_ALGO_PORTS_KURSE_from_the_Web
+            done
+        fi
+        _read_in_ALGO_PORTS_KURSE
+        echo "--------------------------------------------------------------------"
     fi
-    _read_in_ALGO_PORTS_KURSE
+
+    if [ ${PoolActive["sn"]} -eq 1 ]; then
+        echo "------------------   WhatToMine BLOCK_REWARD  ----------------------"
+        if [ ! -s ${COIN_PRICING_WEB} ] \
+               || [[ $(($(date --utc --reference=${COIN_PRICING_WEB} +%s)+120)) -lt $(date +%s) ]]; then
+            declare -i secs=1
+            _prepare_COIN_PRICING_from_the_Web
+            while [ $? -eq 1 ]; do
+                echo "Waiting for valid File ${COIN_PRICING_WEB} from the Web, Second Nr. $secs"
+                sleep 1
+                let secs++
+                _prepare_COIN_PRICING_from_the_Web
+            done
+        fi
+        _read_in_COIN_PRICING
+        echo "--------------------------------------------------------------------"
+
+        echo "------------------   Bittrex COIN-BTC-Faktor  ----------------------"
+        if [ ! -s ${COIN_TO_BTC_EXCHANGE_WEB} ] \
+               || [[ $(($(date --utc --reference=${COIN_TO_BTC_EXCHANGE_WEB} +%s)+120)) -lt $(date +%s) ]]; then
+            declare -i secs=1
+            _prepare_COIN_TO_BTC_EXCHANGE_from_the_Web
+            while [ $? -eq 1 ]; do
+                echo "Waiting for valid File ${COIN_TO_BTC_EXCHANGE_WEB} from the Web, Second Nr. $secs"
+                sleep 1
+                let secs++
+                _prepare_COIN_TO_BTC_EXCHANGE_from_the_Web
+            done
+        fi
+        _read_in_COIN_TO_BTC_EXCHANGE_FACTOR
+        echo "--------------------------------------------------------------------"
+    fi
 fi
 
 ################################################################################
@@ -651,42 +942,52 @@ fi
 # auswahl des devices "eingabe wartend"
 if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 && ${#gpu_idx} -gt 0 && ${#algorithm} -gt 0 ]]; then
     echo "AUTO-BENCHMARKING GPU #${gpu_idx} for Algorithm ${algorithm}"
+    read miningAlgo miner_name miner_version muck888 <<<"${algorithm//#/ }"
 else
     echo ""
     while :; do
         _prompt="Für welches GPU device soll ein Benchmark druchgeführt werden? ${gpu_idx_list}: "
         read -p "${_prompt}" gpu_idx
-        [[ ${gpu_idx} =~ ^[[:digit:]]*$ ]] && [[ ${gpu_idx_list} =~ ^.*${gpu_idx} ]] && break
+        ((${#gpu_idx}>0)) && [[ "${gpu_idx}" =~ ^[[:digit:]]*$ ]] && [[ ${gpu_idx_list} =~ ^.*${gpu_idx} ]] && break
     done
 fi
 gpu_uuid=${uuid[${gpu_idx}]}
 echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
 
-# Sync mit tweak_command.sh
-echo ${gpu_idx}  >bensh_gpu_30s_.index
-echo ${gpu_uuid} >uuid
+# Ein paar Standardverzeichnisse zur Verbesserung der Übersicht:
+if   [ ! -d ../${gpu_uuid}/benchmarking ]; then
+    mkdir   ../${gpu_uuid}/benchmarking
+fi
 
 IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 
+# Funktion zum Einlesen der Benchmarkdaten nach eventuellem vorherigen Update der JSON Datei
+cd ../${gpu_uuid}
+source gpu-bENCH.sh
+cd ${_WORKDIR_} >/dev/null
+
+# Alle Einstellungen aller Algorithmen der ausgewählten GPU einlesen
+# Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da
+#
+_read_IMPORTANT_BENCHMARK_JSON_in without_miners
+#echo "I'm here..."
+
 ################################################################################
 ###
-###          2.2. Einlesen ALLER verfügbaren Miner und deren Algos
+###          2.2. Einlesen ALLER verfügbaren Miner und deren MiningAlgos und Algos/Coins
 ###
 ################################################################################
 
-# Gibt es eine ALGO-NAMEN - KONVERTIERUNGSTABELLEN von NiceHash Algonamen zu $miner_name Algonamen?
-# ---> Datei ${miner_name}#Coin2Algo.names <---
-#      Diese Datei zu pflegen ist wichtig!
-# Einlesen der Datei ${miner_name}#Coin2Algo.names, die die Zuordnung der NH-Namen zu den CC-Namen enthält
-# Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
-# In ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
+# Einlesen der Algos/Coins und MiningAlgos aus den ${miner_name}#${miner_version}.algos Dateien
+# In ALLE die Arrays "Mining_${miner_name}_${miner_version//\./_}_Algos"
 
 # Dann gleich Bereitstellung zweier Arrays mit AvailableAlgos und MissingAlgos.
+#      ( "Available_${miner_name}_${miner_version//\./_}_Algos" und
+#        "Missing_${miner_name}_${miner_version//\./_}_Algos" )
 # Die MissingAlgos könnte man in einer automatischen Schleife benchmarken lassen,
 # bis es keine MissingAlgos mehr gibt.
 #_test_=1
-_read_in_ALL_Internal_Available_and_Missing_Miner_Algo_Arrays "${LINUX_MULTI_MINING_ROOT}/miners"
-
+_read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays "${LINUX_MULTI_MINING_ROOT}/miners"
 
 ################################################################################
 ################################################################################
@@ -696,9 +997,7 @@ _read_in_ALL_Internal_Available_and_Missing_Miner_Algo_Arrays "${LINUX_MULTI_MIN
 ################################################################################
 ################################################################################
 
-if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 && ${#gpu_idx} -gt 0 && ${#algorithm} -gt 0 ]]; then
-    read algo miner_name miner_version muck888 <<<"${algorithm//#/ }"
-else
+if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
     declare -a minerChoice minerVersion
     echo ""
     echo " Die folgenden Miner können getestet werden:"
@@ -713,7 +1012,7 @@ else
     echo ""
     while :; do
         read -p "Welchen Miner möchtest Du mit GPU #${gpu_idx} benchmarken/tweaken? ${choice_list}: " choice
-        [[ ${choice_list} =~ ^.*${choice} ]] && break
+        ((${#choice}>0)) && [[ ${choice} =~ ^[[:digit:]]*$ ]] && [[ "${choice_list}" =~ ^.*${choice} ]] && break
     done
 
     miner_name=${minerChoice[$(($choice-1))]}
@@ -723,14 +1022,12 @@ fi
 ################################################################################
 #
 # Ab hier steht der Miner fest und die Variablen  miner_name und miner_version dürfen NICHT MEHR VERÄNDERT WERDEN!
-# Im --auto Mode ist ab hier zusätzlich auch $algo gültig und darf NICHT MEHR VERÄNDERT WERDEN!
+# Im --auto Mode zusätzlich auch schon $miningAlgo gültig und darf NICHT MEHR VERÄNDERT WERDEN!
 #
 ################################################################################
 
-declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
+declare -n actMiningAlgos="Mining_${miner_name}_${miner_version//\./_}_Algos"
 declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
-
-[ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && read algo rest <<< ${algorithm//#/ }
 
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle Miner gleich ist.
@@ -740,14 +1037,14 @@ source ../miners/${miner_name}#${miner_version}.starts
 ####################################################################################
 ################################################################################
 ###
-###                     4. Auswahl des zu benchmarkenden Algos
+###                     4. Auswahl des zu benchmarkenden MiningAlgos und Produktes
 ###
 ################################################################################
 ####################################################################################
 
 ################################################################################
 ###
-###          4.0. Die Algos, die DISABLED sind aus der Menge der zu betrachtenden Algos herausnehmen
+###          4.0. Die MiningAlgos, die DISABLED sind aus der Menge der zu betrachtenden Algos herausnehmen
 ###
 ################################################################################
 
@@ -758,8 +1055,11 @@ if [ -s ../BENCH_ALGO_DISABLED ]; then
     unset BENCH_ALGO_DISABLED_ARR
     cat ../BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR
     for lfdAlgorithm in ${BENCH_ALGO_DISABLED_ARR[@]}; do
-        unset actInternalAlgos[${lfdAlgorithm}*]
-        actMissingAlgos=( ${actMissingAlgos[@]/${lfdAlgorithm}*/} )
+        read mining_algo m_name m_version muck <<<"${lfdAlgorithm//#/ }"
+        for key in ${!actMiningAlgos[@]}; do
+            [ "${actMiningAlgos[$key]}" == "${mining_algo}" ] && unset actMiningAlgos[$key]
+        done
+        actMissingAlgos=( $(echo ${actMissingAlgos[@]} | sed -e 's/\b'${mining_algo}'\b//g') )
         [ $debug -eq 1 ] && echo "Algo ${lfdAlgorithm} wegen des Vorhandensein in der Datei BENCH_ALGO_DISABLED herausgenommen."
     done
 fi
@@ -778,7 +1078,7 @@ if [ -s ../GLOBAL_ALGO_DISABLED ]; then
             [[ ! ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ^.*:${gpu_uuid} ]] && unset DisAlgo
         fi
         if [ -n "${DisAlgo}" ]; then
-            unset actInternalAlgos[${DisAlgo}]
+            unset actMiningAlgos[${DisAlgo}]
             for (( a=0; $a<${#actMissingAlgos[@]}; a++ )); do
                 if [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ]; then
                     unset actMissingAlgos[$a]
@@ -791,100 +1091,296 @@ if [ -s ../GLOBAL_ALGO_DISABLED ]; then
     done
 fi
 
-################################################################################
+#####################################################################################################
 ###
-###          4.1. Anzeige aller fehlenden Algos, die möglich wären
+###          4.1. Auswahl des MiningAlgos durch den Benutzer oder bereits als Parameter übergeben
 ###
-################################################################################
-
-if [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
-    [ -z "${actInternalAlgos[${algo}]}" ] && exit 99
-else
-    # Checken, ob wir für alle Algos auch schon Werte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json haben
-    # Diejenigen Algos anzeigen, zu denen es noch keine Eintragsmöglichkeit gibt.
-    # Das wurde nach dem Einlesen in ALLE_MINER gemacht und es wurden auch die beiden Arrays
-    #     "Missing_${miner_name}_${miner_version//\./_}_Algos" und
-    #     "Available_${miner_name}_${miner_version//\./_}_Algos" erstellt,
-    #     die die Namen der entsprechenden algos als Werte haben.
-    #if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
-    if [ ${#actMissingAlgos[@]} -gt 0 ]; then
-        for lfdAlgo in ${actMissingAlgos[@]}; do
-            printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${lfdAlgo}
-        done
-    fi
-fi
-
-################################################################################
-###
-###          4.2. Auswahl des Algos durch den Benutzer...
-###
-################################################################################
+#####################################################################################################
 
 # Wegen des Startparameters die Miner... oder sollen wir das auch auf eine glatte Variable umstellen,
 # die man ohne Funktion rufen kann? Könnte man sich einen Funktionsaufruf sparen.
-unset InternalAlgos
-declare -A InternalAlgos
-if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 && ${#gpu_idx} -gt 0 && ${#algorithm} -gt 0 ]]; then
-    for lfdAlgo in "${!actInternalAlgos[@]}"; do
-        InternalAlgos[${lfdAlgo}]=${actInternalAlgos[${lfdAlgo}]}
-    done
-else
-    declare -a menuItems=( "${!actInternalAlgos[@]}" )
-    numAlgos=${#menuItems[@]}
+unset MiningAlgos
+declare -A MiningAlgos
+if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
+
+    ###
+    ###          4.1.1. Anzeige aller fehlenden MiningAlgos, die möglich wären
+    ###
+    #     Anzeige derjenigen MiningAlgos, die als Objekte in der ../${gpu_uuid}/benchmark_${gpu_uuid}.json noch fehlen
+    # UND die jetzt auch verwendet werden können(, weil sie NICHT disabled sind)
+    if [ ${#actMissingAlgos[@]} -gt 0 ]; then
+        for lfdMiningAlgo in ${actMissingAlgos[@]}; do
+            printf "%17s <-------------------- Bitte Benchmark durchführen. Noch keine Daten vorhanden\n" ${lfdMiningAlgo}
+        done
+    fi
+
+    ###
+    ###          4.1.2. miningAlgo festlegen
+    ###
+    #declare -a menuItems=( ${actMiningAlgos[@]} )   # Dupletten besser raus
+    declare -a menuItems=( $(echo ${actMiningAlgos[@]} | sed -e 's/ /\n/g' | sort -u ))
+    numMiningAlgos=${#menuItems[@]}
 
     menuItems_list=''
-    if [ $numAlgos -gt 1 ]; then
+    if [ $numMiningAlgos -ge 2 ]; then
+        ###
+        ### 4.1.2.1. Nach Anzeige aller Optionen Eingabe vom Benutzer fordern und Fehleingaben abfangen...
+        ###
         for i in ${!menuItems[@]}; do
             menuItems_list+="a$i "
             printf "%10s=%17s" "a$i" "\"${menuItems[$i]}\""
             if [ $(((i+1) % 3)) -eq 0 ]; then printf "\n"; fi
-            # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
-            InternalAlgos[${menuItems[$i]}]=${actInternalAlgos[${menuItems[$i]}]}
         done
         printf "\n"
-
         while :; do
             echo ${menuItems_list}
-            read -p "Welchen Algo soll Miner ${miner_name} ${miner_version} mit GPU #${gpu_idx} testen : " algonr
+            read -p "Welchen MiningAlgo soll Miner ${miner_name} ${miner_version} mit GPU #${gpu_idx} testen : " algonr
             # Das matched beides ein ganzes Wort
             REGEXPAT="\<${algonr}\>"
             REGEXPAT="\b${algonr}\b"
-            [[ ${menuItems_list} =~ ${REGEXPAT} ]] && break
+            ((${#algonr}>0)) && [[ ${menuItems_list} =~ ${REGEXPAT} ]] && break
         done
-    elif [ $numAlgos -eq 1 ]; then
-        # ... oder angenommener einziger Algo aus der Datei für die Algos.
-        algonr=a0
-        # Für alle, die intern andere Namen benutzen als wie sie sie abliefern
-        InternalAlgos[${menuItems[0]}]=${actInternalAlgos[${menuItems[0]}]}
+    elif [ $numMiningAlgos -eq 1 ]; then
+        ###
+        ### 4.1.2.2.  ... oder einzigen MiningAlgo automatisch setzen
+        ###
+        algonr="a0"
     else
-        # Au weia, ... noch gar keine Algos einlesen können.
-        error_msg="Sorry, dieser Miner weiss nicht, welche Algos er minen kann.\n"
-        error_msg+="Es gibt weder eine Datei ../miners/${miner_name}#${miner_version}.algos\n"
-        error_msg+="noch eine Namenkonvertierungsdatei ../miners/${miner_name}#Coin2Algo.names\n"
-        error_msg+="ODER die Dateien sind vorhanden, aber leer."
-        error_msg+="Bitte erst eine oder beide dieser Dateien erstellen.\n"
+        ###
+        ### 4.1.2.3.  ... oder ... Au weia, ... nichts mehr übrig oder noch gar keine MiningAlgos einlesen können.
+        ###
+        error_msg="Sorry, entweder gibt es zu diesem Miner noch keine MiningAlgos,\n"
+        error_msg+=" z.B. weil es keine Datei ../miners/${miner_name}#${miner_version}.algos gibt oder weil sie leer ist...\n"
+        error_msg+="ODER diejenigen MiningAlgos, die er kennt, sind gerade Disabled.\n"
         printf ${error_msg}
         read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
         exec $0 ${initialParameters}
     fi
-    algo=${menuItems[${algonr:1}]}
 
-    algorithm="${algo}#${miner_name}#${miner_version}"
+    ###
+    ###          >>> miningAlgo STEHT FEST. <<<
+    ###
+    miningAlgo=${menuItems[${algonr:1}]}
+
+    ###
+    ###          >>> algorithm STEHT FEST. <<<
+    ###
+    algorithm="${miningAlgo}#${miner_name}#${miner_version}"
     # Hier ist die Stelle, an der wir den $algorithm korrigieren, wenn wir uns für den Full Power -p Modus
     # per Kommandozeilenparameter -p entschieden haben:
     [[ ${bENCH_KIND} -eq 888 ]] && algorithm+='#888'
 
-    # Sync mit tweak_command.sh
-    echo "${algorithm}" >benching_${gpu_idx}_algo
+    echo "das ist der MiningAlgo, der ausgewählt wurde : ${miningAlgo}"
+    echo "das ist der \$algorithm, der ausgewählt wurde : ${algorithm}"
+else
+    # Im --auto Mode beenden, wenn der miningAlgo disabled wurde
+    declare -i algo_cnt=$(echo ${actMiningAlgos[@]} | grep -E -c -w ${miningAlgo})
+    [ ${algo_cnt} -eq 0 ] && exit 99
+fi
 
-    echo "das ist der NH-Algo,    den du ausgewählt hast : ${algo}"
-    echo "das ist der \$algorithm, den du ausgewählt hast : ${algorithm}"
-    if [ "$algo" = "scrypt" ] ; then
-        echo "Dieser Algo ist nicht mehr mit Grafikkarten lohnenswert. Dafür ermitteln wir keine Werte mehr."
+################################################################################
+###
+###          4.2. Auswahl des Produktes/Coins
+###
+################################################################################
+
+# Das "Produkt", der "Coin", das was abgeliefert und bezahlt wird und meist
+# in der Server-Adresse oder einem Server-Port enthalten ist, früher in $algo geführt, jetzt in $coin
+# und was sich unter den keys des actMiningAlgos[---> $coin <---] Arrays befindet,
+# will nun festgelegt werden, automatisch oder nach Angebieten mehrerer Möglichkeiten vom Benutzer
+echo ""
+echo "Es folgt die Auswahl der im Moment möglichen Produkte."
+unset Products
+for ccoin in ${!actMiningAlgos[@]}; do
+    [[ "${actMiningAlgos[$ccoin]}" == "$miningAlgo" ]] && Products=( ${Products[@]} $ccoin )
+done
+
+if [ ! "${live_mode}" == "o" ]; then
+    # Das Auswahlmenü enthält den Coin und den Pool, an dem er abgeliefert werden kann.
+    # Aktuelle Coin Namen und Preise aus dem Web sind in den verschiedenen leider vom Pool abhängigen Arrays
+    # und sind eingangs abgerufen worden.
+    # Wenn keine Internetverbindung da war, sind wir bereits im Offline-Modus, in dem diese Betrachtungen überflüssig sind!
+    #
+    unset menuItems menuMines algonr
+    for ccoin in ${Products[@]}; do
+        REGEXPAT="\b${ccoin}\b"
+
+        ppool="nh"
+        if [ ${PoolActive[${ppool}]} -eq 1 ]; then
+            #
+            # Frage: Ist der Coin, den der Miner mittels des MiningAlgo generell produzieren kann
+            #        zufälligerweise unter den Produkten, die dieser Pool abnimmt, dabei?
+            if [[ "${ALGOs[@]}" =~ ${REGEXPAT} ]]; then
+                menuItems=( ${menuItems[@]} "${ccoin}#${ppool}" )
+                # Einen Preis können wir vielleicht auch anbieten...
+                if [[          ${#bENCH[$algorithm]}  -gt 0   \
+                            && ${#KURSE[$ccoin]}      -gt 0   \
+                            && ${WATTS[$algorithm]}  -lt 1000 \
+                    ]]; then
+                    # "Mines" in BTC berechnen
+                    algoMines=$(echo "scale=8;   ${bENCH[$algorithm]}  \
+                                               * ${KURSE[$ccoin]}  \
+                                               / ${k_base}^3  \
+                                               * ( 100 - "${PoolFee[${ppool}]}" ) / 100 \
+                                 " | bc )
+                    menuMines=( ${menuMines[@]} "${algoMines}" )
+                else
+                    menuMines=( ${menuMines[@]} ".0" )
+                fi
+            fi
+        fi
+
+        ppool="sn"
+        if [ ${PoolActive[${ppool}]} -eq 1 ]; then
+            #
+            # Frage: Ist der Coin, den der Miner mittels des MiningAlgo generell produzieren kann
+            #        zufälligerweise unter den Produkten, die dieser Pool abnimmt, dabei?
+            if [[ "${COINS[@]}" =~ ${REGEXPAT} ]]; then
+                menuItems=( ${menuItems[@]} "${ccoin}#${ppool}" )
+                # Einen Preis können wir vielleicht auch anbieten...
+                if [[          ${#bENCH[$algorithm]}         -gt 0   \
+                            && ${#BlockReward[${ccoin}]}     -gt 0   \
+                            && ${#BlockTime[${ccoin}]}       -gt 0   \
+                            && ${#CoinHash[${ccoin}]}        -gt 0   \
+                            && ${#Coin2BTC_factor[${ccoin}]} -gt 0   \
+                            && ${WATTS[$algorithm]}          -lt 1000 \
+                    ]]; then
+                    # "Mines" in BTC berechnen
+                    algoMines=$(echo "scale=8;   86400 * ${BlockReward[${ccoin}]} * ${Coin2BTC_factor[${ccoin}]}   \
+                                               / ( ${BlockTime[${ccoin}]} * (1 + ${CoinHash[${ccoin}]} / ${bENCH[$algorithm]}) ) \
+                                               * ( 100 - "${PoolFee[${ppool}]}" ) / 100 \
+                                 " | bc )
+                    menuMines=( ${menuMines[@]} "${algoMines}" )
+                else
+                    menuMines=( ${menuMines[@]} ".0" )
+                fi
+            fi
+        fi
+    done
+
+    if [ -n "${algoMines}" ]; then
+        # Werden die möglichen Coins im Moment auch bezahlt?
+        # Wenn nicht, dann schalten wir in den Offline-Modus
+        # Und wenn es keine MenuItems gibt, ist die Summe automatisch auch == 0 nach dieser Berechnung
+        bc_string="scale=8; sum=0"
+        for algoMines in ${menuMines[@]}; do
+            bc_string+="+${algoMines}"
+        done
+        bc_string+="; if( sum == 0 ) {print 0} else {print 1}"
+        algoMines=$(echo $bc_string | bc )
+
+        if [ $algoMines -eq 1 ]; then
+            if [ ${#menuItems[@]} -ge 2 ]; then
+                # Wenn es Preise (und Hashwerte, ohne die Preise nicht berechnet werden können) gab, wollen wir sie sortiert darstellen
+                menuItems_list=''
+                unset READARR
+                rm -f .$$_pool_price_sort
+                # Darstellung im Menü mit Preisen
+                for i in ${!menuMines[@]}; do
+                    menuItems_list+="a$i "
+                    printf "%10s= %17s %12s\n" "a$i" "\"${menuItems[$i]}\"" "${menuMines[$i]}" >>.$$_pool_price_sort
+                done
+                cat .$$_pool_price_sort | sort -r -k 3 | readarray -n 0 -O 0 -t READARR
+                rm -f .$$_pool_price_sort
+
+                if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
+                    # Darstellung der Auswahlliste
+                    for i in ${!READARR[@]}; do
+                        echo "${READARR[$i]}"
+                    done
+                    # Eingabe der Auswahl durch den Benutzer
+                    while :; do
+                        echo ${menuItems_list}
+                        read -p "Welchen Coin soll Miner ${miner_name} ${miner_version} mit MiningAlgo ${miningAlgo} testen : " algonr
+                        REGEXPAT="\b${algonr}\b"
+                        ((${#algonr}>0)) && [[ ${menuItems_list} =~ ${REGEXPAT} ]] && break
+                    done
+                else
+                    # --auto Mode, wir wählen den Coin mit dem besten Preis.
+                    # Der steht in READARR[0].
+                    # Allerdings jetzt verbacken mit dem Rest des Strings in der Form
+                    # a12=blablabla.... also alles weg ab und inclusive dem "=" Zeichen
+                    echo "Der Coin mit dem besten Preis wird automatisch ausgewählt."
+                    algonr="${READARR[0]%%=*}"
+                fi
+            else
+                echo "Es kann genau EIN Coin produziert werden, der auch bezahlt wird. Dieser wird automatisch ausgewählt."
+                algonr="a0"
+            fi
+        else
+            echo "Die Preise aller möglichen Coins, die der ${miningAlgo} berechnen könnte, sind momentan auf 0."
+            echo ${switch_to_offline_msg}
+            live_mode="o"
+        fi
+    else
+        echo "Es konnten keine BTC \"Mines\" aller möglichen Coins berechnet werden."
+        echo ${switch_to_offline_msg}
+        live_mode="o"
+    fi
+fi
+
+if [ "${live_mode}" == "o" ]; then
+    # Offline-Mode wurde bereits aufgrund von Logik voreingestellt.
+    # Wir fragen den Benutzer daher nicht mehr nach dem Coin, sondern legen ihn automatisch fest.
+    # Wir brauchen jetzt einen menuitem und eine algonr bzw. letztlich einen coin und einen pool
+    # Die Voraussetzung ist, dass wir eventuell Coins haben in dem Array Products[]
+    if [ ${#Products[@]} -gt 0 ]; then
+        # Aber wir müssen IRGENDEIN Produkt/Coin vorgeben, sonst hat der ccminer keinen actMiningAlgo ... oder?
+        #      Und welchen Pool sollen wir dazu nehmen?
+        #      Es wird eh der Offline-Mode sein, d.h. welcher Pool, spielt eigentlich keine Rolle.
+        #      Aber wir können natürlich den Pool zu dem Coin ermitteln? Geht das einfach?
+        # Wir können uns jetzt tatsächlich nur auf die statisch abgespeicherten Dateien all.* verlassen,
+        # um eine coin:miningAlgo und pool Zuordnung zu erhalten
+        found=0
+        for ccoin in ${Products[@]}; do
+            for ppool in ${!OfflineInfo[@]}; do
+                found=$(grep -E -m 1 -c -e "^${ccoin}:${miningAlgo}:" ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$ppool]})
+                [ $found -eq 1 ] && break 2
+            done
+        done
+        if [ $found -eq 0 ]; then
+            error_msg="Dieser Fall kann eigentlich gar nicht auftreten.\n"
+            error_msg+="In keiner der OfflineInfo-Dateien wurde die Kombination aus einem möglichen Coin und dem MiningAlgo $miningAlgo gefunden.\n"
+            error_msg+="Bitte dieses Problem NOTIEREN und LÖSEN.\n"
+            printf ${error_msg}
+            [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 96
+            read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+            exec $0 ${initialParameters}
+        fi
+
+        echo "OFFLINE-Mode: Die Kombination \"$ccoin#$ppool\" wurde automatisch ausgewählt."
+        menuItems=( "${ccoin}#${ppool}" )
+        algonr="a0"
+    else
+        # Kein Produkt, höchstens Offline Benchmark möglich... hier Abbruch nach Hinweis an den Benutzer
+        error_msg="Sorry, dieser MiningAlgo weiss nicht, welche Coins er minen/produzieren kann.\n"
+        error_msg+="Das ist ein interesanter Fall, denn dann stimmt etwas mit seiner .algos Datei wahrscheinlich nicht oder mit Einlese-Logik.\n"
+        error_msg+="Wir können keine coin#pool Kombination für die Startparameter ermitteln, weil es ohne Coin auch keinen -a Algo gibt.\n"
+        error_msg+="Bitte erst dieses Problem lösen.\n"
+        printf ${error_msg}
+        [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 97
         read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
         exec $0 ${initialParameters}
     fi
 fi
+
+# JETZT sollten in jedem Fall ein menuitem und eine algonr da sein.
+read coin pool <<<"${menuItems[${algonr:1}]//#/ }"
+
+domain=${POOLS[${pool}]}
+coin_algorithm=${coin}#${pool}#${algorithm}
+
+# Für den Parameterstack steht nun auch dieser Array-Member fest, der als einziger benötigt wird.
+# Eigentlich würde insgesamt tatsächlich ein einziger Member genügen, wenn $coin mal feststeht!
+MiningAlgos[${coin}]=${actMiningAlgos[${coin}]}
+
+################################################################################
+#
+# Ab hier steht im Benutzermodus der Coin und Pool und Domain fest
+# und die Variablen  $coin und $pool und $domain dürfen NICHT MEHR VERÄNDERT WERDEN!
+#
+################################################################################
+
 
 ################################################################################
 ###
@@ -893,39 +1389,57 @@ fi
 ################################################################################
 
 # Ein paar Standardverzeichnisse zur Verbesserung der Übersicht:
-if   [ ! -d ../${gpu_uuid}/benchmarking ]; then
-    mkdir   ../${gpu_uuid}/benchmarking
+if   [ ! -d ../${gpu_uuid}/benchmarking/${miner_name}#${miner_version} ]; then
+    mkdir   ../${gpu_uuid}/benchmarking/${miner_name}#${miner_version}
 fi
-if   [ ! -d ../${gpu_uuid}/benchmarking/${algo} ]; then
-    mkdir   ../${gpu_uuid}/benchmarking/${algo}
+if   [ ! -d ../${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo} ]; then
+    mkdir   ../${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}
 fi
-if   [ ! -d ../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version} ]; then
-    mkdir   ../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version}
-fi
-LOGPATH="../${gpu_uuid}/benchmarking/${algo}/${miner_name}#${miner_version}"
-BENCHLOGFILE="test/benchmark_${algo}_${gpu_uuid}.log"
-TWEAKLOGFILE="test/tweak_${algo}_${gpu_uuid}.log"
-rm -f ${BENCHLOGFILE} ${TWEAKLOGFILE} COUNTER watt_bensh_30s.out watt_bensh_30s_max.out
+
+LOGPATH="../${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}"
+BENCHLOGFILE="test/${miningAlgo}_${gpu_uuid}_benchmark.log"
+TWEAKLOGFILE="test/${miningAlgo}_${gpu_uuid}_tweak.log"
+WATTSLOGFILE="test/${miningAlgo}_${gpu_uuid}_watts_output.log"
+WATTSMAXFILE="test/${miningAlgo}_${gpu_uuid}_watts_max.log"
+
+TEMPAZB_FILE="test/${miningAlgo}_${gpu_uuid}_tempazb"
+TEMPSED_FILE="test/${miningAlgo}_${gpu_uuid}_sed_insert_on_different_lines_cmd"
+temp_hash_bc="test/${miningAlgo}_${gpu_uuid}_temp_hash_bc_input"
+temp_avgs_bc="test/${miningAlgo}_${gpu_uuid}_temp_avgs_bc_input"
+temp_hash_sum="test/${miningAlgo}_${gpu_uuid}_temp_hash_sum"
+temp_watt_sum="test/${miningAlgo}_${gpu_uuid}_temp_watt_sum"
+CCMINER_PID=.$$_ccminer.pid
+
+rm -f ${BENCHLOGFILE} ${TWEAKLOGFILE} ${WATTSLOGFILE} ${WATTSMAXFILE}
 
 if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
     ###
     ### Variablen für TWEAKING MODE 
     ###
-    TWEAK_CMD_LOG=tweak_commands.log
+    TWEAK_CMD_LOG="test/${miningAlgo}_${gpu_uuid}_tweak_commands.log"
     rm -f ${TWEAK_CMD_LOG}
     touch ${TWEAK_CMD_LOG}
     declare -i TWEAK_CMD_LOG_AGE
     declare -i new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
     tweak_msg=''
     declare -A TWEAK_MSGs
-    echo "$TWEAK_CMD_LOG"       >tweak_to_these_logs
-    echo "watt_bensh_30s.out"  >>tweak_to_these_logs
-    echo "${BENCHLOGFILE}"     >>tweak_to_these_logs
     declare -i queryCnt=0
 fi
 countWatts=1
 countHashes=1
-declare -i COUNTER=0
+# Wir gehen davon aus, dass das Benchmarking ordentlich beendet wurde und alle Werte in der Endlosschleife konsistent sind.
+# Das ist so bei normalem Ende des Scripts im Standardbenchmarking und Stop nach x Werten
+# Und das ist beim Tweaken so nach Beenden des Tweaking Terminals, welches den kill nur im Sleep sendet.
+#
+# Aber es gibt den Fall, dass der Tewakmode gewünscht wurde, aber keine Kommandos abgestzt (Benchlog- und Wattlog ohne Tweak-CMDs)
+#      und es gibt den Fall, dass sehr wohl getweakt wurde.
+#      Und in diesem 2. Fall dürfen wir die Logfiles nur nach dem letzten Kommando durchsuchen.
+#      Genau wie innerhalb der Endlosschleife.
+# Andernfalls müssen die Files von vorne ab durchsucht werden, was gleichbedeutend ist mit dem Beginn ab Zeile 1
+#      Genaugenommen kann man sagen, dass die Logfiles von Anfang an ab Zeile 1 zu durchsuchen sind.
+#      Jedes Tweak-Kommando korrigiert diese Zeilennummern dann nach oben.
+declare -i watt_line=1
+declare -i hash_line=1
 declare -i wattCount=0
 declare -i hashCount=0
 maxWATT=0
@@ -944,14 +1458,51 @@ maxWATT=0
 ###
 ################################################################################
 
-#[ "${KURSE[$algo]}" == "0" ] && live_mode=${live_mode//l/}
-[ -z "${KURSE[$algo]}" -o "${KURSE[$algo]}" == "0" ] && live_mode="o"
+# Kann es sein, dass bei NH nichts bezahlt wird, der selbe Coin aber bei SN abgenommen wird?
+# ---> Wenn ja, dann müssen wir das hier noch unterscheiden!   <-----------------
+#
+# Die Variable pool steht doch schon fest!
+# Und der coin steht auch fest.
+# Was wollen wir dann hier eigentlich?
+# Wir wollen sehen, ob der coin auch bezahlt wird, ansonsten minen wir Offline.
+# Aber wir haben doch schon mal nach den Preisen gesehen.
+# Hätten wir da nicht die 0'er schon rausnehmen können?
+#
+# Dann müssten wir es hier nicht mehr abfragen.
+# Und wenn es vorhin schon nicht ging, wird es jetzt immer noch nicht gehen und wir stiften nur Verwirrung.
+#
+# ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? 
+# ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? 
+# ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? ??? 
+
+REGEXPAT="\b${coin}\b"
+if [ ${PoolActive["nh"]} -eq 1 ]; then
+    if [[ "${ALGOs[@]}" =~ ${REGEXPAT} ]]; then
+        # Zum Herausfiltern des "l" ist eigentlich korrekt: && live_mode=${live_mode//l/}
+        # An dieser Stelle ist das setzen auf "o" effektiver. Dadurch ist das "l" ebenfalls aus dem String verschwunden.
+        if [ -z "${KURSE[$coin]}" -o "${KURSE[$coin]}" == "0" ]; then
+            echo " NiceHash Kurse für Coin ${coin} sind momentan auf 0, ZERO, NADA..."
+            live_mode="o"
+        fi
+    fi
+fi
+if [ ${PoolActive["sn"]} -eq 1 ]; then
+    if [[ "${COINS[@]}" =~ ${REGEXPAT} ]]; then
+        # Zum Herausfiltern des "l" ist eigentlich korrekt: && live_mode=${live_mode//l/}
+        # An dieser Stelle ist das setzen auf "o" effektiver. Dadurch ist das "l" ebenfalls aus dem String verschwunden.
+        if [[ "${BlockReward[${coin}]//\./}" =~ ^0+$ || "${Coin2BTC_factor[${coin}]//\./}" =~ ^0+$ ]]; then
+            echo " SuprNova Block_Reward oder BTC-Umrechnungsfaktor für Coin ${coin} sind momentan auf 0, ZERO, NADA..."
+            live_mode="o"
+        fi
+    fi
+fi
 [ -z "${BENCH_START_CMD}" ]  && live_mode=${live_mode//o/}
 
 if [ -z "$live_mode" ]; then
     # Weder LIVE-Mode noch OFFLINE-Mode möglich
     [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 99
-    echo "Weder der LIVE-Mode (wegen Kurs=0) noch der OFFLINE-Mode (wegen fehlendem BENCH_START_CMD) sind im Moment möglich."
+    echo "WEDER der LIVE-Mode (wegen Kurs=0) oder fehlender Benchmarkwerte,"
+    echo " NOCH der OFFLINE-Mode (wegen fehlendem BENCH_START_CMD) sind im Moment möglich."
     read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
     exec $0 ${initialParameters}
 elif [ "$live_mode" == "l" ]; then
@@ -961,7 +1512,7 @@ elif [ "$live_mode" == "l" ]; then
 elif [ "$live_mode" == "o" ]; then
     # Ausschliesslich OFFLINE mode möglich
     [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ] && \
-        echo "Im Moment ist nur der OFFLINE-Mode möglich, automatische Einstellung auf OFFLINE-Mode."
+        echo "Der OFFLINE-Mode wurde manuell ausgewählt oder automatisch eingestellt."
 else
     if [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]; then
         # Benutzer kann eine Auswahl treffen.
@@ -971,7 +1522,7 @@ else
         while :; do
             read -p "--> l <-- für LIVE    und    --> o <-- für OFFLINE : " live_mode
             REGEXPAT="^[lo]$"
-            [[ "${live_mode}" =~ ${REGEXPAT} ]] && break
+            ((${#live_mode}>0)) && [[ "${live_mode}" =~ ${REGEXPAT} ]] && break
         done
     else
         # Automatik bevorzugt den LIVE-Mode, weil die Kosten für den Test so oder so anfallen und im Live-Mode
@@ -986,15 +1537,8 @@ fi
 ###
 ################################################################################
 
-# Funktion zum Einlesen der Benchmarkdaten nach eventuellem vorherigen Update der JSON Datei
-cd ../${gpu_uuid}
-source gpu-bENCH.sh
-cd ${_WORKDIR_} >/dev/null
-
-# Alle Einstellungen aller Algorithmen der ausgewählten GPU einlesen
-# Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da, z.B. die folgenden 4
-_read_IMPORTANT_BENCHMARK_JSON_in without_miners
-
+# Alle Einstellungen aller Algorithmen der ausgewählten GPU wurden schon eingelesen.
+# Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da, z.B. die folgenden 5 nvidia-Befehle
 # Nvidia-Befhele zum tunen, die wir kennen und so gut es ging abstrahiert haben:
 #nvidiaCmd[0]="nvidia-settings --assign [gpu:%i]/GPUGraphicsClockOffset[3]=%i"
 #nvidiaCmd[1]="nvidia-settings --assign [gpu:%i]/GPUMemoryTransferRateOffset[3]=%i"
@@ -1006,11 +1550,11 @@ _setup_Nvidia_Default_Tuning_CmdStack
 echo""
 echo "Kurze Zusammenfassung:"
 echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
-echo "Das ist der Miner,      den Du ausgewählt hast : ${miner_name} ${miner_version}"
-echo "das ist der NH-Algo,    den du ausgewählt hast : ${algo}"
-echo "das ist der \$algorithm, den du ausgewählt hast : ${algorithm}"
-[ "${InternalAlgos[$algo]}" != "${algo}" ] && echo "Das ist der Miner-Interne Algoname: ${InternalAlgos[$algo]}"
-echo "Du hast Dich für den " $([ "$live_mode" == "l" ] && echo "LIVE" || echo "OFFLINE") " Modus entschieden"
+echo "Das ist der Miner,           der ausgewählt wurde : ${miner_name} ${miner_version}"
+echo "das ist der Coin,            der ausgewählt wurde : ${coin}"
+echo "das ist der \$coin_algorithm, der ausgewählt wurde : ${coin_algorithm}"
+[ "${MiningAlgos[$coin]}" != "${coin}" ] && echo "Das ist der Miner-Berechnungs Algorithmus........ : ${MiningAlgos[$coin]}"
+echo "Der " $([ "$live_mode" == "l" ] && echo "LIVE" || echo "OFFLINE") " Modus ist eingestellt"
 echo ""
 echo "DIE FOLGENDEN KOMMANDOS WERDEN NACH BESTÄTIGUNG ABGESETZT:"
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
@@ -1033,8 +1577,29 @@ done
 continent="eu"        # Noch nicht vollständig implementiert!      <--------------------------------------
 worker="1060"         # Noch nicht vollständig implementiert!      <--------------------------------------
 
-algo_port=${PORTs[${algo}]}
-if [ $NoCards ]; then algo_port=777; fi
+###
+### An dieser Stelle muss der Pool eigentlich schon ausgewählt sein.
+###    und die domain haben wir eigentlich auch schon gesetzt.
+###    Zumindest im Benutzer Eingabemodus.
+###
+
+unset algo_port
+REGEXPAT="\b${coin}\b"
+if   [ "${pool}" == "nh" ]; then
+        algo_port=${PORTs[${coin}]}
+elif [ "${pool}" == "sn" ]; then
+    algo_port=$(cat ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$pool]} \
+                       | grep -v -e '^#' \
+                       | grep -m 1 -e "^${coin}:" \
+                       | cut -d ':' -f 4 )
+fi
+#if [ $NoCards ]; then algo_port=777; fi
+if [ -z "${algo_port}" ]; then
+    echo "Es kann kein PORT für den Algo/Coin ${coin} in der DOMAIN \"${domain}\" gefunden werden!"
+    [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 98   # No algo_port found
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+    exec $0 ${initialParameters}
+fi
 
 
 # Jetzt bauen wir den Benchmakaufruf zusammen, der in dem .inc entsprechend vorbereitet ist.
@@ -1104,186 +1669,60 @@ done
 ###
 ################################################################################
 
-if [ $NoCards ]; then
-    if [ ! -f "${BENCHLOGFILE}" ]; then
-        if [[ "${miner_name}" == "miner" ]]; then
-            #sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log >${BENCHLOGFILE}
-            cp -f equihash.log ${BENCHLOGFILE}
-        elif [[ "${miner_name}" == "zm" ]]; then
-            printf ""
-        else
-            cp test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
-            # cp test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
-        fi
-    fi
-fi  ## $NoCards
-
 # Startsekunde festhalten.
 # Wir halten auch die Sekunde nach dem Killing des Miners bei Eintritt in die On_Exit() Routine fest.
 # Wir könnten also überlegen, ob wir Endesekunde - Startsekunde als Messdauer für die Hashwerte festhalten?
 # Wir geben es mal beides aus.
 # Dann sehen wir, wie stark eine eventuelle Diskrepanz auftritt
 bENCH_START=$(date +%s)
-BENCHMARKING_WAS_STARTED=1
 
 ${minerstart} >>${BENCHLOGFILE} &
-echo $! > ccminer.pid
+echo $! >${CCMINER_PID}
 Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
-gnome-terminal -e "${Bench_Log_PTY_Cmd}"
-#if [ ! $NoCards ]; then
-#    sleep 3
-#fi
+gnome-terminal --hide-menubar \
+               --title="Benchmark Output of Miner ${miner_name}#${miner_version}" \
+               -e "${Bench_Log_PTY_Cmd}"
 
+if [ ${STOP_AFTER_MIN_REACHED} -eq 0 ]; then
+    tweak_start_params="${gpu_idx} \
+                        ${gpu_uuid} \
+                        ${algorithm} \
+                        $$ \
+                        ${TWEAK_CMD_LOG} \
+                        ${WATTSLOGFILE} \
+                        ${BENCHLOGFILE} \
+                        ${LOGPATH} \
+                        ${READY_FOR_SIGNALS}"
+    tweak_start_cmd="./tweak_commands.sh ${tweak_start_params}"
+
+    if [ 1 -eq 0 ]; then
+        unset ii; declare -i ii=0
+        ofsX=$((ii*60+50))
+        ofsY=$((ii*30+50))
+        echo "Starting Tweaking Terminal..."
+        gnome-terminal --hide-menubar \
+                       --title="Tweaking Terminal for ${miningAlgo} on GPU #${gpu_uuid}" \
+                       --geometry="100x24+${ofsX}+${ofsY}" \
+                       -x bash -c ${tweak_start_cmd}
+    elif [ 1 -eq 1 ]; then
+        #xterm -kt vt220 -ti vt220 bash -c "${tweak_start_cmd}"
+        xterm -T "Tweaking Terminal for ${miningAlgo} on GPU #${gpu_uuid}" \
+              -fn 10x20         \
+              -geometry 100x25  \
+              -e "${tweak_start_cmd}" &
+    else
+        echo ${tweak_start_params} >${TWEAK_CMD_START_PARAMS}
+    fi
+fi
 
 ################################################################################
 ###
-###          5.6. Wattmessung starten (3 Sekunden nach dem Minerstart !? )
+###          5.6. Wattmessung starten
 ###
 ################################################################################
 
 echo "Starten des Wattmessens..."
 
 while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] || [ ! $STOP_AFTER_MIN_REACHED -eq 1 ]; do
-    ### Wattwert messen und in Datei protokollieren
-    if [ ! $NoCards ]; then
-        nvidia-smi --id=${gpu_idx} --query-gpu=power.draw --format=csv,noheader \
-            | gawk -e 'BEGIN {FS=" "} {print $1}' >> watt_bensh_30s.out
-    else
-        echo $((222 + $COUNTER)) >> watt_bensh_30s.out
-    fi
-    if [ $((++COUNTER)) -ge $MIN_WATT_COUNT ]; then countWatts=0; fi
-    echo $COUNTER > COUNTER
-
-    ### Hashwerte nachsehen und zählen
-    hashCount=$(cat ${BENCHLOGFILE} \
-                       | sed -e 's/ *(yes!)$//g' \
-                       | gawk -e "${detect_zm_hash_count}" \
-                       | grep -c "/s$")
-    if [ $hashCount -ge $MIN_HASH_COUNT ]; then countHashes=0; fi
-
-    if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
-        ###
-        ### TWEAKING MODE
-        ###
-        TWEAK_CMD_LOG_AGE=$(stat -c %Y ${TWEAK_CMD_LOG})
-        if [ $new_TweakCommand_available -lt ${TWEAK_CMD_LOG_AGE} ]; then
-            new_TweakCommand_available=${TWEAK_CMD_LOG_AGE}
-            bENCH_START=${TWEAK_CMD_LOG_AGE}
-            # Ermittle das gerade gegebene Tweaking-Kommando
-            tweak_msg="$(tail -n 1 ${TWEAK_CMD_LOG})"
-            if [ ${#tweak_msg} -gt 0 ]; then
-                TWEAK_MSGs["${tweak_msg/=[[:digit:]]*/}"]="${tweak_msg}"
-                tweak_pat="${tweak_msg//[[]/\\[}"
-                tweak_pat="${tweak_pat//[\]]/\\]}"
-                tweak_pat="${tweak_pat//[.]/\.}"
-                if [ $NoCards ]; then
-                    # Hänge ein paar andere Werte an die Logdateien - zum Testen
-                    cat test/more_hash_values.fake >>${BENCHLOGFILE}
-                    cat more_watt_values.fake >>watt_bensh_30s.out
-                fi
-                hash_line=$(cat ${BENCHLOGFILE} \
-                          | grep -n -e "${tweak_pat}" \
-                          | tail -n 1 \
-                          | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
-                         )
-                watt_line=$(cat "watt_bensh_30s.out" \
-                          | grep -n -e "${tweak_pat}" \
-                          | tail -n 1 \
-                          | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
-                         )
-                printf "${tweak_msg}\n" \
-                    | tee -a ${TWEAKLOGFILE}
-                printf "Hashwerte ab jetzt ab Zeile $hash_line und Wattwerte ab Zeile $watt_line\n" \
-                    | tee -a ${TWEAKLOGFILE}
-            fi
-        fi  ## if [ $new_TweakCommand_available -lt ${TWEAK_CMD_LOG_AGE} ]
-        
-        # Suche das Tweak-Kommando in der Logdatei.
-        # Wenn noch kein Tweak-Kommando gegeben wurde, was durch ${#tweak_msg} == 0 ausgedrückt wird,
-        #      dann nimm alle Zeilen ab dem Dateianfang.
-        if [ ${#tweak_msg} -gt 0 ]; then
-            # Calculate only the values after the last command
-            # Farben Escape-Sequenzen müssen wir nicht mehr ausfiltern
-            #         | sed -e 's/\x1B[[][[:digit:]]*m//g' \
-            hashCount=$(cat ${BENCHLOGFILE} \
-                      | tail -n +$hash_line \
-                      | sed -e 's/ *(yes!)$//g' \
-                      | gawk -e "${detect_zm_hash_count}" \
-                      | grep -e "/s$" \
-                      | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
-                                   | tee temp_hash_bc_input | bc >temp_hash_sum ) \
-                      | wc -l \
-                     )
-            wattCount=$(cat "watt_bensh_30s.out" \
-                      | tail -n +$watt_line \
-                      | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >temp_watt_sum ) \
-                            >(gawk -M -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print max}' >watt_bensh_30s_max.out ) \
-                      | wc -l \
-                     )
-        else
-            # Nimm alle Werte aus der BenchLog und der WattLog Datei, um den lfd. Durchschnitt zu errechnen
-            # zuerst die BenchLog...
-            # Farben Escape-Sequenzen müssen wir nicht mehr ausfiltern
-            #         | sed -e 's/\x1B[[][[:digit:]]*m//g' \
-            hashCount=$(cat ${BENCHLOGFILE} \
-                      | sed -e 's/ *(yes!)$//g' \
-                      | gawk -e "${detect_zm_hash_count}" \
-                      | grep -e "/s$" \
-                      | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
-                                   | tee temp_hash_bc_input | bc >temp_hash_sum ) \
-                      | wc -l \
-                     )
-            # ... dann die WattLog
-            wattCount=$(cat "watt_bensh_30s.out" \
-                      | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >temp_watt_sum ) \
-                            >(gawk -M -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print max}' >watt_bensh_30s_max.out ) \
-                      | wc -l \
-                     )
-        fi
-        hashSum=$(< temp_hash_sum)
-        wattSum=$(< temp_watt_sum)
-
-        if [ ${hashCount} -gt 0 ]; then
-            echo "scale=2; \
-                  avghash  = $hashSum / $hashCount; \
-                  avgwatt  = $wattSum / $wattCount; \
-                  quotient = avghash / avgwatt; \
-                  print avghash, \" \", avgwatt, \" \", quotient" | bc \
-                | read avgHASH avgWATT quotient
-        else
-            avgHASH=0; avgWATT=0; quotient=0
-        fi
-
-        if [ $((queryCnt++ % ${t_base})) -eq 0 ]; then
-            _query_actual_Power_Temp_and_Clocks
-            # Möglich sind: ( "Graphics" "SM" "Memory" "Video" )
-            # ("Power Draw" "Power Limit" "Default Power Limit" "Enforced Power Limit" "Min Power Limit" "Max Power Limit")
-            printf "%5iMHz/%5iMHz %5iMHz/%5iMHz %7sW/%7sW %3i°C\n" \
-                   ${actClocks["Graphics"]} ${maxClocks["Graphics"]} \
-                   ${actClocks["Memory"]}   ${maxClocks["Memory"]} \
-                   ${actPowers["Power Limit"]:0:$(($(expr index ${actPowers["Power Limit"]} ".")+2))} \
-                   ${actPowers["Max Power Limit"]:0:$(($(expr index ${actPowers["Max Power Limit"]} ".")+2))} \
-                   ${actTemp} \
-                | tee -a ${TWEAKLOGFILE}
-        fi
-        printf "%12s H; %#12s W; %#10s H/W\n" \
-               ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} \
-               ${avgWATT:0:$(($(expr index "${avgWATT}" ".")+2))} \
-               ${quotient:0:$(($(expr index "${quotient}" ".")+2))} \
-            | tee -a ${TWEAKLOGFILE}
-    else
-        ###
-        ### "Normal" BENCHMARK MODE
-        ###
-        printf "%3s Hashwerte von mindestens $MIN_HASH_COUNT und %3s Wattwerte von mindestens $MIN_WATT_COUNT\n" \
-               ${hashCount} ${COUNTER}
-    fi
-
-    # Eine Sekunde pausieren vor dem nächsten Wattwert.
-    # Jetzt auch bereit für Unterbrechnungen bzw. Beenden der Messzyklen
-    echo "I'm going to sleep now" >${READY_FOR_SIGNALS}
-    sleep 1
-    rm -f ${READY_FOR_SIGNALS}
-
-done  ##  while [ $countWatts ] || [ $countHashes ] || [ ! $STOP_AFTER_MIN_REACHED ]
-
+    _measure_one_whole_WattsHashes_Cycle
+done

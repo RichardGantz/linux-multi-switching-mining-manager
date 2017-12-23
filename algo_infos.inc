@@ -125,7 +125,7 @@ function _prepare_Strompreise_in_BTC_from_the_Web () {
     btcEUR=$(gawk -e '/id="ticker_price">[0-9.,]* €</ \
                   { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' \
                   ${BTC_EUR_KURS_WEB} \
-	     | grep -E -m 1 -o -e '[0-9.]*' \
+             | grep -E -m 1 -o -e '[0-9.]*' \
              | tee BTC_EUR_kurs.in )
 
     # Einmal für alle gleich die fixen kWh-Preise in BTC umwandeln
@@ -135,45 +135,6 @@ function _prepare_Strompreise_in_BTC_from_the_Web () {
         # Kosten Umrechnung in BTC
         echo $(echo "scale=8; ${kwh_EUR}/${btcEUR}" | bc) >kWh_${GRID[$grid]}_Kosten_BTC.in
     done
-}
-
-# In der Zeit nach der Attacke auf NiceHash waren die länger offline und es ist aufgefallen, dass das Array ALGO_IDs am Rande
-#    mitgepflegt wurde, jetzt aber plötzlich leer war.
-#    Das hat zu falsch-Eintragungen in den benchmark.JSON Dateien geführt.
-# Deshalb hier eien Funktion, die das Array auf einen Stand initialisiert, wie er am 19.10.2017 bekannt war.
-function _set_ALGO_IDs_in_Offline_Mode () {
-    unset ALGO_IDs; declare -Ag ALGO_IDs
-
-    ALGO_IDs[scrypt]=0
-    ALGO_IDs[sha256]=1
-    ALGO_IDs[scryptnf]=2
-    ALGO_IDs[x11]=3
-    ALGO_IDs[x13]=4
-    ALGO_IDs[keccak]=5
-    ALGO_IDs[x15]=6
-    ALGO_IDs[nist5]=7
-    ALGO_IDs[neoscrypt]=8
-    ALGO_IDs[lyra2re]=9
-    ALGO_IDs[whirlpoolx]=10
-    ALGO_IDs[qubit]=11
-    ALGO_IDs[quark]=12
-    ALGO_IDs[axiom]=13
-    ALGO_IDs[lyra2rev2]=14
-    ALGO_IDs[scryptjanenf16]=15
-    ALGO_IDs[blake256r8]=16
-    ALGO_IDs[blake256r14]=17
-    ALGO_IDs[blake256r8vnl]=18
-    ALGO_IDs[hodl]=19
-    ALGO_IDs[daggerhashimoto]=20
-    ALGO_IDs[decred]=21
-    ALGO_IDs[cryptonight]=22
-    ALGO_IDs[lbry]=23
-    ALGO_IDs[equihash]=24
-    ALGO_IDs[pascal]=25
-    ALGO_IDs[x11gost]=26
-    ALGO_IDs[sia]=27
-    ALGO_IDs[blake2s]=28
-    ALGO_IDs[skunk]=29
 }
 
 # Die folgenden Variablen werden in globals.inc gesetzt:
@@ -194,6 +155,7 @@ function _prepare_COIN_PRICING_from_the_Web () {
     # Auswertung und Erzeugung der ARR-Datei, die bequemer von anderen eingelesen werden kann
     gawk -e 'BEGIN { RS=":{|}," }
           FNR == 1 { next }
+          /^"Nicehash-/ { getline; next }
           { print substr( $0, 2, length($0)-2 ); getline                                         # CoinNames
           if (match( $0, /"tag":"[[:alnum:]]*/ ))
                { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }    # COINS
@@ -218,7 +180,7 @@ function _read_in_COIN_PRICING () {
 
     #  Paare extrahieren nach READARR
     unset READARR
-    unset COINS;    declare -ag COINS
+    unset COINS;       declare -ag COINS
     unset CoinNames;   declare -Ag CoinNames
     unset COIN_IDs;    declare -Ag COIN_IDs
     unset CoinAlgo;    declare -Ag CoinAlgo

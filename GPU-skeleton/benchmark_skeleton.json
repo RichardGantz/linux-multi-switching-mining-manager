@@ -4,23 +4,21 @@
   "AlgorithmSettings": [
     {
       "Name": "",
-      "NiceHashID": 0,
-      "MinerBaseType": 0,
       "MinerName": "",
       "MinerVersion": "",
       "BenchmarkSpeed": 0,
-      "ExtraLaunchParameters": "",
       "WATT": 0,
       "MAX_WATT": 0,
       "HASHCOUNT": 0,
       "HASH_DURATION": 0,
       "BENCH_DATE": 0,
       "BENCH_KIND": 0,
-      "MinerFee": 0,
       "GPUGraphicsClockOffset[3]": 0,
       "GPUMemoryTransferRateOffset[3]": 0,
       "GPUTargetFanSpeed": 0,
       "PowerLimit": 0,
+      "HashCountPerSeconds": 0,
+      "BenchMode": 0,
       "LessThreads": 0
     }
   ]

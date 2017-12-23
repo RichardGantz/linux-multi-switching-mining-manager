@@ -16,16 +16,37 @@
 #     angesprochen werden können.
 #
 
+# GLOBALE VARIABLEN, nützliche Funktionen
+[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source ../globals.inc
+
 # Wo befinden wir uns eigentlich?
-PWD=$(pwd | gawk -e 'BEGIN {FS="/"} { print $NF }')
-if [ "$PWD" == "GPU-skeleton" ]; then
-    #
-    echo "Befinde mich im Verteilungsverzeichnis" >/dev/null
-    # Hier drin machen wir den 
-    #     touch -r benchmark_skeleton.json gpu-bENCH.inc
-    # wenn das Skript gpu-bENCH.inc bzw. die Funktionen darin stabil funktionieren.
-    #
-elif [ "${PWD:0:4}" == "GPU-" ]; then
+act_pwd=$(pwd)
+act_pwd=${act_pwd##*/}
+if [ "$act_pwd" == "GPU-skeleton" ]; then
+    echo ""
+    echo "Befinde mich im Verteilungsverzeichnis"
+    echo "Hier drin machen wir nach der Strukturänderung und Validierung den"
+    echo "     touch -r benchmark_skeleton.json gpu-bENCH.inc"
+    echo "wenn das Skript gpu-bENCH.inc bzw. die Funktionen darin stabil funktionieren."
+    echo "Das bitte vor der Bestätigung gleich prüfen! Sonst fällt das ganze System der Reihe nach auf den Bauch..."
+    echo ""
+
+    IMPORTANT_BENCHMARK_JSON=benchmark_skeleton.json
+    source gpu-bENCH.inc
+    _expand_IMPORTANT_BENCHMARK_JSON
+    while :; do
+        read -p "IST DIE benchmark_skeleton.json IN ORDUNG ? (j oder n) : " ok
+        REGEXPAT="[jn]"
+        [[ "${ok}" =~ ${REGEXPAT} ]] && break
+    done
+    if [ "${ok}" == "j" ]; then
+        touch -r ${IMPORTANT_BENCHMARK_JSON} gpu-bENCH.inc
+        echo ""
+        echo "Der Trigger zur Übernahme der neuen gpu-bENCH.inc in die GPU-UUID-Verzeichnisse wurde gesetzt!"
+        echo "Die gpu_gv-algo.sh's sollten nun alle den Struktur-Update vor dem nächsten Einlesen machen"
+        echo "und damit den aktuellsten Datenbestand zur Verfügung haben."
+    fi
+elif [ "${act_pwd:0:4}" == "GPU-" ]; then
     #
     #echo "Befinde mich in einem GPU-Unterverzeichnis"
     # Hier sind wir immer dann drin, wenn konsistente Daten gelesen werden sollen

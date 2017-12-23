@@ -43,14 +43,15 @@ arrayRedeclareTest=0
 # Sonst startet er die Prozesse nicht.
 # Die .pid ist in der Endlosschleife der Hinweis, dass der Prozess läuft und NICHT gestartet werden muss.
 #
-find . -depth -name \*.pid -delete
+find . -depth -name \*.pid  -delete
+find . -depth -name \*.lock -delete
 
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
 export ERRLOG=$(basename $0 .sh).err
 
 function _delete_temporary_files () {
-    rm -f ${ERRLOG} ${SYNCFILE} \
+    rm -f ${ERRLOG} ${SYNCFILE} ${SYSTEM_STATE}.lock \
        I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 _delete_temporary_files
@@ -323,7 +324,7 @@ while : ; do
     fi
     if [ -f BENCH_ALGO_DISABLED ]; then
         echo "-------------> Die folgenden Algos sind aufgrund des Benchmarings DAUERHAFT DISABLED: <-------------"
-        cat BENCH_ALGO_DISABLED
+        cat BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$'
     fi
     if [ -f MINER_ALGO_DISABLED ]; then
         echo "-------------> Die folgenden Algos sind für 5 Minuten DISABLED: <-------------"

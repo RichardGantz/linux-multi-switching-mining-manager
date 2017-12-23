@@ -65,21 +65,22 @@
 [[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
 
 # Erst mal die beiden Funktionen _read_in_SYSTEM_FILE_and_SYSTEM_STATEin und _update_SYSTEM_STATEin_if_necessary
-source gpu-abfrage.inc
+[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source gpu-abfrage.inc
+
 
 function _func_gpu_abfrage_sh () {
     unset READARR
     declare -ig GPU_COUNT
     if [ $NoCards ]; then
-        GPU_COUNT=$(gawk -e 'BEGIN {FS=", | %"} \
-                           {print $1; print $2; print $3; print $4; print $5}' \
-                           .FAKE.nvidia-smi.output >${SYSTEM_FILE} \
-                           | wc -l)
+        GPU_COUNT=$(gawk -e 'BEGIN {FS=", | %| W"} \
+                   {print $1; print $2; print $3; print $4; print $5; print substr( $7, 1, index($7,".")-1 ) }' \
+                         .FAKE.nvidia-smi.output >${SYSTEM_FILE} \
+                   | wc -l)
     else
-        GPU_COUNT=$(nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu --format=csv,noheader \
-                           | gawk -e 'BEGIN {FS=", | %"} {print $1; print $2; print $3; print $4; print $5}' \
-                                  >${SYSTEM_FILE} \
-                           | wc -l )
+        GPU_COUNT=$(nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit --format=csv,noheader \
+                  | gawk -e 'BEGIN {FS=", | %| W"} {print $1; print $2; print $3; print $4; print $5; print substr( $7, 1, index($7,".")-1 ) }' \
+                         >${SYSTEM_FILE} \
+                  | wc -l )
     fi
 
     _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
@@ -106,6 +107,9 @@ function _func_gpu_abfrage_sh () {
             if [ ${#beChatty} -gt 0 ]; then
                 echo "---> 1. Die Karte ist neu! Bitte editiere die Datei 'benchmark_${uuid[${index[$i]}]}.json' !!!"
             fi
+        fi
+        if [ ! -f ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json ]; then
+            cp GPU-skeleton/benchmark_skeleton.json ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json
         fi
         if [ ! -f "${uuid[${index[$i]}]}/gpu_gv-algo.sh" ]; then cp GPU-skeleton/gpu_gv-algo.sh ${uuid[${index[$i]}]}/; fi
 

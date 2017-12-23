@@ -19,7 +19,7 @@
 #    "domain"
 #    "algo_port"
 #    "worker"
-#    "LIVE_LOGFILE" : "InternalAlgos[${algo}]"
+#    "LIVE_LOGFILE" : "MiningAlgos[${algo}]"
 #)
 
 # GLOBALE VARIABLEN, nützliche Funktionen
@@ -42,7 +42,7 @@ gpu_idx=$2
 continent=$3
 algo_port=$4
 worker=$5
-declare -A InternalAlgos[$algo]=$6
+declare -A MiningAlgos[$algo]=$6
 gpu_uuid=$7
 domain=$8
 # Rest ist Nvidia GPU Default Tuning CmdStack
@@ -240,11 +240,11 @@ echo   ${nowDate} ${nowSecs}
 echo   "Kurze Zusammenfassung:"
 echo   "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll gestartet werden."
 echo   "Das ist der Miner,      der ausgewählt ist : ${miner_name} ${miner_version}"
-echo   "das ist der Coin/Algo,  der ausgewählt ist : ${algo}"
+echo   "das ist der Algo/Coin,  der ausgewählt ist : ${algo}"
 printf "das ist der \$algorithm, der ausgewählt ist : ${algorithm}"
 [[ ${#muck888} -gt 0 ]] && printf "#${muck888}"
 printf "\n"
-[ "${InternalAlgos[$algo]}" != "${algo}" ] && echo "Das ist der Miner-Interne Algoname: ${InternalAlgos[$algo]}"
+[ "${MiningAlgos[$algo]}" != "${algo}" ] && echo "Das ist der Miner-Berechnungs Algorithmus: ${MiningAlgos[$algo]}"
 echo   ""
 echo   "DIE FOLGENDEN NVIDIA GPU KOMMANDOS WERDEN ABGESETZT:"
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
@@ -256,20 +256,13 @@ for (( i=0; $i<${#CmdStack[@]}; i++ )); do
     ${CmdStack[$i]}
 done
 
-if [ $NoCards ]; then
-    if [ ! -f "${BENCHLOGFILE}" ]; then
-        if [[ "${miner_name}" == "miner" ]]; then
-            #sed -e 's/\x1B[[][[:digit:]]*m//g' equihash.log >${BENCHLOGFILE}
-            cp -f ../benchmarking/equihash.log ${BENCHLOGFILE}
-        elif [[ "${miner_name}" == "zm" ]]; then
-            printf ""
-        else
-            # cp ../benchmarking/test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
-            cp ../benchmarking/test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
-            # cp ../booos ${BENCHLOGFILE}
-        fi
-    fi
-fi  ## $NoCards
+#if [ $NoCards ]; then
+#    if [ ! -f "${BENCHLOGFILE}" ]; then
+#        # cp ../benchmarking/test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
+#        cp ../benchmarking/test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
+#        # cp ../booos ${BENCHLOGFILE}
+#    fi
+#fi  ## $NoCards
 
 
 ####################################################################################

@@ -1,12 +1,15 @@
 ################################################################################################################
-# Diese Strings/Worte sind, egal wie sie vom Superpool auch genannt werden, IMMER Bestandteil des Servernamens
-#
-# ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG: ACHTUNG:
-#          Sobald NiceHash und suprnova hier einen gleichen String/Wort/Namen verwenden,
-#          können wir die Domains für diesen Fall nicht mehr sauber unterscheiden,
-#          ohne weitere Programmlogik an bestimmten Stellen hinzuzufügen!
-#          BITTE DARAN DENKEN UND BESCHEID SAGEN!!!
+# Hier sind die "Produkte" (COINS/ALGOS) gefolgt vom MiningAlgo durch SPC getrennt,
+#      falls er sich namentlich vom Produkt unterscheidet.
+#      In einer Zeile muss also nicht unbedingt zwei mal der selbe Name stehen.
+#      Algorithmus und Produkt heissen dann gleich, wenn sich nur 1 Name auf einer Zeile befindet.
+# Die Produktnamen und -preise kommen aus dem Web und werden bei einem Server,
+#      der meist das Produkt im seiner Adresse hat, abgeliefert.
+#      Manche Pools verbinden das Produkt auch mit einem Server-Port statt mit der Server-Adresse
 ################################################################################################################
-equihash
-zec
-zen
+# suprnova COIN   MiningAlgo Name
+# NiceHash ALGO   MiningAlgo Name
+# More Products   MiningAlgo Name
+equihash          equihash
+zec               equihash
+zen               equihash

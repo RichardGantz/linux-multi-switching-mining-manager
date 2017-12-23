@@ -48,59 +48,40 @@ function _expand_IMPORTANT_BENCHMARK_JSON ()
     cp -f ${IMPORTANT_BENCHMARK_JSON} ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK
 
     #
-    # Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um MinerVersion, etc.
-    # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien gibt
-    #
-    grep -m1 -c "\"MinerVersion\": \"" ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK &>/dev/null \
-        || gawk -e 'BEGIN {FS=":"} \
-           match( $0, /"MinerName": "[[:alnum:]]*/ )\
-               { M=substr($0, RSTART, RLENGTH); miner=tolower( substr(M, index(M,":")+3 ) ); \
-                 if ( miner == "equihash" ) { miner="miner"; version="0.3.4b" } else { miner="ccminer"; version="2.2" } \
-                 print "      \"MinerName\": \"" miner "\","; \
-                 print "      \"MinerVersion\": \"" version "\","; \
-                 next } \
-           match( $0, /"LessThreads": [[:digit:]]*/ )\
-               { print "      \"GPUGraphicsClockOffset[3]\": 0,"; \
-                 print "      \"GPUMemoryTransferRateOffset[3]\": 0,"; \
-                 print "      \"GPUTargetFanSpeed\": 0,"; \
-                 print "      \"PowerLimit\": 0," \
-               } \
-           {print}' ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK >${IMPORTANT_BENCHMARK_JSON}
-
-    #
-    # 2. Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um die Felder
-    #    MAX_WATT, HASHCOUNT, HASH_DURATION, BENCH_DATE, BENCH_KIND, MinerFee
-    # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien mehr gibt.
-    #
-    grep -m1 -c "\"MAX_WATT\": " ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK &>/dev/null \
-        || gawk -e 'BEGIN {FS=":"} \
-           match( $0, /"WATT": / )\
-               { print $0;        \
-                 print "      \"MAX_WATT\": 0,";   \
-                 print "      \"HASHCOUNT\": 0,";  \
-                 print "      \"HASH_DURATION\": 0,";  \
-                 print "      \"BENCH_DATE\": 0,"; \
-                 print "      \"BENCH_KIND\": 0,"; \
-                 print "      \"MinerFee\": 0,";   \
-                 next } \
-           {print}' ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK >${IMPORTANT_BENCHMARK_JSON}
-
-    #
-    # 3. Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um die Felder
-    #    "DefaultPowerLimit"   (wenn beim Benchmarking = 0 ist, muss es dort ein mal abgefragt werden!)
-    #    "hashCountPerSeconds" (als Quotient aus hashCount und HASH_DURATION, 4 Stellen hinter dem Komma)
+    # 1. Erweiterung der Blockstruktur des benchmark_${gpu_uuid}.json um die Felder
+    #    "HashCountPerSeconds" (als Quotient aus hashCount und HASH_DURATION, 4 Stellen hinter dem Komma)
     #    "BenchMode"           ( "l" für LIVE oder "o" für OFFLINE
+    # 2. "NiceHashID     kann wieder raus. Interessiert eigentlich niemanden, weil die JSON nicht nur für NiceHash,
+    #                    sondern für alle MiningAlgos da ist, die vom jeweiligen Pool unabhängig sind.
+    #    "MinerBaseType" kann raus, bis wir wissen, was das soll.
+    #    "ExtraLaunchParameters" raus, bis wir wissen, was das soll.
+    #    "MinerFee"      kann wieder raus, weil die MinerFees in ../miners/all.miner.fees gepflegt werden
     #    
     # Kann wieder raus, wenn es keine "veralteten" benchmark_*.json Dateien mehr gibt.
     #
-    grep -m1 -c "\"DefaultPowerLimit\": " ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK &>/dev/null \
-        || gawk -e 'BEGIN {FS=":"} \
-           match( $0, /"PowerLimit": / )\
-               { print $0;        \
-                 print "      \"DefaultPowerLimit\": 0,";   \
-                 print "      \"hashCountPerSeconds\": 0,";  \
-                 print "      \"BenchMode\": 0,";  \
-                 next } \
+    grep -m1 -c "\"HashCountPerSeconds\": " ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK &>/dev/null \
+        || gawk -e 'BEGIN {FS=":"}
+           match( $0, /"Name": / ) { print $0     # Name bzw. MiningAlgo
+                           getline                # NiceHashID                      raus
+                           getline                # MinerBaseType                   raus
+                           getline;  print $0     # MinerName
+                           getline;  print $0     # MinerVersion
+                           getline;  print $0     # BenchmarkSpeed
+                           getline                # ExtraLaunchParameters           raus
+                           getline;  print $0     # WATT
+                           getline;  print $0     # MAX_WATT
+                           getline;  print $0     # HASHCOUNT
+                           getline;  print $0     # HASH_DURATION
+                           getline;  print $0     # BENCH_DATE
+                           getline;  print $0     # BENCH_KIND
+                           getline                # MinerFee                        raus
+                           getline;  print $0     # GPUGraphicsClockOffset[3]
+                           getline;  print $0     # GPUMemoryTransferRateOffset[3]
+                           getline;  print $0     # GPUTargetFanSpeed
+                           getline;  print $0     # PowerLimit
+                           print "      \"HashCountPerSeconds\": 0,"
+                           print "      \"BenchMode\": 0,"
+                           next }
            {print}' ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK >${IMPORTANT_BENCHMARK_JSON}
 
 }
@@ -111,20 +92,20 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     if [ "$1" == "without_miners" ]; then w_o_miners=1; fi
 
     # Das sind die Werte zu jedem einzelnen "${algorithm}" == "${algo}#${miner_name}#${miner_version}"
-    unset bENCH         ; declare -Ag bENCH
-    unset WATTS         ; declare -Ag WATTS
-    unset MAX_WATT      ; declare -Ag MAX_WATT
-    unset HASHCOUNT     ; declare -Ag HASHCOUNT
-    unset HASH_DURATION ; declare -Ag HASH_DURATION
-    unset BENCH_DATE    ; declare -Ag BENCH_DATE
-    unset BENCH_KIND    ; declare -Ag BENCH_KIND
-    unset MinerFee      ; declare -Ag MinerFee
-    unset EXTRA_PARAMS  ; declare -Ag EXTRA_PARAMS
-    unset GRAFIK_CLOCK  ; declare -Ag GRAFIK_CLOCK
-    unset MEMORY_CLOCK  ; declare -Ag MEMORY_CLOCK
-    unset FAN_SPEED     ; declare -Ag FAN_SPEED
-    unset POWER_LIMIT   ; declare -Ag POWER_LIMIT
-    unset LESS_THREADS  ; declare -Ag LESS_THREADS
+    unset bENCH               ; declare -Ag bENCH
+    unset WATTS               ; declare -Ag WATTS
+    unset MAX_WATT            ; declare -Ag MAX_WATT
+    unset HASHCOUNT           ; declare -Ag HASHCOUNT
+    unset HASH_DURATION       ; declare -Ag HASH_DURATION
+    unset BENCH_DATE          ; declare -Ag BENCH_DATE
+    unset BENCH_KIND          ; declare -Ag BENCH_KIND
+    unset GRAFIK_CLOCK        ; declare -Ag GRAFIK_CLOCK
+    unset MEMORY_CLOCK        ; declare -Ag MEMORY_CLOCK
+    unset FAN_SPEED           ; declare -Ag FAN_SPEED
+    unset POWER_LIMIT         ; declare -Ag POWER_LIMIT
+    unset HashCountPerSeconds ; declare -Ag HashCountPerSeconds
+    unset BenchMode           ; declare -Ag BenchMode
+    unset LESS_THREADS        ; declare -Ag LESS_THREADS
     unset READARR
 
     _reserve_and_lock_file ${IMPORTANT_BENCHMARK_JSON}
@@ -153,16 +134,16 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     #
     #      "Name": "%s",
     #      "NiceHashID": %i,
-    #      "MinerBaseType": %i,
     #      "MinerName": "%s",
     #      "MinerVersion": "%s",
     #      "BenchmarkSpeed": %i,
-    #      "ExtraLaunchParameters": "%s",
     #      "WATT": %i,
     #      "GPUGraphicsClockOffset[3]": %i,
     #      "GPUMemoryTransferRateOffset[3]": %i,
     #      "GPUTargetFanSpeed": %i,
     #      "PowerLimit": %i,
+    #      "HashCountPerSeconds": %i,
+    #      "BenchMode": %i,
     #      "LessThreads": %i
     #
     #      ... werden zu den 3 Zeilen
@@ -172,47 +153,44 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     #      320
     #      
     #sed -e 's/\r//g' $IMPORTANT_BENCHMARK_JSON | \
-    if [ ${#bENCH_SRC} -eq 0 ]; then bENCH_SRC=${IMPORTANT_BENCHMARK_JSON}.tee_bENCH_SRC; fi
+    [ ${#bENCH_SRC} -eq 0 ] && bENCH_SRC=${IMPORTANT_BENCHMARK_JSON}.tee_bENCH_SRC
     shopt -s lastpipe
     gawk -e '$1 ~ /"Name":/ \
-       { algo = substr( tolower($2), 2, length($2)-3 )
-         if ( length( algo ) > 0 ) {
-            getline                                       # NiceHashID
-            algo_id       = substr( $2, 1, length($2)-1 )
-            getline                                       # MinerBaseType
+       { mining_algo = substr( tolower($2), 2, length($2)-3 )
+         if ( length( mining_algo ) > 0 ) {
             getline                                       # MinerName
-            miner_name    = substr( $2, 2, length($2)-3 )
+            miner_name          = substr( $2, 2, length($2)-3 )
             getline                                       # MinerVersion
-            miner_version = substr( $2, 2, length($2)-3 )
+            miner_version       = substr( $2, 2, length($2)-3 )
             getline                                       # BenchmarkSpeed
-            benchspeed    = substr( $2, 1, length($2)-1 )
-            getline                                       # ExtraLaunchParameters
-            extra_params  = substr( $2, 2, length($2)-3 )
+            benchspeed          = substr( $2, 1, length($2)-1 )
             getline                                       # WATT
-            watt          = substr( $2, 1, length($2)-1 )
+            watt                = substr( $2, 1, length($2)-1 )
             getline                                       # MAX_WATT
-            MAX_WATT      = substr( $2, 1, length($2)-1 )
+            MAX_WATT            = substr( $2, 1, length($2)-1 )
             getline                                       # HASHCOUNT
-            HASHCOUNT     = substr( $2, 1, length($2)-1 )
+            HASHCOUNT           = substr( $2, 1, length($2)-1 )
             getline                                       # HASH_DURATION
-            HASH_DURATION = substr( $2, 1, length($2)-1 )
+            HASH_DURATION       = substr( $2, 1, length($2)-1 )
             getline                                       # BENCH_DATE
-            BENCH_DATE    = substr( $2, 1, length($2)-1 )
+            BENCH_DATE          = substr( $2, 1, length($2)-1 )
             getline                                       # BENCH_KIND
-            BENCH_KIND    = substr( $2, 1, length($2)-1 )
-            getline                                       # MinerFee
-            MinerFee      = substr( $2, 1, length($2)-1 )
+            BENCH_KIND          = substr( $2, 1, length($2)-1 )
             getline                                       # GRAFIK_CLOCK
-            grafik_clock  = substr( $2, 1, length($2)-1 )
+            grafik_clock        = substr( $2, 1, length($2)-1 )
             getline                                       # MEMORY_CLOCK
-            memory_clock  = substr( $2, 1, length($2)-1 )
+            memory_clock        = substr( $2, 1, length($2)-1 )
             getline                                       # FAN_SPEED
-            fan_speed     = substr( $2, 1, length($2)-1 )
+            fan_speed           = substr( $2, 1, length($2)-1 )
             getline                                       # POWER_LIMIT
-            power_limit   = substr( $2, 1, length($2)-1 )
+            power_limit         = substr( $2, 1, length($2)-1 )
+            getline                                       # HashCountPerSeconds
+            HashCountPerSeconds = substr( $2, 1, length($2)-1 )
+            getline                                       # BenchMode
+            BenchMode           = substr( $2, 1, length($2)-1 )
             getline                                       # LESS_THREADS
             less_threads  = substr( $2, 1, length($2)-0 )
-            algorithm = algo "#" miner_name "#" miner_version
+            algorithm = mining_algo "#" miner_name "#" miner_version
             if ( BENCH_KIND == 888 )
                { algorithm = algorithm "#888" }
             print algorithm
@@ -223,12 +201,12 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
             print HASH_DURATION
             print BENCH_DATE
             print BENCH_KIND
-            print MinerFee
-            print extra_params
             print grafik_clock
             print memory_clock
             print fan_speed
             print power_limit
+            print HashCountPerSeconds
+            print BenchMode
             print less_threads
             next
          }
@@ -243,20 +221,24 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
         if [[ ${#READARR[$i+1]} -gt 0 && (${#READARR[$i+2]} == 0 || ${READARR[$i+2]} == 0) ]]; then
            WATTS[${READARR[$i]}]=1000
            notify-send -t 10000 -u critical "### Fehler in Benchmarkdatei ###" \
-                 "GPU-Dir: ${GPU_DIR} \n Algoname: ${READARR[$i]} \n KEINE WATT ANGEGEBEN. Verwende 1000"
+                 "GPU-Dir: ${GPU_DIR} \n MiningAlgoName: ${READARR[$i]} \n KEINE WATT ANGEGEBEN. Verwende 1000"
         fi
-        MAX_WATT[${READARR[$i]}]=${READARR[$i+3]}
-        HASHCOUNT[${READARR[$i]}]=${READARR[$i+4]}
-        HASH_DURATION[${READARR[$i]}]=${READARR[$i+5]}
-        BENCH_DATE[${READARR[$i]}]=${READARR[$i+6]}
-        BENCH_KIND[${READARR[$i]}]=${READARR[$i+7]}
-        MinerFee[${READARR[$i]}]=${READARR[$i+8]}
-        EXTRA_PARAMS[${READARR[$i]}]=${READARR[$i+9]}
-        GRAFIK_CLOCK[${READARR[$i]}]=${READARR[$i+10]}
-        MEMORY_CLOCK[${READARR[$i]}]=${READARR[$i+11]}
-        FAN_SPEED[${READARR[$i]}]=${READARR[$i+12]}
-        POWER_LIMIT[${READARR[$i]}]=${READARR[$i+13]}
-        LESS_THREADS[${READARR[$i]}]=${READARR[$i+14]}
+        # Die müssen alle in der richtigen Reihenfolge stehen!
+        declare -i ofs=3
+        MAX_WATT[${READARR[$i]}]=${READARR[$i+ofs++]}
+        HASHCOUNT[${READARR[$i]}]=${READARR[$i+ofs++]}
+        HASH_DURATION[${READARR[$i]}]=${READARR[$i+ofs++]}
+        BENCH_DATE[${READARR[$i]}]=${READARR[$i+ofs++]}
+        BENCH_KIND[${READARR[$i]}]=${READARR[$i+ofs++]}
+        GRAFIK_CLOCK[${READARR[$i]}]=${READARR[$i+ofs++]}
+        MEMORY_CLOCK[${READARR[$i]}]=${READARR[$i+ofs++]}
+        FAN_SPEED[${READARR[$i]}]=${READARR[$i+ofs++]}
+        local -i P=${READARR[$i+ofs++]}
+        [[ ${P} -eq 0 ]] && P=${defPowLim[${gpu_idx}]}
+        POWER_LIMIT[${READARR[$i]}]=${P}
+        HashCountPerSeconds[${READARR[$i]}]=${READARR[$i+ofs++]}
+        BenchMode[${READARR[$i]}]=${READARR[$i+ofs++]}
+        LESS_THREADS[${READARR[$i]}]=${READARR[$i+ofs++]}
     done
     rm -f ${IMPORTANT_BENCHMARK_JSON}.lock
 
@@ -270,7 +252,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
 
         # Einlesen aller Dateien ${miner_name}#Coin2Algo.names, die die Zuordnung der NH-Namen (Algo/Coin) zu den CC-Namen (Algorithmus) enthält
         # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
-        # in ALLE die Arrays "Internal_${miner_name}_${miner_version//\./_}_Algos"
+        # in ALLE die Arrays "Mining_${miner_name}_${miner_version//\./_}_Algos"
         #
         # Das Verzeichnis, das alle diese Informationen bereit hält ist:
         # ${LINUX_MULTI_MINING_ROOT}/miners
@@ -283,11 +265,11 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
 
         for minerName in ${ALLE_MINER[@]}; do
             read m_name m_version <<<"${minerName//#/ }"
-            declare -n actInternalAlgos="Internal_${m_name}_${m_version//\./_}_Algos"
-            for lfdAlgo in ${!actInternalAlgos[@]}; do
-                if [ ${#bENCH["${lfdAlgo}#${m_name}#${m_version}"]} -eq 0 ]; then
+            declare -n actMiningAlgos="Mining_${m_name}_${m_version//\./_}_Algos"
+            for lfdMiningAlgo in ${actMiningAlgos[@]}; do
+                if [ ${#bENCH["${lfdMiningAlgo}#${m_name}#${m_version}"]} -eq 0 ]; then
                     printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
-                           ${gpu_idx} "${lfdAlgo}#${m_name}#${m_version}"
+                           ${gpu_idx} "${lfdMiningAlgo}#${m_name}#${m_version}"
                 fi
             done
         done

@@ -357,7 +357,7 @@ while :; do
 
     #  4. ###WARTET### jetzt, bis die Dateien zur Berechnung der Kurse vorhanden und NICHT LEER SIND und
     #  5. Ruft die entsprechenden Funktionen zum Füllen der Arrays, die für die Berechnungen benötigt werden
-    if [ ${DOMAINS["nicehash.com"]} -eq 1 ]; then
+    if [ ${PoolActive["nh"]} -eq 1 ]; then
         #  4. ###WARTET### jetzt, bis die Datei "../KURSE_PORTS.in" vorhanden und NICHT LEER ist.
         until [ -s ${algoID_KURSE_PORTS_ARR} ]; do
             echo "GPU #${gpu_idx}: ###---> Waiting for ${algoID_KURSE_PORTS_ARR} to become available..."
@@ -371,7 +371,7 @@ while :; do
         _read_in_ALGO_PORTS_KURSE
     fi
 
-    if [ ${DOMAINS["suprnova.cc"]} -eq 1 ]; then
+    if [ ${PoolActive["sn"]} -eq 1 ]; then
         until [ -s "${COIN_PRICING_ARR}" -a -s "${COIN_TO_BTC_EXCHANGE_ARR}" ]; do
             echo "GPU #${gpu_idx}: ###---> Waiting for ${COIN_PRICING_ARR} and ${COIN_TO_BTC_EXCHANGE_ARR} to become available..."
             sleep .5
@@ -490,12 +490,12 @@ while :; do
         # Wenn der Algo für 5 Minuten Disabled ist, übergehen:
         [[ ${#MINER_ALGO_DISABLED_ARR[${algorithm%#888}]} -ne 0 ]] && continue
         # Wenn der Algo durch BENCHMARKING PERMANENT Disabled ist, übergehen:
-        for algo in ${BENCH_ALGO_DISABLED_ARR[@]}; do
-            [[ "${algorithm%#888}" == "${algo}" ]] && continue 2
+        for lfdAlgorithm in ${BENCH_ALGO_DISABLED_ARR[@]}; do
+            [[ "${algorithm%#888}" == "${lfdAlgorithm}" ]] && continue 2
         done
         # Wenn der Algo GLOBAL Disabled ist, übergehen:
-        for algo in ${GLOBAL_ALGO_DISABLED_ARR[@]}; do
-            [[ ${algorithm} =~ ^${algo} ]] && continue 2
+        for lfdAlgorithm in ${GLOBAL_ALGO_DISABLED_ARR[@]}; do
+            [[ ${algorithm} =~ ^${lfdAlgorithm} ]] && continue 2
         done
 
         read algo miner_name miner_version muck888 <<<${algorithm//#/ }
@@ -503,7 +503,8 @@ while :; do
         #REGEXPAT="\<${algo}\>"
         REGEXPAT="\b${algo}\b"
 
-        if [ ${DOMAINS["nicehash.com"]} -eq 1 ]; then
+        pool="nh"
+        if [ ${PoolActive[${pool}]} -eq 1 ]; then
             if [[ "${ALGOs[@]}" =~ ${REGEXPAT} ]]; then
                 # Wenn gerade nichts für den Algo bezahlt wird, übergehen:
                 [[ "${KURSE[$algo]}" == "0" ]] && continue
@@ -516,6 +517,7 @@ while :; do
                     algoMines=$(echo "scale=8;   ${bENCH[$algorithm]}  \
                                                * ${KURSE[$algo]}  \
                                                / ${k_base}^3  \
+                                               * ( 100 - "${PoolFee[${pool}]}" ) / 100 \
                                  " | bc )
                     printf "$algorithm\n${WATTS[$algorithm]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
                 else
@@ -525,7 +527,8 @@ while :; do
             fi
         fi
 
-        if [ ${DOMAINS["suprnova.cc"]} -eq 1 ]; then
+        pool="sn"
+        if [ ${PoolActive[${pool}]} -eq 1 ]; then
             if [[ "${COINS[@]}" =~ ${REGEXPAT} ]]; then
                 if [[          ${#bENCH[$algorithm]}      -gt 0   \
                             && ${#BlockReward[$algo]}     -gt 0   \
@@ -537,6 +540,7 @@ while :; do
                     # "Mines" in BTC berechnen
                     algoMines=$(echo "scale=8;   86400 * ${BlockReward[$algo]} * ${Coin2BTC_factor[$algo]}   \
                                                / ( ${BlockTime[$algo]} * (1 + ${CoinHash[$algo]} / ${bENCH[$algorithm]}) ) \
+                                               * ( 100 - "${PoolFee[${pool}]}" ) / 100 \
                                  " | bc )
                     # Wenn gerade nichts für den Algo bezahlt wird, übergehen:
                     [[ ((${algoMines//\./} > 0)) ]] \
@@ -790,23 +794,23 @@ while :; do
             # Das matched beides ein ganzes Wort
             #REGEXPAT="\<${algo}\>"
             REGEXPAT="\b${algo}\b"
-            if [ ${DOMAINS["nicehash.com"]} -eq 1 ]; then
+            if [ ${PoolActive["nh"]} -eq 1 ]; then
                 if [[ "${ALGOs[@]}" =~ ${REGEXPAT} ]]; then
                     algo_port=${PORTs[${algo}]}
                     domain="nicehash.com"
                 fi
             fi
-            if [ ${DOMAINS["suprnova.cc"]} -eq 1 ]; then
+            if [ ${PoolActive["sn"]} -eq 1 ]; then
                 if [[ "${COINS[@]}" =~ ${REGEXPAT} ]]; then
                     algo_port=$(cat ../all.suprnova \
                                        | grep -v -e '^#' \
                                        | grep -m 1 -e "^${algo}:" \
-                                       | cut -d ':' -f 5 )
-                    domains="suprnova.cc"
+                                       | cut -d ':' -f 4 )
+                    domain="suprnova.cc"
                 fi
             fi
-            declare -n actInternalAlgos="Internal_${miner_name}_${miner_version//\./_}_Algos"
-            InternalAlgoName=${actInternalAlgos[$algo]}
+            declare -n actMiningAlgos="Mining_${miner_name}_${miner_version//\./_}_Algos"
+            MiningAlgoName=${actMiningAlgos[$algo]}
             _setup_Nvidia_Default_Tuning_CmdStack
             cmdParameterString=""
             for cmd in "${CmdStack[@]}"; do
@@ -821,7 +825,7 @@ while :; do
               "SelbstWahl"        \
               ${algo_port}        \
               "1060"              \
-              ${InternalAlgoName} \
+              ${MiningAlgoName} \
               ${gpu_uuid}         \
               ${domain}           \
               $cmdParameterString \

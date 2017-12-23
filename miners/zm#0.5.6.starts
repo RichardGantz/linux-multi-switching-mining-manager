@@ -26,8 +26,8 @@ LIVE_PARAMETERSTACK=(
 )
 
 function PREP_LIVE_PARAMETERSTACK () {
-    declare -g coin_or_algoContinent="${algo}"
-    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${algo}.${continent}"
+    declare -g coin_or_algoContinent="${coin}"
+    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${coin}.${continent}"
 }
 
 # Wenn kein BENCH_START_CMD angegeben ist, wird nur LIVE Benchmarked.
@@ -46,7 +46,7 @@ BENCH_PARAMETERSTACK=(
 )
 
 function PREP_BENCH_PARAMETERSTACK () {
-    declare -g coin_or_algoContinent="${algo}"
-    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${algo}.${continent}"
+    declare -g coin_or_algoContinent="${coin}"
+    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${coin}.${continent}"
 }
 

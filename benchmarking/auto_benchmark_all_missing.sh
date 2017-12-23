@@ -153,9 +153,8 @@ gpu_idx_list="${index[@]}"
 ################################################################################
 ################################################################################
 
-touch ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
-
-[ ${debug} -eq 1 ] && echo "Internet Connection Lost - Fake etabliert"
+#touch ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+#[ ${debug} -eq 1 ] && echo "Internet Connection Lost - Fake etabliert"
 
 ################################################################################
 ###
@@ -168,7 +167,7 @@ for gpu_idx in ${index[@]}; do
     gpu_uuid=${uuid[${gpu_idx}]}
     IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
     #_test_=1
-    _read_in_ALL_Internal_Available_and_Missing_Miner_Algo_Arrays "${LINUX_MULTI_MINING_ROOT}/miners"
+    _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays "${LINUX_MULTI_MINING_ROOT}/miners"
 
     ###
     ### 3. Auswahl des Miners
@@ -192,4 +191,4 @@ for gpu_idx in ${index[@]}; do
     done
 done
 
-rm -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
+#rm -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t

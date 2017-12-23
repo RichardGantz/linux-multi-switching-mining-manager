@@ -3,13 +3,19 @@
 # Ein paar Funktionen und auch Überlegungen und Dokumentation zur GPU Systemabfrage und deren Abbild im Arbeitsspeicher
 #
 
+_GPU_ABFRAGE_INCLUDED=1
+
 # SYSTEM_STATE muss natürlich gesetzt sein.
 # Und alle anderen Systemarrays ebenfalls, sonst sind wir total aufgeschmissen.
 # Diese Funktion sollte nur nach einem frischen Aufbau aller Assoziativen Arrays gerufen werden.
 #
 _update_SYSTEM_STATEin_if_necessary () {
     # Im Moment keine Echo's, wenn mit Parameter gerufen...
-    local verbose=$1
+    local verbose=$1 
+    local _WORKDIR_=$(pwd)
+    cd ${LINUX_MULTI_MINING_ROOT}
+
+    _reserve_and_lock_file ${SYSTEM_STATE}          # Zumearbeiten reservieren...
 
     echo '# Über diese Datei schalten wir GPUs MANUELL gezielt ein oder aus.'                   >${SYSTEM_STATE}.out
     echo '# 1 (== EIN == ENABLED)  ist der Default für jede GPU, die noch nicht erfasst war.'  >>${SYSTEM_STATE}.out
@@ -51,6 +57,9 @@ _update_SYSTEM_STATEin_if_necessary () {
     diff -q ${SYSTEM_STATE}.out ${SYSTEM_STATE}.in &>/dev/null \
         || cp -f ${SYSTEM_STATE}.out ${SYSTEM_STATE}.in
     rm -f ${SYSTEM_STATE}.out
+
+    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
+    cd ${_WORKDIR_} >/dev/null
 }
 
 _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
@@ -62,13 +71,15 @@ _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
     unset bus;        declare -ag bus
     unset uuid;       declare -ag uuid
     unset auslastung; declare -ag auslastung
-    for ((i=0; $i<${#READARR[@]}; i+=5)) ; do
+    unset defPowLim;  declare -ag defPowLim
+    for ((i=0; $i<${#READARR[@]}; i+=6)) ; do
         j=$(expr $i / 5)
         index[$j]=${READARR[$i]}        # index[] = Grafikkarten-Index für miner
         name[${index[$j]}]=${READARR[$i+1]}
         bus[${index[$j]}]=${READARR[$i+2]}
         uuid[${index[$j]}]=${READARR[$i+3]}
         auslastung[${index[$j]}]=${READARR[$i+4]}
+        defPowLim[${index[$j]}]=${READARR[$i+5]}
         # EXTREM WICHTIGE Deklarationen!
         # Seitdem dieser Teil am Anfang einer Endlosschleife enthalten ist, müssen wir die Arrays erst mal löschen!
         declare -n deleteIt="GPU${index[$j]}Algos";     unset deleteIt

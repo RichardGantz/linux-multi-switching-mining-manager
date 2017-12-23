@@ -15,13 +15,13 @@ minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/xmrMiner"
 #    "domain"
 #    "algo_port"
 #    "worker"
-#    "InternalAlgos[${algo}]"
+#    "MiningAlgos[${coin}]"
 #)
 #
 #function PREP_LIVE_PARAMETERSTACK () {
-#    LIVE_PARAMETERSTACK[-1]="InternalAlgos[${algo}]"
-#    declare -g coin_or_algoContinent="${algo}"
-#    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${algo}.${continent}"
+#    LIVE_PARAMETERSTACK[-1]="MiningAlgos[${coin}]"
+#    declare -g coin_or_algoContinent="${coin}"
+#    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${coin}.${continent}"
 #}
 
 BENCH_START_CMD='%s/%s -d %s --benchmark'
@@ -32,6 +32,6 @@ BENCH_PARAMETERSTACK=(
 )
 
 #function PREP_BENCH_PARAMETERSTACK () {
-#    BENCH_PARAMETERSTACK[-1]="InternalAlgos[${algo}]"
+#    BENCH_PARAMETERSTACK[-1]="MiningAlgos[${coin}]"
 #}
 

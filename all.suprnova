@@ -19,11 +19,14 @@ dcr:decred:dcr.suprnova.cc:3252
 dgbg:myr-gr:dgbg.suprnova.cc:7978
 dgbq:qubit:dgbq.suprnova.cc:8531
 geo:qubit:geo.suprnova.cc:6009
+btg:equihash:btg.suprnova.cc:8816
+sib:sib:sib.suprnova.cc:3458
+lbc:lbry:lbry.suprnova.cc:6256
 #
 ### Nachzuliefern:
-# xmr:cryptonight
-# btg:equihash
-# sib:x11gost
-# ftc:neoscrypt
-# sc:blake2b
-# lbc:lbry
+# xmr:cryptonight:<- nicht in suprnova enthalten
+# 
+# 
+# ftc:neoscrypt: <- nicht in suprnova enthalten
+# sc:blake2b: <- nicht in suprnova enthalten
+# 

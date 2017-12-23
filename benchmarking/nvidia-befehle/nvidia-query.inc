@@ -13,8 +13,12 @@ if [ $NoCards ]; then
 fi
 
 # NVIDIA Befehle
-#nvidia-smi -q -i ${gpu_idx} -d Clock,Power
+#nvidia-smi -i ${gpu_idx} -q -d Clock,Power
 #nvidia-smi -i ${gpu_idx} --query-gpu=temperature.gpu --format=csv,noheader
+# list devices
+#nvidia-smi --query-gpu=index,gpu_name,gpu_uuid --format=csv,noheader
+# device $var auflisten
+#nvidia-smi --id=${gpu_idx} --query-gpu=index,gpu_name,gpu_uuid --format=csv,noheader
 #
 # Die folgenden Strings kommen vor und dienen als Index für die Assoziativen Arrays
 # actClocks[] und maxClocks[]
@@ -43,12 +47,18 @@ nvidiaCmd[4]="nvidia-settings --assign [gpu:%i]/GPUFanControlState=%i"
 # 2. $IMPORTANT_BENCHMARK_JSON muss eingelesen sein, damit die Arrays gefüllt sind
 #        Trotzdem kann es vorkommen, dass die Array-Variablen leer sind, wenn der Algo noch nicht enthalten ist!
 #
+function _declare_and_fill_nvidiPara_Array () {
+    local    G=0; [[ ${#GRAFIK_CLOCK[${algorithm}]} -gt 0 ]] && G=${GRAFIK_CLOCK[${algorithm}]}
+    local    M=0; [[ ${#MEMORY_CLOCK[${algorithm}]} -gt 0 ]] && M=${MEMORY_CLOCK[${algorithm}]}
+    local    F=0; [[ ${#FAN_SPEED[${algorithm}]}    -gt 0 ]] && F=${FAN_SPEED[${algorithm}]}
+    local -i P=0; [[ ${#POWER_LIMIT[${algorithm}]}  -gt 0 ]] && P=${POWER_LIMIT[${algorithm}]}
+    [ ${P} -eq 0 ] && P=${defPowLim[${gpu_idx}]}
+    unset nvidiaPara
+    declare -ag nvidiaPara=( $G $M $F $P )
+}
+
 function _setup_Nvidia_Default_Tuning_CmdStack () {
-    local G=0; [[ ${#GRAFIK_CLOCK[${algorithm}]} -gt 0 ]] && G=${GRAFIK_CLOCK[${algorithm}]}
-    local M=0; [[ ${#MEMORY_CLOCK[${algorithm}]} -gt 0 ]] && M=${MEMORY_CLOCK[${algorithm}]}
-    local F=0; [[ ${#FAN_SPEED[${algorithm}]}    -gt 0 ]] && F=${FAN_SPEED[${algorithm}]}   
-    local P=0; [[ ${#POWER_LIMIT[${algorithm}]}  -gt 0 ]] && P=${POWER_LIMIT[${algorithm}]} 
-    declare -a nvidiaPara=( $G $M $F $P )
+    _declare_and_fill_nvidiPara_Array
 
     # Die Clocks nach den Werten in der JSON setzen
     unset CmdStack
@@ -57,9 +67,9 @@ function _setup_Nvidia_Default_Tuning_CmdStack () {
     for (( i=0; $i<2; i++ )); do
         printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[$i]}" ${gpu_idx} ${nvidiaPara[$i]}
     done
-    
+
     # Fan-Kontrolle nach den Werten in der JSON setzen
-    if [ ${F} -eq 0 ]; then
+    if [ ${nvidiaPara[2]} -eq 0 ]; then
         # Automatik einschalten. Entsprechendes Kommando ist das LETZTE auf dem nvidiaCmd-Array
         printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
     else
@@ -70,9 +80,7 @@ function _setup_Nvidia_Default_Tuning_CmdStack () {
     fi
 
     # Power Limit nach den Werten in der JSON setzen
-    if [ ${P} -gt 0 ]; then
-        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
-    fi
+    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
 }
 
 
