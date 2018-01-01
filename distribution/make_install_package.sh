@@ -48,7 +48,9 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/GPU-skeleton/gpu-bENCH.sh \
     ${SRC_DIR}/GPU-skeleton/gpu_gv-algo.sh \
     ${SRC_DIR}/GPU-skeleton/MinerShell.sh \
-    ${SRC_DIR}/GPU-skeleton/README.md
+    ${SRC_DIR}/GPU-skeleton/README.md \
+    ${SRC_DIR}/distribution/make_install_package.sh \
+    ${SRC_DIR}/distribution/multi_mining_calc.sh.header
 
 # Wir machen das Archiv selbstextrahierend
 cat multi_mining_calc.sh.header ${ARCHIVE_NAME} >multi_mining_calc.install.sh

@@ -87,18 +87,24 @@ if ($6 ~ /\[Not Supported\]/) { print "0" } else { print substr( $6, 1, index($6
                    | gawk -e 'BEGIN {FS=", "} { \
 print $1; print $2; print $3; print $4
 if ($5 ~ /\[Not Supported\]/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
-if ($6 ~ /\[Not Supported\]/) { print "0" } else { print substr( $6, 1, index($6,".")-1 ) }
+if ($6 ~ /\[Not Supported\]/) { print "1" } else { print substr( $6, 1, index($6,".")-1 ) }
 }' \
                   | tee ${SYSTEM_FILE} \
                   | wc -l )
     fi
     GPU_COUNT=$(( ${GPU_COUNT} / 6 ))
 
-    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
-    _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
     unset beChatty
     if [ ${#ATTENTION_FOR_USER_INPUT} -gt 0 ] && [ ${ATTENTION_FOR_USER_INPUT} -gt 0 ]; then beChatty=1; fi
-    _update_SYSTEM_STATEin_if_necessary "$beChatty"
+    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
+    while [ ${#uuidEnabledSOLL[@]} -eq 0 ]; do
+        # Beim allerersten Start gibt es noch keine System.in und die System.in wird erst beim _update geschrieben
+        #      wobei alle GPUs in der Datei auf Enabled gesetzt werden.
+        # Um nach dem Update auch die Arrays aus der system.in gesetzt zu haben, muss sie nochmal eingelesen werden.
+        _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
+        _update_SYSTEM_STATEin_if_necessary "$beChatty"
+        unset beChatty
+    done
     rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
 
     _set_Miner_Device_to_Nvidia_GpuIdx_maps
@@ -144,6 +150,7 @@ if ($6 ~ /\[Not Supported\]/) { print "0" } else { print substr( $6, 1, index($6
 
 if [ 1 -eq 0 ]; then
     if [ $NoCards ]; then
+        ATTENTION_FOR_USER_INPUT=1
         _func_gpu_abfrage_sh
         exit
     fi

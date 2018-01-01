@@ -1564,9 +1564,11 @@ fi
 #nvidiaCmd[4]="nvidia-settings --assign [gpu:%i]/GPUFanControlState=%i"
 _setup_Nvidia_Default_Tuning_CmdStack
 
+miner_device=${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]}
 echo""
 echo "Kurze Zusammenfassung:"
 echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
+echo "Die Miner Device-ID für GPU #${gpu_idx} ist die #${miner_device}"
 echo "Das ist der Miner,           der ausgewählt wurde : ${miner_name} ${miner_version}"
 echo "das ist der Coin,            der ausgewählt wurde : ${coin}"
 echo "das ist der \$coin_algorithm, der ausgewählt wurde : ${coin_algorithm}"

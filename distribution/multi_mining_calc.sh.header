@@ -55,6 +55,15 @@ tail -n+$ARCHIVE $0 | tar xvz -C ${DST_DIR}
 
 cd ${DST_DIR}
 
+# Abfragen:
+# 1. CUDA-Version Verwendung? => Exportpath
+#    Wieviele CUda-Versionen, welche Cuda-Version welcher Miner?
+# 2. Minerfolder/names
+# 3. Pools
+# 4. Username/Password
+# 5. Minerfees
+# 6. GLOBAL_GPU_SYSTEM_STATE.in
+
 [ "${ExecuteAfterInstall}" == "GO" ] && exec ./$(basename $0)
 
 exit 0

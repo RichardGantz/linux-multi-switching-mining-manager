@@ -171,6 +171,11 @@ function _On_Exit () {
         fi
     fi
 
+    # Ein in den Hintergrund geschickter Benchmarker muss beendet werden
+    # Der folgende Befehl sendet ein SIGTERM an die ganze process group des aktuellen Prozesses.
+    # Damit sollten die Benchmarker dann weg sein.
+    kill -- -$$
+
     rm -f .DO_AUTO_BENCHMARK_FOR
     for algorithm in ${!DO_AUTO_BENCHMARK_FOR[@]}; do
         echo ${algorithm} >>.DO_AUTO_BENCHMARK_FOR

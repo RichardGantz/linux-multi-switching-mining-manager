@@ -11,7 +11,7 @@ _GPU_ABFRAGE_INCLUDED=1
 #
 function _update_SYSTEM_STATEin_if_necessary () {
     # Im Moment keine Echo's, wenn mit Parameter gerufen...
-    local verbose=$1 
+    local verbose=$1
     local _WORKDIR_=$(pwd)
     cd ${LINUX_MULTI_MINING_ROOT}
 
@@ -60,17 +60,20 @@ function _update_SYSTEM_STATEin_if_necessary () {
 }
 
 function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
+    unset READARR
     readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 
     # Die Daten der GPUs in Arrays einlesen, die durch den GPU-Grafikkarten-Index indexiert werden können
-    unset index;      declare -ag index
-    unset name;       declare -ag name
-    unset bus;        declare -ag bus
-    unset uuid;       declare -ag uuid
-    unset auslastung; declare -ag auslastung
-    unset defPowLim;  declare -ag defPowLim
-    for ((i=0; $i<${#READARR[@]}; i+=6)) ; do
-        j=$(expr $i / 5)
+    unset index;      declare -ag index       # gpu_row 0 or 1
+    unset name;       declare -ag name        # gpu_row 1 or 2
+    unset bus;        declare -ag bus         # gpu_row 2 or 3
+    unset uuid;       declare -ag uuid        # gpu_row 3 or 4
+    unset auslastung; declare -ag auslastung  # gpu_row 4 or 5
+    unset defPowLim;  declare -ag defPowLim   # gpu_row 5 or 6
+    declare -i num_gpu_rows=6
+
+    for ((i=0; $i<${#READARR[@]}; i+=num_gpu_rows)) ; do
+        j=$(expr $i / ${num_gpu_rows})
         index[$j]=${READARR[$i]}        # index[] = Grafikkarten-Index für miner
         name[${index[$j]}]=${READARR[$i+1]}
         bus[${index[$j]}]=${READARR[$i+2]}
