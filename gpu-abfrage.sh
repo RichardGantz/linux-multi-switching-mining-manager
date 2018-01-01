@@ -73,16 +73,26 @@ function _func_gpu_abfrage_sh () {
     unset READARR
     declare -ig GPU_COUNT
     if [ $NoCards ]; then
-        GPU_COUNT=$(gawk -e 'BEGIN {FS=", | %| W"} \
-                   {print $1; print $2; print $3; print $4; print $5; print substr( $7, 1, index($7,".")-1 ) }' \
-                         .FAKE.nvidia-smi.output >${SYSTEM_FILE} \
+        GPU_COUNT=$(cat .FAKE.nvidia-smi.output \
+                   | grep -E -v -e "^#|^$"      \
+                   | gawk -e 'BEGIN {FS=", "} { \
+print $1; print $2; print $3; print $4
+if ($5 ~ /\[Not Supported\]/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
+if ($6 ~ /\[Not Supported\]/) { print "0" } else { print substr( $6, 1, index($6,".")-1 ) }
+}' \
+                   | tee ${SYSTEM_FILE} \
                    | wc -l)
     else
         GPU_COUNT=$(nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit --format=csv,noheader \
-                  | gawk -e 'BEGIN {FS=", | %| W"} {print $1; print $2; print $3; print $4; print $5; print substr( $7, 1, index($7,".")-1 ) }' \
-                         >${SYSTEM_FILE} \
+                   | gawk -e 'BEGIN {FS=", "} { \
+print $1; print $2; print $3; print $4
+if ($5 ~ /\[Not Supported\]/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
+if ($6 ~ /\[Not Supported\]/) { print "0" } else { print substr( $6, 1, index($6,".")-1 ) }
+}' \
+                  | tee ${SYSTEM_FILE} \
                   | wc -l )
     fi
+    GPU_COUNT=$(( ${GPU_COUNT} / 6 ))
 
     _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
     _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
@@ -132,3 +142,9 @@ function _func_gpu_abfrage_sh () {
     done
 }
 
+if [ 1 -eq 0 ]; then
+    if [ $NoCards ]; then
+        _func_gpu_abfrage_sh
+        exit
+    fi
+fi
