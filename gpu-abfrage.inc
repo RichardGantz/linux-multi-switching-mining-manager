@@ -9,13 +9,11 @@ _GPU_ABFRAGE_INCLUDED=1
 # Und alle anderen Systemarrays ebenfalls, sonst sind wir total aufgeschmissen.
 # Diese Funktion sollte nur nach einem frischen Aufbau aller Assoziativen Arrays gerufen werden.
 #
-_update_SYSTEM_STATEin_if_necessary () {
+function _update_SYSTEM_STATEin_if_necessary () {
     # Im Moment keine Echo's, wenn mit Parameter gerufen...
     local verbose=$1 
     local _WORKDIR_=$(pwd)
     cd ${LINUX_MULTI_MINING_ROOT}
-
-    _reserve_and_lock_file ${SYSTEM_STATE}          # Zumearbeiten reservieren...
 
     echo '# Über diese Datei schalten wir GPUs MANUELL gezielt ein oder aus.'                   >${SYSTEM_STATE}.out
     echo '# 1 (== EIN == ENABLED)  ist der Default für jede GPU, die noch nicht erfasst war.'  >>${SYSTEM_STATE}.out
@@ -58,11 +56,10 @@ _update_SYSTEM_STATEin_if_necessary () {
         || cp -f ${SYSTEM_STATE}.out ${SYSTEM_STATE}.in
     rm -f ${SYSTEM_STATE}.out
 
-    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
     cd ${_WORKDIR_} >/dev/null
 }
 
-_read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
+function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
     readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 
     # Die Daten der GPUs in Arrays einlesen, die durch den GPU-Grafikkarten-Index indexiert werden können
@@ -98,9 +95,6 @@ _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
     #     Weil möglicherweise in der Zwischenzeit Karten ein- oder ausgebaut wurden,
     #     die dazugenommen werden müssen mit einem Default-Wert ENABLED
     #     oder ganz rausfliegen können, weil sie eh nicht mehr im System sind
-    # Eventuell können wir hier auch die temporär disabelten Algos (automatisch?) eintragen lassen
-    #     und durchschleifen. DARUM KÜMMERN WIR UNS ABER, WENN ES SOWEIT IST.
-    #     (Hier ist erst mal nur das Einlesen mitgemacht, weil der Code schon im multi_mining_calc.sh so drin war.)
     unset SYSTEM_STATE_CONTENT
     unset uuidEnabledSOLL;  declare -Ag uuidEnabledSOLL
     unset NumEnabledGPUs;   declare -ig NumEnabledGPUs
@@ -121,5 +115,28 @@ _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
             fi
         done
     fi
+}
+
+# Die folgenden beiden Funktionen können gerufen werden, um eine GPU in der Datei GLOBAL_GPU_SYSTEM_STATE.in
+# disablen ode enablen zu können.
+# Das kann von der gpu_gv-algo.sh genutzt werden, um ein automatisches Benchmarking einleiten zu können,
+# indem die GPU als disabled eingetragen ist und damit nicht auf sie gewartet wird, bis sie rechenergebnisse abliefert.
+# Der Multiminer wartet auf alle enabled GPU's, bis sie die Datei ALGO_WATTS_MINES.in geschrieben haben.
+function _disable_GPU_UUID_GLOBALLY () {
+    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen reservieren
+
+    REGEXPAT='s/^\('${gpu_uuid}':.*\):[[:digit:]]$/\1:0/g'
+    sed -i -e "${REGEXPAT}" ${SYSTEM_STATE}.in
+
+    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
+}
+
+function _enable_GPU_UUID_GLOBALLY () {
+    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen reservieren
+
+    REGEXPAT='s/^\('${gpu_uuid}':.*\):[[:digit:]]$/\1:1/g'
+    sed -i -e "${REGEXPAT}" ${SYSTEM_STATE}.in
+
+    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben, weil _update selbst lockt
 }
 

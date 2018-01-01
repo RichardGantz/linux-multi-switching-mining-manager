@@ -82,6 +82,9 @@ _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 
 read miningAlgo miner_name miner_version muck888 <<<"${algorithm//#/ }"
 
+[[ ${#_MINERFUNC_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+_set_Miner_Device_to_Nvidia_GpuIdx_maps
+
 # Jetzt haben wir gleich alle Daten für den $algorithm !
 IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
 
@@ -145,7 +148,10 @@ while :; do
 
     echo ""
     echo "Benchmark wird momentan mit der folgenden GPU durchgeführt, die Du beeinflussen kannst:"
-    echo "GPU #${gpu_idx} mit UUID: ${gpu_uuid}"
+    echo "NVIDIA GPU #${gpu_idx} mit UUID: ${gpu_uuid}"
+    echo "Der MINER \"${miner_name}#${miner_version}\" führt diese GPU als Device mit der Nummer " \
+         ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} ". Also nicht verwirren lassen."
+    echo "Hier werden Befehle unter Verwendung der echten NVISIA-GPU-Indexnummer abgesetzt, was an der UUID zu erkennen ist."
     echo "Das ist der Miner,      der ausgewählt ist : ${miner_name} ${miner_version}"
     echo "das ist der MiningAlgo, der ausgewählt ist : ${miningAlgo}"
     echo "das ist der \$algorithm, der ausgewählt ist : ${algorithm}"

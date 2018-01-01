@@ -50,12 +50,12 @@ ATTENTION_FOR_USER_INPUT=1      # -a | --auto: setzt die Attention auf 0, überg
 prepare_hashes_for_bc='BEGIN {out="0"}
 { hash=NF-1; einheit=NF
   switch ($einheit) {
-    case /^Sol\/s$|^H\/s$/: faktor=1      ; break
-    case /^k/:              faktor=kBase  ; break
-    case /^M/:              faktor=kBase^2; break
-    case /^G/:              faktor=kBase^3; break
-    case /^T/:              faktor=kBase^4; break
-    case /^P/:              faktor=kBase^5; break
+    case /^Sol\/s *$|^H\/s *$/: faktor=1      ; break
+    case /^k/:                  faktor=kBase  ; break
+    case /^M/:                  faktor=kBase^2; break
+    case /^G/:                  faktor=kBase^3; break
+    case /^T/:                  faktor=kBase^4; break
+    case /^P/:                  faktor=kBase^5; break
   }
   out=out "+" $hash "*" faktor
 }
@@ -162,7 +162,7 @@ function _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
               | tail -n +$hash_line \
               | sed -e 's/ *(yes!)$//g' \
               | gawk -e "${detect_zm_hash_count}" \
-              | grep -e "/s$" \
+              | grep -E -e "/s *$" \
               | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
                              | tee ${temp_hash_bc} | bc >${temp_hash_sum} ) \
               | wc -l \
@@ -224,9 +224,18 @@ function _measure_one_whole_WattsHashes_Cycle () {
     ### Hashwerte aus dem Hintergrund nachsehen, nur die Zeilen zählen und Flagge setzen, sobald die Minimum Hashwerte erreicht sind.
     hashCount=$(cat ${BENCHLOGFILE} \
               | tail -n +$hash_line \
+              | tee >(grep -c -m1 -e "${CONEXPR//[|]/\\|}" >${RETRIES_COUNT}) \
+                    >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+                               BEGIN { yeses=0; booos=0; seq_booos=0 }
+                               $0 ~ BOO { booos++; seq_booos++; next }
+                               $0 ~ YES { yeses++; seq_booos=0;
+                                            if (match( $NF, /[+*]+/ ) > 0)
+                                               { yeses+=(RLENGTH-1) }
+                                          }
+                               END { print seq_booos " " booos " " yeses }' >${BoooooS_COUNT}) \
               | sed -e 's/ *(yes!)$//g' \
               | gawk -e "${detect_zm_hash_count}" \
-              | grep -c "/s$"
+              | grep -E -c "/s *$"
              )
     [ $hashCount -ge $MIN_HASH_COUNT ] && countHashes=0
 
@@ -560,7 +569,7 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             ${benchMode}
             ${less_threads}
         )
-        echo "Der MiningAlgo wird zur Datei ${IMPORTANT_BENCHMARK_JSON} hinzugefügt"
+        echo "Der MiningAlgo \"${miningAlgo}\" wird zur Datei ${IMPORTANT_BENCHMARK_JSON} hinzugefügt"
         sed -i -e '/^ \+]/,/}$/d'  ${IMPORTANT_BENCHMARK_JSON}
         printf ",   {\n"         >>${IMPORTANT_BENCHMARK_JSON}
         for (( i=0; $i<${#BLOCK_FORMAT[@]}; i++ )); do
@@ -573,8 +582,7 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
 function _delete_temporary_files () {
     rm -f ${temp_hash_bc} ${temp_hash_sum} ${temp_watt_sum} ${temp_avgs_bc} ${TEMPAZB_FILE} \
-       ${TEMPSED_FILE} ${WATTSMAXFILE} ${WATTSLOGFILE} ${CCMINER_PID} \
-       ${READY_FOR_SIGNALS}
+       ${TEMPSED_FILE} ${WATTSMAXFILE} ${WATTSLOGFILE}
     [ -s "${TWEAK_CMD_LOG}" ] || rm -f ${TWEAK_CMD_LOG}
 }
 #_delete_temporary_files
@@ -587,6 +595,7 @@ function _terminate_Miner () {
             sleep $Erholung
         fi
         printf "done.\n"
+        rm  ${CCMINER_PID}
     fi
 }
 
@@ -700,8 +709,8 @@ function _On_Exit () {
         temp_einheit=$(cat ${BENCHLOGFILE} \
                               | sed -e 's/ *(yes!)$//g' \
                               | gawk -e "${detect_zm_hash_count}" \
-                              | grep -m1 "/s$" \
-                              | gawk -e '/H\/s$/ {print "H/s"; next}{print "Sol/s"}')
+                              | grep -m1 "/s *$" \
+                              | gawk -e '/H\/s *$/ {print "H/s"; next}{print "Sol/s"}')
 
         summary="\nZusammenfassung der ermittelten Werte:\n"
         summary+="$(printf " Summe WATT   : %12s; Messwerte: %5s\n" $wattSum $wattCount)\n"
@@ -757,7 +766,7 @@ function _On_Exit () {
     fi  ## if [ ${BENCHMARKING_WAS_STARTED} -eq 1 ]
 
     [ $debug -eq 0 ] && _delete_temporary_files
-    rm -f ${This}.pid
+    rm -f ${READY_FOR_SIGNALS} ${This}.pid
 }
 trap _On_Exit EXIT
 
@@ -806,7 +815,6 @@ if [ ! -d test ]; then mkdir test; fi
 # Funktionen für das Einlesen aller bekannten Miner und Unterscheidung in Vefügbare sowie Fehlende.
 [[ ${#_MINERFUNC_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 
-
 # Das ist jetzt richtig aktiv und liest die folgenden Systeminformationen in die entsprechenden Arrays:
 #      index[0-n]=gpu_idx
 #          name[${gpu_idx}]=
@@ -829,6 +837,8 @@ source gpu-abfrage.sh
 _func_gpu_abfrage_sh
 cd ${_WORKDIR_} >/dev/null
 gpu_idx_list="${index[@]}"
+
+_set_Miner_Device_to_Nvidia_GpuIdx_maps
 
 ################################################################################
 ################################################################################
@@ -987,7 +997,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in without_miners
 # Die MissingAlgos könnte man in einer automatischen Schleife benchmarken lassen,
 # bis es keine MissingAlgos mehr gibt.
 #_test_=1
-_read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays "${LINUX_MULTI_MINING_ROOT}/miners"
+_read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
 
 ################################################################################
 ################################################################################
@@ -1413,6 +1423,8 @@ temp_hash_bc="test/${miningAlgo}_${gpu_uuid}_temp_hash_bc_input"
 temp_avgs_bc="test/${miningAlgo}_${gpu_uuid}_temp_avgs_bc_input"
 temp_hash_sum="test/${miningAlgo}_${gpu_uuid}_temp_hash_sum"
 temp_watt_sum="test/${miningAlgo}_${gpu_uuid}_temp_watt_sum"
+RETRIES_COUNT="test/${miningAlgo}_${gpu_uuid}.retry"
+BoooooS_COUNT="test/${miningAlgo}_${gpu_uuid}.booos"
 CCMINER_PID=.$$_ccminer.pid
 
 rm -f ${BENCHLOGFILE} ${TWEAKLOGFILE} ${WATTSLOGFILE} ${WATTSMAXFILE}
@@ -1588,19 +1600,41 @@ worker="1060"         # Noch nicht vollständig implementiert!      <-----------
 ###    Zumindest im Benutzer Eingabemodus.
 ###
 
+if [ 1 -eq 0 ]; then
+    # Servernames und Ports bei non-NH Pools
+    unset Coin_MiningAlgo_ServerName_Port
+    declare -ag Coin_MiningAlgo_ServerName_Port
+    cat ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[${pool}]} \
+        | grep -E -v -e "^#|^$" \
+        | readarray -n 0 -O 0 -t Coin_MiningAlgo_ServerName_Port
+    for ((i=0; $i<${#Coin_MiningAlgo_ServerName_Port[@]}; i++)) ; do
+        read coin miningAlgo server_name algo_port <<<${Coin_MiningAlgo_ServerName_Port[$i]//:/ }
+    done
+fi
+
+# Parameter speziell für den equihash "miner", der ein Logfile angegeben haben muss,
+# weil der Output über standard-out komischerweise nicht gespeichert werden kann
+LIVE_LOGFILE=${BENCHLOGFILE}
+if [ ${NoCards} ]; then
+    # Der equihash "miner" arbeitet nur auf test-Systemen ohne Karten auch im Benchmark-Modus
+    BENCH_LOGFILE=${BENCHLOGFILE}
+fi
+
+server_name="fake"
 unset algo_port
 REGEXPAT="\b${coin}\b"
 if   [ "${pool}" == "nh" ]; then
         algo_port=${PORTs[${coin}]}
 elif [ "${pool}" == "sn" ]; then
-    algo_port=$(cat ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$pool]} \
-                       | grep -v -e '^#' \
-                       | grep -m 1 -e "^${coin}:" \
-                       | cut -d ':' -f 4 )
+    read server_name_algo_port <<<$(cat ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$pool]} \
+                                           | grep -E -v -e '^#|^$' \
+                                           | grep -m 1 -e "^${coin}:" \
+                                           | cut -d ':' -f 3,4 )
+    read server_name algo_port <<<${server_name_algo_port//:/ }
 fi
-#if [ $NoCards ]; then algo_port=777; fi
-if [ -z "${algo_port}" ]; then
-    echo "Es kann kein PORT für den Algo/Coin ${coin} in der DOMAIN \"${domain}\" gefunden werden!"
+
+if [ -z "${algo_port}" -o -z "${server_name}" ]; then
+    echo "Es kann kein SERVERNAME PORT für den Algo/Coin ${coin} in dem POOL \"${pool}\" gefunden werden!"
     [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ] && exit 98   # No algo_port found
     read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
     exec $0 ${initialParameters}

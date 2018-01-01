@@ -33,11 +33,11 @@ echo $$ >${This}.pid
 function _On_Exit () {
     # WhatToMine.* \
     [[ ${debug} -eq 0 ]] \
-	&& rm -f ${algoID_KURSE_PORTS_WEB} ${algoID_KURSE_PORTS_ARR} ${BTC_EUR_KURS_WEB} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} \
-	      KURSE.in ALGO_NAMES.json ALGO_NAMES.in \
-	      ${COIN_PRICING_ARR} ${COIN_TO_BTC_EXCHANGE_ARR} \
-	      I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t \
-	      ${This}.err
+        && rm -f ${algoID_KURSE_PORTS_WEB} ${algoID_KURSE_PORTS_ARR} ${BTC_EUR_KURS_WEB} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} \
+              KURSE.in ALGO_NAMES.json ALGO_NAMES.in \
+              ${COIN_PRICING_ARR} ${COIN_TO_BTC_EXCHANGE_ARR} \
+              I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t \
+              ${This}.err
     rm -f ${This}.pid
 }
 trap _On_Exit EXIT
@@ -76,22 +76,22 @@ declare -i SECS=31 nowSecs
 while :; do
 
     if [ ${PoolActive["sn"]} -eq 1 ]; then
-	echo "------------------   WhatToMine BLOCK_REWARD  ----------------------"
-	_prepare_COIN_PRICING_from_the_Web; RC=$?
-	echo "--------------------------------------------------------------------"
-	[[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) BLOCK_REWARD Abruf nicht erfolgreich." | tee -a ${ERRLOG}
+        echo "------------------   WhatToMine BLOCK_REWARD  ----------------------"
+        _prepare_COIN_PRICING_from_the_Web; RC=$?
+        echo "--------------------------------------------------------------------"
+        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) BLOCK_REWARD Abruf nicht erfolgreich." | tee -a ${ERRLOG}
 
-	echo "------------------   Bittrex COIN-BTC-Faktor  ----------------------"
-	_prepare_COIN_TO_BTC_EXCHANGE_from_the_Web; RC=$?
-	echo "--------------------------------------------------------------------"
-	[[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) COIN-BTC-Faktor Abruf nicht erfolgreich." | tee -a ${ERRLOG}
+        echo "------------------   Bittrex COIN-BTC-Faktor  ----------------------"
+        _prepare_COIN_TO_BTC_EXCHANGE_from_the_Web; RC=$?
+        echo "--------------------------------------------------------------------"
+        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) COIN-BTC-Faktor Abruf nicht erfolgreich." | tee -a ${ERRLOG}
     fi
 
     if [ ${PoolActive["nh"]} -eq 1 ]; then
-	echo "------------------   Nicehash-Kurse           ----------------------"
-	_prepare_ALGO_PORTS_KURSE_from_the_Web; RC=$?
-	echo "--------------------------------------------------------------------"
-	[[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) NiceHash api-Abruf nicht erfolgreich." | tee -a ${ERRLOG}
+        echo "------------------   Nicehash-Kurse           ----------------------"
+        _prepare_ALGO_PORTS_KURSE_from_the_Web; RC=$?
+        echo "--------------------------------------------------------------------"
+        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) NiceHash api-Abruf nicht erfolgreich." | tee -a ${ERRLOG}
     fi
     
     echo "------------------   BTC-EUR-KURS-Abfrage     ----------------------"
@@ -118,6 +118,7 @@ while :; do
     while :; do
         _check_InternetConnection
         nowSecs=$(date +%s)
-        [[ $(( ${nowSecs} - ${SleepingStart} )) -le ${SECS} ]] && sleep 1 || break
+#        [[ $(( ${nowSecs} - ${SleepingStart} )) -le ${SECS} ]] && sleep 1 || break
+        (( ${nowSecs} - ${SleepingStart} <= ${SECS} )) && sleep 1 || break
     done
 done

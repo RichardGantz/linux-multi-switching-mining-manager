@@ -7,33 +7,43 @@
 
 minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ccminer-2.2.2"
 
-LIVE_START_CMD='%s/%s --devices %s -o stratum+tcp://%s.%s:%s -u 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s -p 0 -a %s --no-color'
+LIVE_START_CMD='%s/%s -o stratum+tcp://%s:%s -u %s.%s -p %s --devices %s -a %s --no-color'
 LIVE_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
-    "gpu_idx"
-    "coin_or_algoContinent"
-    "domain"
+    "server_name"
     "algo_port"
+    "user_name"
     "worker"
-    "MiningAlgos[${coin}]"
+    "password"
+    "miner_device"
+    "miningAlgo"
 )
 
 function PREP_LIVE_PARAMETERSTACK () {
-    LIVE_PARAMETERSTACK[-1]="MiningAlgos[${coin}]"
-    declare -g coin_or_algoContinent="${coin}"
-    [ "${domain}" == "nicehash.com" ] && coin_or_algoContinent="${coin}.${continent}"
+    # ${pool} muss von gpu_gv-algo.sh an die MinerShell mit übergeben werden
+    #         und  von bench_30s_2.sh selbst richtig eingestellt werden (was bereits der Fall ist)
+    case "${pool}" in
+        "nh")
+            server_name="${coin}.${continent}.${domain}"
+            user_name="12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
+            password=0
+            ;;
+        "sn")
+            user_name="unbekannt"
+            password=x
+            ;;
+    esac
 }
 
 BENCH_START_CMD='%s/%s --devices %s -a %s --no-color --benchmark'
 BENCH_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
-    "gpu_idx"
-    "MiningAlgos[${coin}]"
+    "miner_device"
+    "miningAlgo"
 )
 
-function PREP_BENCH_PARAMETERSTACK () {
-    BENCH_PARAMETERSTACK[-1]="MiningAlgos[${coin}]"
-}
+#function PREP_BENCH_PARAMETERSTACK () {
+#}
 

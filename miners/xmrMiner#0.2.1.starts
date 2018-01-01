@@ -28,10 +28,9 @@ BENCH_START_CMD='%s/%s -d %s --benchmark'
 BENCH_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
-    "gpu_idx"
+    "miner_device"
 )
 
 #function PREP_BENCH_PARAMETERSTACK () {
-#    BENCH_PARAMETERSTACK[-1]="MiningAlgos[${coin}]"
 #}
 

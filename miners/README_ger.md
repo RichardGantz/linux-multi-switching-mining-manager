@@ -4,11 +4,16 @@ Jede Miner Version ist hier vertreten mit einer Datei, in der all die Algos drin
 {miner_name}#{miner_version}.algos
 
 Einfach in Form einer Liste, z.B. ein Auszug vom ccminer:
+
+# suprnova COIN   MiningAlgo Name
+# NiceHash ALGO   MiningAlgo Name
+# More Products   MiningAlgo Name
 ...
-scrypt
-sha256
-scryptnf
-x11
+lyra2re
+whirlpoolx        whirlpool
+qubit
+quark
+sha256            sha256d
 ...
 
 Bei Dual-Algo-fähigen Minern, die zwei Algos gleichzeitig berechnen können, beachten wir den folgenden Dateiaufbau:
@@ -18,15 +23,5 @@ daggerhashimoto:decred              <--- Die gleichzeitig laufenden Agos durch "
 daggerhashimoto:lbry                <----|
 daggerhashimoto:pascal              <----|
 daggerhashimoto:sia                 <----|
-...
-
-Konvertierungstabellen von NiceHash Algonamen nach {miner_name} Algonamen werde in einer Datei mit folgendem Dateinamen gespeichert und können kommentare nach "#" enthalten:
-NiceHash#{miner_name}.names
-
-z.B. NiceHash#ccminer.names
-...
-# NH Algo Name  CCminer Algo Name
-blake256r8      blakecoin
-blake256r8vnl   vanilla
 ...
 

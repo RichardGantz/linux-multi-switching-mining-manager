@@ -12,7 +12,8 @@
 ###############################################################################
 
 # GLOBALE VARIABLEN, nützliche Funktionen
-[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
+[[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
+[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
@@ -48,7 +49,7 @@ find . -depth -name \*.lock -delete
 
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
-export ERRLOG=$(basename $0 .sh).err
+export ERRLOG=${LINUX_MULTI_MINING_ROOT}/$(basename $0 .sh).err
 
 function _delete_temporary_files () {
     rm -f ${ERRLOG} ${SYNCFILE} ${SYSTEM_STATE}.lock \
@@ -61,14 +62,16 @@ _delete_temporary_files
 #
 function _terminate_all_log_ptys () {
     for gpu_idx in ${!LOG_PTY_CMD[@]}; do
-        printf "Beenden des Logger-Terminals GPU #${gpu_idx} ... "
+        broken_pipe_text+="Beenden des Logger-Terminals GPU #${gpu_idx} ... "
+        REGEXPAT="${LOG_PTY_CMD[${gpu_idx}]//\//\\/}"
+        REGEXPAT="${REGEXPAT//\+/\\+}"
         kill_pids=$(ps -ef \
-          | grep -e "${LOG_PTY_CMD[${gpu_idx}]}" \
+          | grep -e "${REGEXPAT}" \
           | grep -v 'grep -e ' \
           | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
         if [ ! "$kill_pids" == "" ]; then
             kill $kill_pids >/dev/null
-            printf "done.\n"
+            broken_pipe_text+="done.\n"
         fi
     done
 }
@@ -79,16 +82,20 @@ function _terminate_all_processes_of_script () {
        | grep -v 'grep -e ' \
        | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
     if [ ! "$kill_pids" == "" ]; then
-        printf "Killing all $1 processes... "
+        broken_pipe_text+="Killing all $1 processes... "
         kill $kill_pids
-        printf "done.\n"
+        broken_pipe_text+="done.\n"
     fi
 }
 
 function _On_Exit () {
+    broken_pipe_text="MultiMiner: _On_Exit() ENTRY, CLEANING UP RESOURCES NOW...\n"
     _terminate_all_processes_of_script "gpu_gv-algo.sh"
     _terminate_all_processes_of_script "algo_multi_abfrage.sh"
     _terminate_all_log_ptys
+    broken_pipe_text+="\n"
+    echo ${broken_pipe_text}
+
     [[ ${#pstreePID} -gt 0 ]] && kill ${pstreePID}
     # Temporäre Dateien löschen
     [[ $debug -eq 0 ]] && _delete_temporary_files
@@ -153,6 +160,7 @@ source ./gpu-abfrage.sh
 # Das gibt Informationen der gpu-abfrage.sh aus
 ATTENTION_FOR_USER_INPUT=1
 while : ; do
+    printf "=========         Beginn neuer Zyklus um:     $(date "+%Y-%m-%d %H:%M:%S" )         =========\n"
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >1.< While Loop ENTRY" >>perfmon.log
 
@@ -284,34 +292,33 @@ while : ; do
     #
     # Zunächst also warten, bis die "Mines"-Berechnungen und die Wattangaben alle verfügbar sind.
 
-    _progressbar='\r'
-    while :; do
-        declare -i AWMTime=new_Data_available+3600
-        for UUID in ${!uuidEnabledSOLL[@]}; do
-            if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
-                if [ ! -f ${UUID}/ALGO_WATTS_MINES.lock ]; then
-                    if [ -f ${UUID}/ALGO_WATTS_MINES.in ]; then
-                        declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in) 2>/dev/null
-                        if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
+    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "Going to wait for all GPUs to calculate their ALGO_WATTS_MINES.in"
+    if [ ${NumEnabledGPUs} -gt 0 ]; then
+        declare -i msg_echoed=0
+        while :; do
+            declare -i AWMTime=new_Data_available+3600
+            for UUID in ${!uuidEnabledSOLL[@]}; do
+                if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
+                    if [ ! -f ${UUID}/ALGO_WATTS_MINES.lock ]; then
+                        if [ -f ${UUID}/ALGO_WATTS_MINES.in ]; then
+                            declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in) 2>/dev/null
+                            if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
+                        fi
                     fi
                 fi
+            done
+            if [ $AWMTime -lt $new_Data_available ]; then
+                [[ msg_echoed++ -eq 0 ]] && echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
+                sleep .5
+            else
+                break
             fi
         done
-        if [ $AWMTime -lt $new_Data_available ]; then
-            [[ "${_progressbar}" == "\r" ]] && echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
-            _progressbar+='.'
-            if [[ ${#_progressbar} -gt 75 ]]; then
-                printf '\r                                                                            '
-                _progressbar='\r.'
-            fi
-            printf ${_progressbar}
-            sleep .5
-        else
-            break
-        fi
-    done
-    [[ "${_progressbar}" != "\r" ]] && printf "\n"
+    else
+        echo "Im Moment sind ALLE GPU's DISABLED..."
+    fi
 
+    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >3.< GPUs haben alle Daten geschrieben" >>perfmon.log
 
     ###############################################################################################
@@ -335,6 +342,9 @@ while : ; do
     #
     #    EINLESEN ALLER ALGORITHMEN, WATTS und MINES, AUF DIE WIR GERADE GEWARTET HABEN
     #
+    # m_m_calc.sh wird zwar das selbe auch tun, aber wir brauchen die Daten, wenn wir die Ergebnisse von m_m_calc.sh bekommen,
+    # denn diese Ergebnisse sind nur exakte Pointer/Zeiger in diese Datenmenge hinein, die wir brauchen, um die Anweisungen
+    # über ${RUNNING_STATE} an die GPUs weitergeben zu können. Wir können uns das Einlesen also nicht ersparen.
     _read_in_All_ALGO_WATTS_MINESin
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >4.< Alle Algos aller GPUs sind eigelesen." >>perfmon.log
@@ -535,9 +545,11 @@ while : ; do
 
         # Ausfiltern der Guten GPUs aus PossibleCandidateGPUidx.
         # PossibleCandidateGPUidx enthält dann zum Schluss nur noch ebenfalls abzuschaltende GPUs
-        # ${gpu_idx} ausfiltern durch Neu-Initialisierung des Arrays, wobei ${gpu_idx} durch '' ersetzt wird
-        #            und damit einfach nicht mit ausgegeben und also nicht mehr im neuen Array enthalten ist.
-        PossibleCandidateGPUidx=(${PossibleCandidateGPUidx[@]/${gpu_idx}/})
+        unset tmparray
+        for p in ${!PossibleCandidateGPUidx[@]}; do
+            [[ "${PossibleCandidateGPUidx[$p]}" != "${gpu_idx}" ]] && tmparray+=( ${PossibleCandidateGPUidx[$p]} )
+        done
+        PossibleCandidateGPUidx=( ${tmparray[@]} )
 
         declare -n actGPUalgoName="GPU${gpu_idx}Algos"
         declare -n actGPUalgoWatt="GPU${gpu_idx}Watts"
@@ -590,7 +602,9 @@ while : ; do
                         echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin auf \"${actGPUalgoName[${algoidx}]}\""
                     fi
                     printf "${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
-                    NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
+                    if [ $NoCards ]; then
+                        [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
+                    fi
                 else
                     #
                     # Die Karte ist NUN generell DISABLED!
@@ -620,7 +634,9 @@ while : ; do
                     # MINER- Behandlung
                     echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
                     printf "${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
-                    NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
+                    if [ $NoCards ]; then
+                        [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
+                    fi
                 else
                     #
                     # Die Karte BLEIBT generell DISABLED
@@ -649,7 +665,9 @@ while : ; do
                 # MINER- Behandlung
                 echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
                 printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
-                NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
+                if [ $NoCards ]; then
+                    [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
+                fi
             else
                 #
                 # Die Karte IST generell DISABLED
@@ -735,7 +753,7 @@ while : ; do
     # Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
     rm -f ${RUNNING_STATE}.lock                      # ... und wieder freigeben
 
-    echo "Neues globales Switching Sollzustand Kommandofile"
+    echo "Zugriff auf neues globales Switching Sollzustand Kommandofile ${RUNNING_STATE} freigegeben:"
     cat ${RUNNING_STATE}
 
     if [ $NoCards ]; then
@@ -747,7 +765,7 @@ while : ; do
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 
-    printf "=========     Ende des Zyklus      =========\n"
+    printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )         =========\n\n"
     while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
         sleep 1
     done

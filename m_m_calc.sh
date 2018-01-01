@@ -70,8 +70,7 @@ _read_in_All_ALGO_WATTS_MINESin
 
 echo "=========  GPU Einzelberechnungen  ========="
 echo "Ermittlung aller gewinnbringenden Algorithmen durch Berechnung:"
-echo "Jede GPU für sich betrachtet, wenn sie als Einzige laufen würde"
-echo "UND Beginn der Ermittlung und des Hochfahrens von MAX_PROFIT !"
+echo "Jede GPU für sich betrachtet, wenn sie als Einzige laufen würde UND Beginn der Ermittlung und des Hochfahrens von MAX_PROFIT !"
 if [ ${verbose} == 1 ]; then
     echo "Damit sparen wir uns später den Fall '1 GPU aus MAX_GOOD möglichen GPUs' und können gleich mit 2 beginnen!"
 fi
@@ -169,10 +168,12 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
             unset profitableAlgoIndexes; declare -a profitableAlgoIndexes
 
             for (( algoIdx=0; $algoIdx<${numAlgos}; algoIdx++ )); do
-                # Achtung: actGPUAlgos[$algoIdx] ist ein String und besteht aus 3 Teilen:
-                #          "$algo#$miner_name#$miner_version"
-                # Uns interessiert nur der NH-AlgoName $algo:
-                read actAlgoName muck <<<"${actGPUAlgos[$algoIdx]//#/ }"
+                # Achtung: actGPUAlgos[$algoIdx] ist ein String und besteht aus 5 Teilen:
+                #          "$coin#$pool#$miningAlgo#$miner_name#$miner_version"
+                # Wenn uns davon etwas interessiert, können wir es so in Variablen einlesen.
+                # Einst war die folgende Zeile hier aktiv, aber actAlgoName ist nirgends abgefragt oder verwendet worden.
+                # Deshalb wurde es am 24.12.2017 herausgenommen. Nach der großen Trennung von $algo in $coin und $miningAlgo
+                #read actAlgoName muck <<<"${actGPUAlgos[$algoIdx]//#/ }"
 
                 # ---> Ist der AlgoDisabled? <---
                 # ---> Ist der AlgoDisabled? <---
@@ -281,69 +282,79 @@ fi
 
 [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >6.< Beginn mit der Gesamtsystemberechnung" >>perfmon.log
     
-echo "=========  Gesamtsystemberechnung  ========="
+# Sind überhaupt irgendwelche Date eingelesen worden und prüfbare GPU's ermittelt worden?
+# Wenn nicht, gabe es keine Einzelberechnung und dann ist auch keine Gesamtberechnung nötig.
+if [[ ${#PossibleCandidateGPUidx[@]} -gt 0 ]]; then
 
-# Für die Mechanik der systematischen GV-Werte Ermittlung
-# Hilfsarray testGPUs, das die "GPU${idx}Algos/Watts/Mines" Algos/Watts/Mines indexiert
-unset MAX_GOOD_GPUs; declare -i MAX_GOOD_GPUs  # Wieviele GPUs haben mindestens 1 möglichen Algo
+    echo "=========  Gesamtsystemberechnung  ========="
 
-# Die folgenden 3 Variablen werden bei jedem Aufruf von _CALCULATE_GV_of_all_TestCombinationGPUs_members
-# neu gesetzt und verwendet. (Vorletzte "Schale")
-unset MAX_GPU_TIEFE; declare -i MAX_GPU_TIEFE  # Wieviele dieser GPUs sollen berechnet werden
-unset lfdGPU; declare -i lfdGPU                # Laufender Zähler analog dem meist verwendeten $i
-unset testGPUs; declare -A testGPUs            # Test-Zähler-Stellwerk
+    # Für die Mechanik der systematischen GV-Werte Ermittlung
+    # Hilfsarray testGPUs, das die "GPU${idx}Algos/Watts/Mines" Algos/Watts/Mines indexiert
+    unset MAX_GOOD_GPUs; declare -i MAX_GOOD_GPUs  # Wieviele GPUs haben mindestens 1 möglichen Algo
 
-# Diese Nummer bildet die globale, die äusserste, letzte "Schale", von der aus die anderen gestartet/verwendet werden
-unset numGPUs; declare -i numGPUs
+    # Die folgenden 3 Variablen werden bei jedem Aufruf von _CALCULATE_GV_of_all_TestCombinationGPUs_members
+    # neu gesetzt und verwendet. (Vorletzte "Schale")
+    unset MAX_GPU_TIEFE; declare -i MAX_GPU_TIEFE  # Wieviele dieser GPUs sollen berechnet werden
+    unset lfdGPU; declare -i lfdGPU                # Laufender Zähler analog dem meist verwendeten $i
+    unset testGPUs; declare -A testGPUs            # Test-Zähler-Stellwerk
 
-MAX_GOOD_GPUs=${#PossibleCandidateGPUidx[@]}
+    # Diese Nummer bildet die globale, die äusserste, letzte "Schale", von der aus die anderen gestartet/verwendet werden
+    unset numGPUs; declare -i numGPUs
 
-if [[ ${MAX_GOOD_GPUs} -gt 1 ]]; then      # Den Fall für 1 GPU allein haben wir ja schon ermittelt.
+    MAX_GOOD_GPUs=${#PossibleCandidateGPUidx[@]}
 
-    # Bei zu wenig Solarpower könnte das ins Minus rutschen...
-    #     [ DAS MÜSSEN WIR NOCH CHECKEN, OB DAS WIRKLICH SICHTBAR WIRD ]
-    # Deshalb werden wir auch noch Kombinationen mit weniger als der vollen Anzahl an gewinnbringenden GPUs
-    #     durchrechnen.
-    # Dazu entwickeln wir eine rekursive Funktion, die ALLE möglichen Kombinationen
-    #     angefangen mit jeweils ZWEI laufenden GPUs von MAX_GOOD_GPUs
-    #                           (EINE laufende GPU haben wir oben schon durchgerechnet)
-    #     über DREI laufende GPUs von MAX_GOOD_GPUs
-    #     bis hin zu ALLEN laufenden MAX_GOOD_GPUs.
-    #
-    # numGPUs:        Anzahl zu berechnender GPU-Kombinationen mit numGPUs GPU's
-    #
-    echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
-    for (( numGPUs=2; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
-        # Parameter: $1 = maxTiefe
-        #            $2 = Beginn Pointer1 bei Index 0
-        #            $3 = Ende letzter Pointer 5
-        #            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
-        #                 in der sie sich selbst gerade befindet.
-        endStr="GPUs von ${MAX_GOOD_GPUs} laufen:"
-        echo "Berechnung aller Kombinationen des Falles, dass nur ${numGPUs} ${endStr}"
-        _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES \
-            ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))
-    done
+    if [[ ${MAX_GOOD_GPUs} -gt 1 ]]; then      # Den Fall für 1 GPU allein haben wir ja schon ermittelt.
 
-fi  # if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
-
-echo "=========    Berechnungsverlauf    ========="
-for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
-    echo ${MAX_PROFIT_MSG_STACK[$msg]}
-done
-if [[ "${MAX_PROFIT_GPU_Algo_Combination}" != "${MAX_FP_GPU_Algo_Combination}" \
-            && "${MAX_FP_MINES}" > "${MAX_PROFIT}" ]]; then
-    echo "FULL POWER MINES ${MAX_FP_MINES} wären mehr als die EFFIZIENZ Mines ${MAX_PROFIT}"
-    FP_echo="FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower"
-    FP_echo+=" und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
-    if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
-        echo ${FP_echo}
-        for msg in ${!MAX_FP_MSG_STACK[@]}; do
-            echo ${MAX_FP_MSG_STACK[$msg]}
+        # Bei zu wenig Solarpower könnte das ins Minus rutschen...
+        #     [ DAS MÜSSEN WIR NOCH CHECKEN, OB DAS WIRKLICH SICHTBAR WIRD ]
+        # Deshalb werden wir auch noch Kombinationen mit weniger als der vollen Anzahl an gewinnbringenden GPUs
+        #     durchrechnen.
+        # Dazu entwickeln wir eine rekursive Funktion, die ALLE möglichen Kombinationen
+        #     angefangen mit jeweils ZWEI laufenden GPUs von MAX_GOOD_GPUs
+        #                           (EINE laufende GPU haben wir oben schon durchgerechnet)
+        #     über DREI laufende GPUs von MAX_GOOD_GPUs
+        #     bis hin zu ALLEN laufenden MAX_GOOD_GPUs.
+        #
+        # numGPUs:        Anzahl zu berechnender GPU-Kombinationen mit numGPUs GPU's
+        #
+        echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
+        for (( numGPUs=2; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
+            # Parameter: $1 = maxTiefe
+            #            $2 = Beginn Pointer1 bei Index 0
+            #            $3 = Ende letzter Pointer 5
+            #            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
+            #                 in der sie sich selbst gerade befindet.
+            endStr="GPUs von ${MAX_GOOD_GPUs} laufen:"
+            echo "Berechnung aller Kombinationen des Falles, dass nur ${numGPUs} ${endStr}"
+            _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES \
+                ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))
         done
     else
-        echo "KEIN(!)" ${FP_echo}
+        echo "Keine Gesamtberechnung nötig. Es ist nur 1 GPU aktiv und die wurde schon berechnet."
+    fi  # if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
+
+    echo "=========    Berechnungsverlauf    ========="
+    for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
+        echo ${MAX_PROFIT_MSG_STACK[$msg]}
+    done
+    if [[ "${MAX_PROFIT_GPU_Algo_Combination}" != "${MAX_FP_GPU_Algo_Combination}" \
+                && "${MAX_FP_MINES}" > "${MAX_PROFIT}" ]]; then
+        echo "FULL POWER MINES ${MAX_FP_MINES} wären mehr als die EFFIZIENZ Mines ${MAX_PROFIT}"
+        FP_echo="FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower"
+        FP_echo+=" und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
+        if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
+            echo ${FP_echo}
+            for msg in ${!MAX_FP_MSG_STACK[@]}; do
+                echo ${MAX_FP_MSG_STACK[$msg]}
+            done
+        else
+            echo "KEIN(!)" ${FP_echo}
+        fi
     fi
+else
+    echo "ACHTUNG: Keine Berechnungsdaten verfügbar oder alle GPU's Disabled. Es finden im Moment keine Berechnungen statt."
+    echo "ACHTUNG: GPU's, die sich selbst für ein Benchmarking aus dem System genommen haben, kommen auch von selbst wieder zurück"
+    echo "ACHTUNG: und beginnen damit, wieder Daten zu liefern."
 fi
 
 # Die folgenden Variablen müssen dann in Dateien gepiped werden, damit die Auswertung funktioniert:
@@ -353,18 +364,18 @@ fi
 # ${PossibleCandidateGPUidx[@]        um die restlichen Abzuschaltenden zu erhalten
 # ${SwitchOffGPUs[@]                  Die, die bisher schon angefallen sind und die im Anschluss erweitert werden
 
-echo "${MAX_PROFIT_GPU_Algo_Combination}"         >MAX_PROFIT_DATA.out
-echo "${MAX_FP_GPU_Algo_Combination}"            >>MAX_PROFIT_DATA.out
+echo "${MAX_PROFIT_GPU_Algo_Combination}"         >MAX_PROFIT_DATA.out       # 0:24,1:15,3:16,5:11,       # das letzte Komma fällt bei der Auswertung eh weg
+echo "${MAX_FP_GPU_Algo_Combination}"            >>MAX_PROFIT_DATA.out       # 0:24,1:31,2:8,3:12,4:24,5:16,  # das letzte Komma fällt bei der Auswertung eh weg
 PossibleCandidateGPUidxArrayString=''
 for (( i=0; $i<${#PossibleCandidateGPUidx[@]}; i++ )); do
     PossibleCandidateGPUidxArrayString+="${PossibleCandidateGPUidx[$i]} "
 done
-echo "${PossibleCandidateGPUidxArrayString/% /}" >>MAX_PROFIT_DATA.out
+echo "${PossibleCandidateGPUidxArrayString/% /}" >>MAX_PROFIT_DATA.out       # 0 1 3 4 5       # Die 4 wird im Anschluss vom Multiminer auf den
 SwitchOffGPUsArrayString=''
 for (( i=0; $i<${#SwitchOffGPUs[@]}; i++ )); do
     SwitchOffGPUsArrayString+="${SwitchOffGPUs[$i]} "
 done
-echo "${SwitchOffGPUsArrayString/% /}"           >>MAX_PROFIT_DATA.out
-echo "${GLOBAL_GPU_COMBINATION_LOOP_COUNTER}"    >>MAX_PROFIT_DATA.out
-echo "${GLOBAL_MAX_PROFIT_CALL_COUNTER}"         >>MAX_PROFIT_DATA.out
-echo "${MAX_FP_WATTS}"                           >>MAX_PROFIT_DATA.out
+echo "${SwitchOffGPUsArrayString/% /}"           >>MAX_PROFIT_DATA.out       # 2               # Stack für die abzuschaltenden GPUs gelegt werden
+echo "${GLOBAL_GPU_COMBINATION_LOOP_COUNTER}"    >>MAX_PROFIT_DATA.out       # 369             # Wenigstens 0
+echo "${GLOBAL_MAX_PROFIT_CALL_COUNTER}"         >>MAX_PROFIT_DATA.out       # 402             # Wenigstens 0
+echo "${MAX_FP_WATTS}"                           >>MAX_PROFIT_DATA.out       # 1168            # Wenigstens 0

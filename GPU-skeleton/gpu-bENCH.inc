@@ -41,6 +41,7 @@
 
 function _expand_IMPORTANT_BENCHMARK_JSON ()
 {
+    # echo ${IMPORTANT_BENCHMARK_JSON}
     #
     # Zu 1. Backup Datei erstellen
     #
@@ -80,7 +81,7 @@ function _expand_IMPORTANT_BENCHMARK_JSON ()
                            getline;  print $0     # GPUTargetFanSpeed
                            getline;  print $0     # PowerLimit
                            print "      \"HashCountPerSeconds\": 0,"
-                           print "      \"BenchMode\": 0,"
+                           print "      \"BenchMode\": o,"
                            next }
            {print}' ${IMPORTANT_BENCHMARK_JSON}.STRUCT_BAK >${IMPORTANT_BENCHMARK_JSON}
 

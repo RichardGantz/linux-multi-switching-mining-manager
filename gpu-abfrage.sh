@@ -62,7 +62,8 @@
 #
 
 # GLOBALE VARIABLEN, nützliche Funktionen
-[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
+[[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
+[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 
 # Erst mal die beiden Funktionen _read_in_SYSTEM_FILE_and_SYSTEM_STATEin und _update_SYSTEM_STATEin_if_necessary
 [[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source gpu-abfrage.inc
@@ -83,12 +84,14 @@ function _func_gpu_abfrage_sh () {
                   | wc -l )
     fi
 
+    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
     _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
-
     unset beChatty
     if [ ${#ATTENTION_FOR_USER_INPUT} -gt 0 ] && [ ${ATTENTION_FOR_USER_INPUT} -gt 0 ]; then beChatty=1; fi
     _update_SYSTEM_STATEin_if_necessary "$beChatty"
+    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
 
+    _set_Miner_Device_to_Nvidia_GpuIdx_maps
 
     ######################################
     # Überprüfung ob folder da ist.
@@ -108,6 +111,8 @@ function _func_gpu_abfrage_sh () {
                 echo "---> 1. Die Karte ist neu! Bitte editiere die Datei 'benchmark_${uuid[${index[$i]}]}.json' !!!"
             fi
         fi
+        # Wenn es zu chaotisch geworden ist, kann die Datei auch einfach gelöscht werden.
+        # Sie wird dann hier wieder hergestellt und durch automatisches Benchmarking aufgefüllt werden.
         if [ ! -f ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json ]; then
             cp GPU-skeleton/benchmark_skeleton.json ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json
         fi
@@ -120,7 +125,8 @@ function _func_gpu_abfrage_sh () {
         fi
 
         if [ ${#beChatty} -gt 0 ]; then
-            echo Kartenverzeichnis ${name[${index[$i]}]} existiert
+            echo Kartenverzeichnis ${name[${index[$i]}]} existiert und die Karte ist \
+                 $( [[ "${uuidEnabledSOLL[${uuid[${index[$i]}]}]}" == "1" ]] && echo "Enabled" || echo "DISABLED" )
         fi
         echo ${index[$i]} > ${uuid[${index[$i]}]}/gpu_index.in
     done

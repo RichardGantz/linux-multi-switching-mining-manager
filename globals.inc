@@ -111,6 +111,7 @@ if [ $HOME == "/home/richard" ]; then
     NoCards=true
     PATH=${PATH}:${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle
     Erholung=.001
+    PoolActive["sn"]=1
 fi
 
 # Diese Funktion ist bequem, aber langsamer als die Member eines Arrays in einer for-Schleife zu verbinden.
@@ -127,7 +128,7 @@ function _reserve_and_lock_file () {
     while [ -f ${1}.lock ]; do let locked_loop_counter++; done
     touch ${1}.lock
     [[ ${locked_loop_counter} -gt 0 ]] \
-        && echo $(date "+%Y-%m-%d %H:%M:%S") " : " ${locked_loop_counter} >>.$(basename ${1}).loop_counter
+        && echo $(date "+%Y-%m-%d %H:%M:%S") " : " ${locked_loop_counter} $(basename $0) >>._reserve_and_lock_counter.$(basename ${1})
 }
 
 #####################################################

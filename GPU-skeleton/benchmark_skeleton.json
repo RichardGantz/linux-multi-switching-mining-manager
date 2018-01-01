@@ -18,7 +18,7 @@
       "GPUTargetFanSpeed": 0,
       "PowerLimit": 0,
       "HashCountPerSeconds": 0,
-      "BenchMode": 0,
+      "BenchMode": o,
       "LessThreads": 0
     }
   ]
