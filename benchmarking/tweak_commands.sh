@@ -78,7 +78,10 @@ trap _On_Exit EXIT
 
 # Sonst kann das DefaultPowerLimit nicht angezeigt werden, wenn noch kein Object in der ${IMPORTANT_BENCHMARK_JSON} ist
 [[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
+
+_reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
 _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
+rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
 
 read miningAlgo miner_name miner_version muck888 <<<"${algorithm//#/ }"
 

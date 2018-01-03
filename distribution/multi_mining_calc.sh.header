@@ -63,6 +63,14 @@ cd ${DST_DIR}
 # 4. Username/Password
 # 5. Minerfees
 # 6. GLOBAL_GPU_SYSTEM_STATE.in
+# 7. WICHTIG:    smi-Tool:
+#             1  $ copy ${SRC_DIR}/nvidia-smi ${lmms-root}/benchmarking/nvidia-befehle/smi
+#             2  $ su
+#             3  # cd ${lmms-root}/benchmarking/nvidia-befehle/smi
+#             4  # chown root smi
+#             5  # chmod 4555 smi
+#             6  # <Ctrl>-D
+#                $
 
 [ "${ExecuteAfterInstall}" == "GO" ] && exec ./$(basename $0)
 

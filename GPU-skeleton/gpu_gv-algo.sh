@@ -335,6 +335,11 @@ while :; do
     echo ""
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
     echo "GPU #${gpu_idx}: ###########################---> Anfang der Endlosschleife <---###########################"
+    #     Das "Alter" der Datei ALGO_WATTS_MINES.in Sekunden ist Hinweis für multi_mining_calc.sh,
+    #     ob mit der Gesamtsystem-Gewinn-Verlust-Berechnung begonnen werden kann.
+    #     Alte Berechnungen verwerfen. Wir werden gleich eine Aktuelle erstellen.
+    rm -f ALGO_WATTS_MINES.in
+
 
     # If there is a newer version of this script, update it before the next run
     #  1. Ruft _update_SELF_if_necessary
@@ -558,9 +563,6 @@ while :; do
     #     sofern diese Daten tatsächlich vorhanden sind.
     #     Algorithmen mit fehlenden Benchmark- oder Wattangaben, etc. werden NICHT beachtet.
     #
-    #     Das "Alter" der Datei ALGO_WATTS_MINES.in Sekunden ist Hinweis für multi_mining_calc.sh,
-    #     ob mit der Gesamtsystem-Gewinn-Verlust-Berechnung begonnen werden kann.
-    rm -f ALGO_WATTS_MINES.in
 
     for algorithm in "${!bENCH[@]}"; do
 
@@ -728,6 +730,7 @@ while :; do
         echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
         echo "GPU #${gpu_idx}: Einlesen des NEUEN nun einzustellenden ${RUNNING_STATE} und erfahren, was GPU #${gpu_idx} zu tun hat..."
     fi
+    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "RUNNING_STATE there now, going to fetch orders..."
     # Da NUR die multi_mining_calc.sh diese Datei schreibt und da die Datei länger nicht mehr geschrieben wird,
     # brauchen wir sie hier auch nicht zum Lesen reservieren.
     # GLEICHZEITIGES LESEN SOLLTE KEIN PROBLEM DARSTELLEN.
@@ -968,10 +971,9 @@ while :; do
             for algorithm in ${ALL_MISSING_ALGOS[@]}; do
 
                 echo "GPU #${gpu_idx}: ###---> Going to Auto-Benchmark Algorithm/Miner ${algorithm}, trying to produce some Coins on the fly..."
-                parameters=""
-                if [ ${NoCards} ]; then
-                    parameters="-d -w 3 -m 3"
-                fi
+                parameters="-d"
+                [ ${NoCards} ] && parameters="-d -w 3 -m 3"
+                [ -n "${parameters}" ] && echo "        ###---> HardCoded additional Parameters for bench_30s_2.sh: \"${parameters}\""
                 ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters}
 
             done
@@ -1139,7 +1141,7 @@ while :; do
     #     ###WARTET### jetzt, bis das "Alter" der Datei ${SYNCFILE} aktueller ist als ${new_Data_available}
     #                         mit der Meldung "Waiting for new actual Pricing Data from the Web..."
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
-    echo "GPU #${gpu_idx}: Waiting for new actual Pricing Data from the Web..."
+    echo "GPU #${gpu_idx}: Waiting for SYNCFILE and so for new actual Pricing Data from the Web..."
     while (( ${new_Data_available} >= $(date --reference=${SYNCFILE} +%s) )) ; do
         sleep 1         # .5 Je kürzer dieser Sleep, desto unmittelbarer nehmen wir die Änderung wahr. Eine Auflösung von 1s sollte gut genügen?
     done

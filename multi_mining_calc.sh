@@ -37,22 +37,22 @@ debug=1
 # 2: pstree-Dauerschleife vom Beginn bis zum Ende der Berechnungen (Punkte >5.< und >6.<) in Datei "pstree.log"
 #    ACHTUNG: die pstree-Informationen haben keine neuen Erkenntnisse ergeben!
 performanceTest=1
-arrayRedeclareTest=0
 
 # Sicherheitshalber alle .pid Dateien löschen.
 # Das machen die Skripts zwar selbst bei SIGTERM, nicht aber bei SIGKILL und anderen.
 # Sonst startet er die Prozesse nicht.
 # Die .pid ist in der Endlosschleife der Hinweis, dass der Prozess läuft und NICHT gestartet werden muss.
 #
-find . -depth -name \*.pid  -delete
-find . -depth -name \*.lock -delete
+find . -name \*.pid  -delete
+find . -name \*.lock -delete
+find . -name ALGO_WATTS_MINES\.in -delete
 
 # Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
 export ERRLOG=${LINUX_MULTI_MINING_ROOT}/$(basename $0 .sh).err
 
 function _delete_temporary_files () {
-    rm -f ${ERRLOG} ${SYNCFILE} ${SYSTEM_STATE}.lock \
+    rm -f ${ERRLOG} ${SYNCFILE} ${SYSTEM_STATE}.lock ._reserve_and_lock_counter.* \
        I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 _delete_temporary_files
@@ -103,8 +103,6 @@ function _On_Exit () {
 }
 trap _On_Exit EXIT
 
-FullPowerPattern="\#888$"    # Endet mit "#888"
-
 # Funktionen Definitionen ausgelagert
 source ./multi_mining_calc.inc
 
@@ -153,9 +151,10 @@ gnome-terminal --hide-menubar \
 # Besteht nun hauptsächlich aus der Funktion _func_gpu_abfrage_sh
 source ./gpu-abfrage.sh
 
-# Zuletzt 15047 Sekunden gelaufen mit der Einstellung arrayRedeclareTest=1
-# Deshalb brechen wir nach dieser zeit ab. Sind etwas über 4 Stunden...
-# TestZeitEnde=$(($(date --utc +%s)+15047))
+# Anzahl der GPUs wird u.a. von _reserve_and_lock_file() benutzt, um unterschiedliche Fallbackzeiten zu produzieren
+# Und war am Anfang immer leer, obwohl der multiminer sie gesetzt hatte.
+declare -ig GPU_COUNT
+export GPU_COUNT
 
 # Das gibt Informationen der gpu-abfrage.sh aus
 ATTENTION_FOR_USER_INPUT=1
@@ -294,25 +293,28 @@ while : ; do
 
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "Going to wait for all GPUs to calculate their ALGO_WATTS_MINES.in"
     if [ ${NumEnabledGPUs} -gt 0 ]; then
-        declare -i msg_echoed=0
-        while :; do
+
+        # Alle GPUs müssen abgehakt werden können
+        unset GPUs_abhaken;   declare -A GPUs_abhaken
+        #for (( i=0; i<${NumEnabledGPUs}; i++ )); do
+        for UUID in ${!uuidEnabledSOLL[@]}; do GPUs_abhaken[${UUID}]=0; done
+        
+        numAbgehakt=$(( $(pos_join '+' "${GPUs_abhaken[@]}") ))
+        while (( $numAbgehakt < ${NumEnabledGPUs} )) ; do
             declare -i AWMTime=new_Data_available+3600
+
             for UUID in ${!uuidEnabledSOLL[@]}; do
                 if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
-                    if [ ! -f ${UUID}/ALGO_WATTS_MINES.lock ]; then
-                        if [ -f ${UUID}/ALGO_WATTS_MINES.in ]; then
-                            declare -i gpuTime=$(stat -c %Y ${UUID}/ALGO_WATTS_MINES.in) 2>/dev/null
-                            if [ $gpuTime -lt $AWMTime ]; then AWMTime=gpuTime; fi
+                    if [[ -f ${UUID}/ALGO_WATTS_MINES.in ]] \
+                       && [[ $(( $(date --utc --reference=${UUID}/ALGO_WATTS_MINES.in +%s) >= ${new_Data_available} )) ]]; then
+                        if [ ! -f ${UUID}/ALGO_WATTS_MINES.lock ]; then
+                            GPUs_abhaken[${UUID}]=1
                         fi
                     fi
                 fi
             done
-            if [ $AWMTime -lt $new_Data_available ]; then
-                [[ msg_echoed++ -eq 0 ]] && echo "Waiting for all GPUs to calculate their ALGO_WATTS_MINES.in"
-                sleep .5
-            else
-                break
-            fi
+            sleep .1
+            numAbgehakt=$(( $(pos_join '+' "${GPUs_abhaken[@]}") ))
         done
     else
         echo "Im Moment sind ALLE GPU's DISABLED..."
@@ -474,7 +476,7 @@ while : ; do
     #                Einzel- und Gesamtsystemberechnung extern
     #
     ################################################################################
-    ./m_m_calc.sh ${SolarWattAvailable} "p${performanceTest}" "v${verbose}"
+    ./m_m_calc.sh ${SolarWattAvailable} "p${performanceTest}" "v${verbose}" "d${debug}"
 
     ################################################################################
     #

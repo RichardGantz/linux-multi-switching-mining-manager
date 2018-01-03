@@ -832,13 +832,21 @@ if [ ! -d test ]; then mkdir test; fi
 #
 # Das entsprechende "source"-ing machen wir weiter unten, wenn wir wissen, um welche GPU
 #     und welchen $algorithm es sich handelt.
-cd ..
+cd ${LINUX_MULTI_MINING_ROOT}
 source gpu-abfrage.sh
-_func_gpu_abfrage_sh
+if [ ! -s ${SYSTEM_STATE}.in ]; then
+    _func_gpu_abfrage_sh
+else
+    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
+    _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
+    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
+fi
+
 cd ${_WORKDIR_} >/dev/null
 gpu_idx_list="${index[@]}"
 
 _set_Miner_Device_to_Nvidia_GpuIdx_maps
+cd ${_WORKDIR_} >/dev/null
 
 ################################################################################
 ################################################################################
@@ -871,7 +879,7 @@ _set_Miner_Device_to_Nvidia_GpuIdx_maps
 #   Denn dann läuft die algo_multi_abfrage.sh nicht
 switch_to_offline_msg="Deshalb wird an dieser Stelle automatisch in den OFFLINE-Mode geschaltet."
 live_mode="lo"
-if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+if [[ -f ${LINUX_MULTI_MINING_ROOT}/I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
     echo "Solange keine Internetverbindung besteht, ist nur das OFFLINE-Benchmarking möglich."
     echo ${switch_to_offline_msg}
     live_mode="o"
@@ -965,14 +973,14 @@ gpu_uuid=${uuid[${gpu_idx}]}
 echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
 
 # Ein paar Standardverzeichnisse zur Verbesserung der Übersicht:
-if   [ ! -d ../${gpu_uuid}/benchmarking ]; then
-    mkdir   ../${gpu_uuid}/benchmarking
+if   [ ! -d ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking ]; then
+    mkdir   ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking
 fi
 
-IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
+IMPORTANT_BENCHMARK_JSON="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmark_${gpu_uuid}.json"
 
 # Funktion zum Einlesen der Benchmarkdaten nach eventuellem vorherigen Update der JSON Datei
-cd ../${gpu_uuid}
+cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}
 source gpu-bENCH.sh
 cd ${_WORKDIR_} >/dev/null
 
@@ -1042,7 +1050,7 @@ declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
 
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle Miner gleich ist.
-source ../miners/${miner_name}#${miner_version}.starts
+source ${LINUX_MULTI_MINING_ROOT}/miners/${miner_name}#${miner_version}.starts
 
 
 ####################################################################################
@@ -1404,14 +1412,14 @@ MiningAlgos[${coin}]=${actMiningAlgos[${coin}]}
 ################################################################################
 
 # Ein paar Standardverzeichnisse zur Verbesserung der Übersicht:
-if   [ ! -d ../${gpu_uuid}/benchmarking/${miner_name}#${miner_version} ]; then
-    mkdir   ../${gpu_uuid}/benchmarking/${miner_name}#${miner_version}
+if   [ ! -d ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version} ]; then
+    mkdir   ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}
 fi
-if   [ ! -d ../${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo} ]; then
-    mkdir   ../${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}
+if   [ ! -d ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo} ]; then
+    mkdir   ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}
 fi
 
-LOGPATH="../${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}"
+LOGPATH="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}"
 BENCHLOGFILE="test/${miningAlgo}_${gpu_uuid}_benchmark.log"
 TWEAKLOGFILE="test/${miningAlgo}_${gpu_uuid}_tweak.log"
 WATTSLOGFILE="test/${miningAlgo}_${gpu_uuid}_watts_output.log"
@@ -1498,7 +1506,7 @@ if [ ${PoolActive["nh"]} -eq 1 ]; then
         # Zum Herausfiltern des "l" ist eigentlich korrekt: && live_mode=${live_mode//l/}
         # An dieser Stelle ist das setzen auf "o" effektiver. Dadurch ist das "l" ebenfalls aus dem String verschwunden.
         if [ -z "${KURSE[$coin]}" -o "${KURSE[$coin]}" == "0" ]; then
-            echo " NiceHash Kurse für Coin ${coin} sind momentan auf 0, ZERO, NADA..."
+            echo "NiceHash Kurse für Coin ${coin} sind momentan auf 0, ZERO, NADA..."
             live_mode="o"
         fi
     fi
@@ -1710,6 +1718,8 @@ done
 ###
 ################################################################################
 
+cd ${_WORKDIR_} >/dev/null
+
 # Startsekunde festhalten.
 # Wir halten auch die Sekunde nach dem Killing des Miners bei Eintritt in die On_Exit() Routine fest.
 # Wir könnten also überlegen, ob wir Endesekunde - Startsekunde als Messdauer für die Hashwerte festhalten?
@@ -1724,6 +1734,9 @@ gnome-terminal --hide-menubar \
                --title="Benchmark Output of Miner ${miner_name}#${miner_version}" \
                -e "${Bench_Log_PTY_Cmd}"
 
+####################################################################
+# Automatischer Aufruf eines Terminals zum Tweaken im Tweak-Mode -t
+####################################################################
 if [ ${STOP_AFTER_MIN_REACHED} -eq 0 ]; then
     tweak_start_params="${gpu_idx} \
                         ${gpu_uuid} \
@@ -1757,9 +1770,11 @@ if [ ${STOP_AFTER_MIN_REACHED} -eq 0 ]; then
 fi
 
 ################################################################################
+################################################################################
 ###
 ###          5.6. Wattmessung starten
 ###
+################################################################################
 ################################################################################
 
 echo "Starten des Wattmessens..."

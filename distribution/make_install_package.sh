@@ -8,6 +8,18 @@ ARCHIVE_NAME=lmms.tar.gz
 # um es durch das vorübergehende "Auspackungsskript" zu ersetzen.
 # So kann die Installation mit dem selben Namen beginnen wie jeder normale Initialisierungsstart
 
+# Die folgenden Dateien und Verzeichnisse wurden vorübergehend oder endgültig herausgenommen.
+# Muss noch reiflich überlegt werden.
+#
+# Da diese Datei in jedem System sowieso automatisch erstellt wird, macht es nur Sinn, wenn man vorher scheon
+# weiss, dass man eine bestimmte GPU von Anfang DISABLED haben möchte.
+#   ${SRC_DIR}/GLOBAL_GPU_SYSTEM_STATE.in \
+#
+# Im Miners-Folder könnte man ein einzelnes Muster mitgeben, das vom System im Normalbetrieb übergangen wird.
+# Im Moment wird nur noch die all.miner.fees übergeben
+#   ${SRC_DIR}/miners/* \
+
+
 tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/algo_infos.inc \
     ${SRC_DIR}/algo_multi_abfrage.sh \
@@ -16,7 +28,6 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/all.suprnova \
     ${SRC_DIR}/.FAKE.nvidia-smi.output \
     ${SRC_DIR}/GLOBAL_ALGO_DISABLED \
-    ${SRC_DIR}/GLOBAL_GPU_SYSTEM_STATE.in \
     ${SRC_DIR}/globals.inc \
     ${SRC_DIR}/gpu-abfrage.inc \
     ${SRC_DIR}/gpu-abfrage.sh \
@@ -42,13 +53,13 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/benchmarking/nvidia-befehle/smi.copy \
     ${SRC_DIR}/benchmarking/README_BENCH_GER.md \
     ${SRC_DIR}/benchmarking/tweak_commands.sh \
-    ${SRC_DIR}/miners/* \
     ${SRC_DIR}/GPU-skeleton/benchmark_skeleton.json \
     ${SRC_DIR}/GPU-skeleton/gpu-bENCH.inc \
     ${SRC_DIR}/GPU-skeleton/gpu-bENCH.sh \
     ${SRC_DIR}/GPU-skeleton/gpu_gv-algo.sh \
     ${SRC_DIR}/GPU-skeleton/MinerShell.sh \
     ${SRC_DIR}/GPU-skeleton/README.md \
+    ${SRC_DIR}/miners/* \
     ${SRC_DIR}/distribution/make_install_package.sh \
     ${SRC_DIR}/distribution/multi_mining_calc.sh.header
 

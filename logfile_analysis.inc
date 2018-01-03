@@ -82,9 +82,9 @@ YES_ACCEPTED_MSGs=(
 #      Nach 10x Algo Disablen für 5 Minuetn oder so...
 
 # Joining all Arraymembers by '|'...
-CONEXPR=$(join '|' "${NOT_CONNECTED_MSGs[@]}")
-BOOEXPR=$(join '|' "${NOT_ACCEPTED_MSGs[@]}")
-YESEXPR=$(join '|' "${YES_ACCEPTED_MSGs[@]}")
+CONEXPR=$(pos_join '|' "${NOT_CONNECTED_MSGs[@]}")
+BOOEXPR=$(pos_join '|' "${NOT_ACCEPTED_MSGs[@]}")
+YESEXPR=$(pos_join '|' "${YES_ACCEPTED_MSGs[@]}")
 
 # ... then protecting the '|' by backslash befor giving to ...
 #     GREP, maybe SED, but NOT gawk

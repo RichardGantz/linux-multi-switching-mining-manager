@@ -70,7 +70,8 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
     unset uuid;       declare -ag uuid        # gpu_row 3 or 4
     unset auslastung; declare -ag auslastung  # gpu_row 4 or 5
     unset defPowLim;  declare -ag defPowLim   # gpu_row 5 or 6
-    declare -i num_gpu_rows=6
+    # Diese Felder sind ziemlich wichtig, so dass wir deren Anzahl in globals.inc hinterlegen
+    #declare -ig num_gpu_rows=6
 
     for ((i=0; $i<${#READARR[@]}; i+=num_gpu_rows)) ; do
         j=$(expr $i / ${num_gpu_rows})

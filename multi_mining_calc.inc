@@ -160,6 +160,7 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
     for (( lfdGPU=0; $lfdGPU<${MAX_GPU_TIEFE}; lfdGPU++ )); do
         declare -i testGPUs[$lfdGPU]=0
     done
+    [[ ${debug} -eq 1 ]] && echo "\$MAX_GPU_TIEFE=$MAX_GPU_TIEFE und das Teststellwerk \$testGPUs[] hat ${#testGPUs[@]} Member"
 
     declare -i finished=0
     while [[ $finished == 0 ]]; do
@@ -181,10 +182,23 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
             algosCombinationKey+="${gpu_idx}:${algoIdx},"
             declare -n sumupGPUWatts="GPU${gpu_idx}Watts"
             declare -n sumupGPUMines="GPU${gpu_idx}Mines"
+            #[[ ${debug} -eq 1 ]] && [ -z "${sumupGPUMines[${algoIdx}]}" ] && exit 1
             CombinationWatts+=${sumupGPUWatts[${algoIdx}]}
             CombinationMines+="${sumupGPUMines[${algoIdx}]}+"
         done
         
+        if [[ ${debug} -eq 2 ]]; then
+            ab_Tiefe=7
+            [[ $MAX_GPU_TIEFE -gt $ab_Tiefe ]] && printf "$(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)\n\
+VOR DEM AUFRUF VON _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT ${SolarWattAvailable} ${CombinationWatts} ( ${CombinationMines}0 )\n"
+        fi
+        _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
+            ${SolarWattAvailable} ${CombinationWatts} "( ${CombinationMines}0 )"
+        if [[ ${debug} -eq 2 ]]; then
+            [[ $MAX_GPU_TIEFE -gt $ab_Tiefe ]] && printf "$(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)\n\
+NACH DEM AUFRUF VON _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT\n"
+        fi
+
         # Um die Gesamtformel besser zu verstehen:
         # Wir haben die Summe aller Brutto BTC "Mines" nun in ${CombinationMines}
         #   ${CombinationMines}
@@ -192,18 +206,11 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
         # Summe aller Wattzahlen ${CombinationWatts}
         # multipliziert mit den Kosten (in BTC) für anteilig SolarPower (kWhMin) und/oder NetzPower (kWhMax)
         # Wird überhaupt Netzstrom benötigt werden oder steht die Gesamte Leistung in SolarPower bereit?
-        _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
-            ${SolarWattAvailable} ${CombinationWatts} "( ${CombinationMines}0 )"
         if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
             MAX_PROFIT_GPU_Algo_Combination=${algosCombinationKey}
             # Hier könnten wir eigentlich schon ausgeben, welche GPU mit welchem Algo
-            # ---> ARRAYPUSH 3c <---
             msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-            if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                MAX_PROFIT_MSG_STACK=(${MAX_PROFIT_MSG_STACK[@]} ${msg})
-            else
-                MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
-            fi
+            MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
             if [[ ${verbose} == 1 ]]; then
                 _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
                 echoString="Exactly: "
@@ -232,13 +239,8 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
         if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
             MAX_FP_WATTS=${CombinationWatts}
             MAX_FP_GPU_Algo_Combination=${algosCombinationKey}
-            # ---> ARRAYPUSH 3d <---
             msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
-            if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                MAX_FP_MSG_STACK=(${MAX_FP_MSG_STACK[@]} ${msg})
-            else
-                MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
-            fi
+            MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
         fi
 
         # Für Statistik-Zwecke. Dieser Zähler sollte über die 31s-Intervalle ziemlich gleich bleiben
@@ -329,6 +331,11 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
         # Das ist der letzte "Pointer", der keinen Weiteren mehr initialisiert.
         # Hier rufen wir jetzt die eigentliche Kalkulation auf und kehren dann zurück.
         #echo "Innerste Ebene und Ausführungsebene erreicht. Alle zu testenden GPUs sind bekannt und werden nun berechnet."
+        if [[ ${debug} -eq 1 ]]; then
+            echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
+            echo "_CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES maxTiefe ${maxTiefe} erreicht."
+            echo "Starte mit den Testkombinationen von iii=${myStart} bis iii < ${myDepth}."
+        fi
         
         for (( iii=${myStart}; $iii<${myDepth}; iii++ )); do
             unset TestCombinationGPUs
@@ -337,7 +344,10 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
             # Das Array TestCombinationGPUs, das die zu untersuchenden GPU-Indexe enthält,
             # wird jetzt komplett für die Berechnungsroutine aufgebaut.
             TestCombinationGPUs=($* ${PossibleCandidateGPUidx[${iii}]})
-            #echo "Anzahl Test-Member-Array: ${#TestCombinationGPUs[@]}"
+            if [[ ${debug} -eq 1 ]]; then
+                echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
+                echo "Testkombinationsarray $iii hat ${#TestCombinationGPUs[@]} Member:" ${TestCombinationGPUs[@]}
+            fi
             _CALCULATE_GV_of_all_TestCombinationGPUs_members
         done
 
@@ -433,6 +443,7 @@ _read_in_All_ALGO_WATTS_MINESin () {
     #                               [1]=".00017009"                        [1]=".00017009"    
     #                               [2]=".00013999"                        [2]=".00013999"
     #
+    #[[ ${debug} -eq 1 ]] && echo "Anzahl GPU's im Array index=${#index[@]}: ${index[@]}"
     for (( idx=0; $idx<${#index[@]}; idx++ )); do
         declare -n actGPUAlgos="GPU${index[$idx]}Algos"
         declare -n actAlgoWatt="GPU${index[$idx]}Watts"
@@ -446,16 +457,9 @@ _read_in_All_ALGO_WATTS_MINESin () {
                 # Wir nehmen das jetzt aber alles mal raus und machen es anders und beobachten wieder
                 # die Durchlaufzeiten, ob die sich wieder mit der Zeit erhöhen UND ob sich
                 # der Speicherbedarf erhöht, OBWOHL alle Arrays immer erst durch UNSET zerstört werden
-                # ---> ARRAYPUSH 1 <---
-                if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                    actGPUAlgos=(${actGPUAlgos[@]}   "${READARR[$i]}")
-                    actAlgoWatt=(${actAlgoWatt[@]}   "${READARR[$i+1]}")
-                    actAlgoMines=(${actAlgoMines[@]} "${READARR[$i+2]}")
-                else
-                    actGPUAlgos[${#actGPUAlgos[@]}]="${READARR[$i]}"
-                    actAlgoWatt[${#actAlgoWatt[@]}]="${READARR[$i+1]}"
-                    actAlgoMines[${#actAlgoMines[@]}]="${READARR[$i+2]}"
-                fi
+                actGPUAlgos[${#actGPUAlgos[@]}]="${READARR[$i]}"
+                actAlgoWatt[${#actAlgoWatt[@]}]="${READARR[$i+1]}"
+                actAlgoMines[${#actAlgoMines[@]}]="${READARR[$i+2]}"
             done
         fi
     done

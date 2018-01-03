@@ -4,7 +4,7 @@
 # z.B: disabled der folgende Eintrag den cryptonight nur für Sebastians Desktop-GPU,
 #      weil der so rechenintensiv ist, dass der Desktop nicht mehr vernünftig bedienbar ist:
 
-cryptonight:GPU-742cb121-baad-f7c4-0314-cfec63c6ec70
+#cryptonight:GPU-742cb121-baad-f7c4-0314-cfec63c6ec70
 
 # Jede weitere GPU-UUID könnte wieder mit einem führenden Doppelpunkt ":" dazugehängt und damit disabled werden.
 #

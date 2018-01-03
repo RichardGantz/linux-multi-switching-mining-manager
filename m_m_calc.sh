@@ -20,9 +20,7 @@
 SolarWattAvailable="$1"
 [[ ${#2} -gt 1 ]] && performanceTest=${2:1} || performanceTest=0
 [[ ${#3} -gt 1 ]] && verbose=${3:1} || verbose=0
-
-# Wegen der verschiedenen "push onto Array"-Verfahren
-arrayRedeclareTest=0
+[[ ${#4} -gt 1 ]] && debug=${4:1} || debug=0
 
 # Ein paar Funktionen zur Verwaltung der Algos, die für alle oder nur für bestimmte GPU-UUIDs disabled sind.
 # Es gibt die Funktionen
@@ -42,7 +40,9 @@ source multi_mining_calc.inc
 #    GPU{ $gpu_idx }Mines[]=            Platz für alle Mines
 #    uuidEnabledSOLL[ $gpu_uuid ]=      1 oder 0 für ENABLED oder DISABLED
 #    NumEnabledGPUs=                    Anzahl aller ENABLED GPUs
+_reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
 _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
+rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
 
 ###############################################################################################
 #
@@ -149,11 +149,7 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
             # Es kam offensichtlich nichts aus der Datei ALGO_WATTS_MINES.in.
             # Vielleicht wegen einer Vorabfilterung durch gpu_gv-algo.sh (unwahrscheinlich aber machbar)
             # ---> ARRAYPUSH 2 <---
-            if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                SwitchOffGPUs=(${SwitchOffGPUs[@]} ${index[$idx]})
-            else
-                SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${index[$idx]}
-            fi
+            SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${index[$idx]}
             ;;
 
         *)
@@ -188,22 +184,12 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                 # Wenn das NEGATIV ist, muss der Algo dieser Karte übergangen werden. Uns interessieren nur diejenigen,
                 # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
                 if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
-                    # ---> ARRAYPUSH 3 <---
-                    if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                        profitableAlgoIndexes=(${profitableAlgoIndexes[@]} ${algoIdx})
-                    else
-                        profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
-                    fi
+                    profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
                 fi
                 if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
                     MAX_PROFIT_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
-                    # ---> ARRAYPUSH 3a <---
                     msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-                    if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                        MAX_PROFIT_MSG_STACK=(${MAX_PROFIT_MSG_STACK[@]} ${msg})
-                    else
-                        MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
-                    fi
+                    MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
                 fi
 
                 # (17.11.2017)
@@ -218,25 +204,15 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                 if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
                     MAX_FP_WATTS=${actAlgoWatt[$algoIdx]}
                     MAX_FP_GPU_Algo_Combination="${index[$idx]}:${algoIdx},"
-                    # ---> ARRAYPUSH 3b <---
                     msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
-                    if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                        MAX_FP_MSG_STACK=(${MAX_FP_MSG_STACK[@]} ${msg})
-                    else
-                        MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
-                    fi
+                    MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
                 fi
                 #fi
             done
 
             profitableAlgoIndexesCnt=${#profitableAlgoIndexes[@]}
             if [[ ${profitableAlgoIndexesCnt} -gt 0 ]]; then
-                # ---> ARRAYPUSH 4 <---
-                if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                    PossibleCandidateGPUidx=(${PossibleCandidateGPUidx[@]} ${index[$idx]})
-                else
-                    PossibleCandidateGPUidx[${#PossibleCandidateGPUidx[@]}]=${index[$idx]}
-                fi
+                PossibleCandidateGPUidx[${#PossibleCandidateGPUidx[@]}]=${index[$idx]}
                 exactNumAlgos[${index[$idx]}]=${profitableAlgoIndexesCnt}
                 # Hilfsarray für AlgoIndexe vor dem Neuaufbau immer erst löschen
                 declare -n deleteIt="PossibleCandidate${index[$idx]}AlgoIndexes";    unset deleteIt
@@ -246,12 +222,7 @@ for (( idx=0; $idx<${#index[@]}; idx++ )); do
                 actCandidatesAlgoIndexes=(${profitableAlgoIndexes[@]})
             else
                 # Wenn kein Algo übrigbleiben sollte, GPU aus.
-                # ---> ARRAYPUSH 5 <---
-                if [[ ${arrayRedeclareTest} -eq 1 ]]; then
-                    SwitchOffGPUs=(${SwitchOffGPUs[@]} ${index[$idx]})
-                else
-                    SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${index[$idx]}
-                fi
+                SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${index[$idx]}
             fi
             ;;
 
@@ -324,8 +295,7 @@ if [[ ${#PossibleCandidateGPUidx[@]} -gt 0 ]]; then
             #            $3 = Ende letzter Pointer 5
             #            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
             #                 in der sie sich selbst gerade befindet.
-            endStr="GPUs von ${MAX_GOOD_GPUs} laufen:"
-            echo "Berechnung aller Kombinationen des Falles, dass nur ${numGPUs} ${endStr}"
+            echo "Berechnung aller Kombinationen des Falles, dass nur ${numGPUs} GPUs von ${MAX_GOOD_GPUs} laufen:"
             _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES \
                 ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))
         done

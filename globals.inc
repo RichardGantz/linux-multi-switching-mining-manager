@@ -28,7 +28,7 @@ InetPingStack=(
     216.58.207.174   # google.com
 )
 
-export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64/:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-9.1/lib64/:$LD_LIBRARY_PATH
 
 # Die Pools, bzw. Abgabestellen, die wir am besten an einem Kürzel erkennen
 #     und die in verschiedenen Domains zu Hause sind.
@@ -53,6 +53,8 @@ declare domain=${POOLS["sn"]}
 ### gpu-abfrage.sh spezifische Variablen
 SYSTEM_FILE="${LINUX_MULTI_MINING_ROOT}/gpu_system.out"
 SYSTEM_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_SYSTEM_STATE"
+# Wieviele Zeilen der gpu_system.out gehören zu jeweils einer GPU
+declare -ig num_gpu_rows=6
 
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
 RUNNING_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_ALGO_RUNNING_STATE"
@@ -117,7 +119,7 @@ fi
 # Diese Funktion ist bequem, aber langsamer als die Member eines Arrays in einer for-Schleife zu verbinden.
 # Für große Datenmengen, große Arrays, daher besser in einem Array zusammen-joinen.
 # UND: Wenn die Funktion OFT gerufen wird, dann ebenfalls lieber eine for-Schleife schreiben.
-function join { local IFS="$1"; shift; echo "$*"; }
+function pos_join { local IFS="$1"; shift; echo "$*"; }
 
 #
 # $1 - Dateiname der für andere zu sperrenden bzw. für Schreiben/Lesen zu reservierenden Datei
@@ -125,10 +127,18 @@ function join { local IFS="$1"; shift; echo "$*"; }
 #
 function _reserve_and_lock_file () {
     declare -i locked_loop_counter=0
-    while [ -f ${1}.lock ]; do let locked_loop_counter++; done
+
+    while [ -f ${1}.lock ]; do
+        fall_back_in_milli_seconds="000"$(( (${RANDOM} * ++locked_loop_counter) % GPU_COUNT + 1 ))
+        sleep .${fall_back_in_milli_seconds:$(( ${#fall_back_in_milli_seconds} - 4 ))}
+    done
     touch ${1}.lock
-    [[ ${locked_loop_counter} -gt 0 ]] \
-        && echo $(date "+%Y-%m-%d %H:%M:%S") " : " ${locked_loop_counter} $(basename $0) >>._reserve_and_lock_counter.$(basename ${1})
+    echo $(date "+%Y-%m-%d %H:%M:%S") ": Locked by" $(basename $0) >>${1}.lock
+    if [[ ${locked_loop_counter} -gt 0 ]]; then
+        cat ${1}.lock >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.$(basename ${1})
+        echo $(date "+%Y-%m-%d %H:%M:%S") ":" ${locked_loop_counter} $(basename $0) \
+             >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.$(basename ${1})
+    fi
 }
 
 #####################################################
