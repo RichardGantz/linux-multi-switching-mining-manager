@@ -1357,8 +1357,10 @@ if [ "${live_mode}" == "o" ]; then
         found=0
         for ccoin in ${Products[@]}; do
             for ppool in ${!OfflineInfo[@]}; do
-                found=$(grep -E -m 1 -c -e "^${ccoin}:${miningAlgo}:" ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$ppool]})
-                [ $found -eq 1 ] && break 2
+                if [ ${PoolActive[$ppool]} -eq 1 ]; then
+                    found=$(grep -E -m 1 -c -e "^${ccoin}:${miningAlgo}:" ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$ppool]})
+                    [ $found -eq 1 ] && break 2
+                fi
             done
         done
         if [ $found -eq 0 ]; then
