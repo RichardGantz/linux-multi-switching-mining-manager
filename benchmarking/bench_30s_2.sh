@@ -170,8 +170,9 @@ function _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
     # ... dann die WattLog
     wattCount=$(cat "${WATTSLOGFILE}" \
               | tail -n +$watt_line \
+              | grep -E -o -e "^[[:digit:]]+" \
               | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >${temp_watt_sum} ) \
-                    >(gawk -M -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print max}' >${WATTSMAXFILE} ) \
+                    >(gawk -M -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print ++max}' >${WATTSMAXFILE} ) \
               | wc -l \
              )
     hashSum=$(< ${temp_hash_sum})
