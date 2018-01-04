@@ -533,11 +533,11 @@ while :; do
             for miningAlgo in ${actMissingAlgos[@]}; do
                 algorithm="${miningAlgo}#${m_name}#${m_version}"
                 if [[ "${#BENCH_ALGO_DISABLED_ARR[@]}" > 0 ]]; then
-                    [[ ! "${BENCH_ALGO_DISABLED_ARR[@]}"  =~ ${algorithm} ]] && ALL_MISSING_ALGOS=( ${ALL_MISSING_ALGOS[@]} ${algorithm} )
+                    [[ ! "${BENCH_ALGO_DISABLED_ARR[@]}"  =~ ${algorithm} ]] && ALL_MISSING_ALGOS[${#ALL_MISSING_ALGOS[@]}]=${algorithm}
                 fi
                 if [[ "${#GLOBAL_ALGO_DISABLED_ARR[@]}" >0 ]]; then
                     REGEXPAT="\b${miningAlgo}\b"
-                    [[ ! "${GLOBAL_ALGO_DISABLED_ARR[@]}" =~ ${REGEXPAT}  ]] && ALL_MISSING_ALGOS=( ${ALL_MISSING_ALGOS[@]} ${algorithm} )
+                    [[ ! "${GLOBAL_ALGO_DISABLED_ARR[@]}" =~ ${REGEXPAT}  ]] && ALL_MISSING_ALGOS[${#ALL_MISSING_ALGOS[@]}]=${algorithm}
                 fi
             done
         fi

@@ -76,11 +76,12 @@ function _calculate_ACTUAL_REAL_PROFIT () {
     # Also Kosten immer " * 24 / 1000", wobei wir darauf achten, dass das Teilen
     #     immer als möglichst letzte Rechenoperation erfolgt,
     #     weil alle Stellen >scale einfach weggeschmissen werden.
-    gesamtFormel="mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000"
-    echo "scale=8; ${gesamtFormel}; print real_profit, \" \", mines_sum" \
+    #gesamtFormel="mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000"
+    #echo "scale=8; ${gesamtFormel}; print real_profit, \" \", mines_sum" \
+    echo "scale=8; mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000; print real_profit, \" \", mines_sum" \
         | bc \
         | read ACTUAL_REAL_PROFIT ACTUAL_MAX_FP_MINES
-    #        | tee bc_inner_commands \
+    #   | tee bc_inner_commands \
     #   | tee bc_ergebnis \
 }
 
@@ -100,10 +101,32 @@ function _calculate_ACTUAL_REAL_PROFIT () {
 #
 function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
 
-    shopt_cmd_before=$(shopt -p lastpipe)
-    shopt -s lastpipe
+    # Der Performance halber hier den Code rein, statt die Funktion zu rufen
+    # Das ist der Anfang des selben Codeblockes wie diese Funktion hatte:
+    #_calculate_ACTUAL_REAL_PROFIT $1 $2 "$3"
 
-    _calculate_ACTUAL_REAL_PROFIT $1 $2 "$3"
+    # $1 ist die Verfügbare Menge günstiger Power, z.B. ${SolarWattAvailable}
+    # $2 ist die Gesamtleistung, die verbraten wird
+    # $3 sind die gesamt BTC "Mines", die dabei erzeugt werden
+
+    if [[ $1 -ge $2 ]]; then
+        # Die Gesamtwattzahl braucht dann nur mit den Minimalkosten ("solar" Preis) berechnet werden:
+        gesamtKostenBTC="$2 * ${kWhMin}"
+    else
+        gesamtKostenBTC="$1 * ${kWhMin} + ($2 - $1) * ${kWhMax}"
+    fi
+    # Die Kosten müssen noch ein bisschen "frisiert" werden, damit die Einheiten rausgekürzt werden.
+    # Deshalb müssen die Kosten immer mit 24 multipliziert und durch 1000 geteilt werden.
+    # Also Kosten immer " * 24 / 1000", wobei wir darauf achten, dass das Teilen
+    #     immer als möglichst letzte Rechenoperation erfolgt,
+    #     weil alle Stellen >scale einfach weggeschmissen werden.
+    #gesamtFormel="mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000"
+    #echo "scale=8; ${gesamtFormel}; print real_profit, \" \", mines_sum" \
+    echo "scale=8; mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000; print real_profit, \" \", mines_sum" \
+        | bc \
+        | read ACTUAL_REAL_PROFIT ACTUAL_MAX_FP_MINES
+    #   | tee bc_inner_commands \
+    #   | tee bc_ergebnis \
 
     # Da MAX_PROFIT eine Dezimalzahl und kein Integer ist, kann die bash nicht damit rechnen.
     # Wir lassen das also von bc berechnen.
@@ -117,7 +140,6 @@ function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
                    else { print ${ACTUAL_REAL_PROFIT}, \" \", \"${MAX_PROFIT}\" }" \
         | bc \
         | read ACTUAL_REAL_PROFIT MAX_PROFIT
-    ${shopt_cmd_before}
     #   | tee bc_DEBUG_STRING.log \
     #   | tee bc_ERGEBNIS.log \
     #   | tee bc_NACH_sed.log \
@@ -187,14 +209,14 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
             CombinationMines+="${sumupGPUMines[${algoIdx}]}+"
         done
         
-        if [[ ${debug} -eq 2 ]]; then
-            ab_Tiefe=7
+        if [[ ${debug} -eq 999 ]]; then
+            ab_Tiefe=3
             [[ $MAX_GPU_TIEFE -gt $ab_Tiefe ]] && printf "$(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)\n\
 VOR DEM AUFRUF VON _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT ${SolarWattAvailable} ${CombinationWatts} ( ${CombinationMines}0 )\n"
         fi
         _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
             ${SolarWattAvailable} ${CombinationWatts} "( ${CombinationMines}0 )"
-        if [[ ${debug} -eq 2 ]]; then
+        if [[ ${debug} -eq 999 ]]; then
             [[ $MAX_GPU_TIEFE -gt $ab_Tiefe ]] && printf "$(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)\n\
 NACH DEM AUFRUF VON _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT\n"
         fi

@@ -172,7 +172,7 @@ function _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
               | tail -n +$watt_line \
               | grep -E -o -e "^[[:digit:]]+" \
               | tee >(gawk -M -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >${temp_watt_sum} ) \
-                    >(gawk -M -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print ++max}' >${WATTSMAXFILE} ) \
+                    >(gawk -M -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print max}' >${WATTSMAXFILE} ) \
               | wc -l \
              )
     hashSum=$(< ${temp_hash_sum})
@@ -190,6 +190,10 @@ function _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
         avgHASH=0; avgWATT=0; quotient=0; hashCountPerSeconds=0
     fi
     maxWATT=$(< "${WATTSMAXFILE}")
+    if [[ ${wattSum} == 0 ]]; then
+        avgWATT=999.99
+        maxWATT=999.99
+    fi
 }
 
 #########################################################################
@@ -290,7 +294,6 @@ function _measure_one_whole_WattsHashes_Cycle () {
                 if [ $NoCards ]; then
                     # Hänge ein paar andere Werte an die Logdateien - zum Testen
                     cat test/more_hash_values.fake >>${BENCHLOGFILE}
-                    #cat more_watt_values.fake >>${WATTSLOGFILE}
                 fi
 
                 #
@@ -387,8 +390,8 @@ function _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
 
     # Die WATT-Werte noch zu Integern machen und dabei aufrunden
-    avgWATT=$((${avgWATT/%[.][[:digit:]]*}+1))
-    maxWATT=$((${maxWATT/%[.][[:digit:]]*}+1))
+    avgWATT=$((${avgWATT%.*}+1))
+    maxWATT=$((${maxWATT%.*}+1))
 
     declare -i tempazb=0
     # Full Power ($?=100) oder Effizienz Messung ($?=99)
@@ -776,6 +779,20 @@ This=.$(basename $0 .sh)_$$
 echo $$ >${This}.pid
 if [ ! -d test ]; then mkdir test; fi
 
+################################################################################
+#
+# Gültige, nicht mehr zu verändernde Variablen:
+#
+#          ${gpu_idx]
+#          ${IMPORTANT_BENCHMARK_JSON}   (${bENCH[ $algorithm ], etc.)
+#     ALLE    ${Mining_${mName}_${mVer}_Algos[ $coin ]}
+#     ALLE ${Available_${mName}_${mVer}_Algos[ $i    ]}
+#     ALLE   ${Missing_${mName}_${mVer}_Algos[ $i    ]}
+#          ${miner_name}
+#          ${miner_version}
+#          ${MINER}
+#
+# --auto:  ${gpu_idx]
 ###################################################################################
 #
 #                _query_actual_Power_Temp_and_Clocks
@@ -841,13 +858,12 @@ else
     _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
     _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
     rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
+
+    _set_Miner_Device_to_Nvidia_GpuIdx_maps
 fi
 
 cd ${_WORKDIR_} >/dev/null
 gpu_idx_list="${index[@]}"
-
-_set_Miner_Device_to_Nvidia_GpuIdx_maps
-cd ${_WORKDIR_} >/dev/null
 
 ################################################################################
 ################################################################################
@@ -960,7 +976,7 @@ fi
 
 # auswahl des devices "eingabe wartend"
 if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 && ${#gpu_idx} -gt 0 && ${#algorithm} -gt 0 ]]; then
-    echo "AUTO-BENCHMARKING GPU #${gpu_idx} for Algorithm ${algorithm}"
+    echo "${This}: AUTO-BENCHMARKING GPU #${gpu_idx} for Algorithm ${algorithm}"
     read miningAlgo miner_name miner_version muck888 <<<"${algorithm//#/ }"
 else
     echo ""
@@ -971,7 +987,7 @@ else
     done
 fi
 gpu_uuid=${uuid[${gpu_idx}]}
-echo "GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
+echo "${This}: GPU #${gpu_idx} mit UUID ${gpu_uuid} soll benchmarked werden."
 
 # Ein paar Standardverzeichnisse zur Verbesserung der Übersicht:
 if   [ ! -d ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking ]; then
@@ -1040,6 +1056,18 @@ fi
 MINER=${miner_name}#${miner_version}
 
 ################################################################################
+#
+# Gültige, nicht mehr zu verändernde Variablen:
+#
+#          ${gpu_idx]
+#          ${IMPORTANT_BENCHMARK_JSON}   (${bENCH[ $algorithm ], etc.)
+#     ALLE    ${Mining_${mName}_${mVer}_Algos[ $coin ]}
+#     ALLE ${Available_${mName}_${mVer}_Algos[ $i    ]}
+#     ALLE   ${Missing_${mName}_${mVer}_Algos[ $i    ]}
+#          ${miner_name}
+#          ${miner_version}
+#          ${MINER}
+#          
 #
 # Ab hier steht der Miner fest und die Variablen  miner_name und miner_version dürfen NICHT MEHR VERÄNDERT WERDEN!
 # Im --auto Mode zusätzlich auch schon $miningAlgo gültig und darf NICHT MEHR VERÄNDERT WERDEN!
@@ -1215,7 +1243,9 @@ for ccoin in ${!actMiningAlgos[@]}; do
     [[ "${actMiningAlgos[$ccoin]}" == "$miningAlgo" ]] && Products=( ${Products[@]} $ccoin )
 done
 
-if [ ! "${live_mode}" == "o" ]; then
+# Das ist die zweite Stelle, an der wir eine Entscheidung anhand des $live_mode fällen.
+# Hier 
+if [[ "${live_mode}" =~ "l" ]]; then
     # Das Auswahlmenü enthält den Coin und den Pool, an dem er abgeliefert werden kann.
     # Aktuelle Coin Namen und Preise aus dem Web sind in den verschiedenen leider vom Pool abhängigen Arrays
     # und sind eingangs abgerufen worden.

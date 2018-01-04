@@ -94,7 +94,7 @@ function _On_Exit () {
     _terminate_all_processes_of_script "algo_multi_abfrage.sh"
     _terminate_all_log_ptys
     broken_pipe_text+="\n"
-    echo ${broken_pipe_text}
+    printf ${broken_pipe_text}
 
     [[ ${#pstreePID} -gt 0 ]] && kill ${pstreePID}
     # Temporäre Dateien löschen
