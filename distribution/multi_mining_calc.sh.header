@@ -52,8 +52,8 @@ ARCHIVE=$(awk '/^__ARCHIVE_BELOW__/ {print NR + 1; exit 0; }' $0)
 mkdir -vp ${DST_DIR}
 
 tail -n+$ARCHIVE $0 | tar xvz -C ${DST_DIR}
-
-cd ${DST_DIR}
+touch ${DST_DIR}/GPU-skeleton/benchmark_skeleton.json
+touch -r ${DST_DIR}/GPU-skeleton/benchmark_skeleton.json ${DST_DIR}/GPU-skeleton/gpu-bENCH.inc
 
 # Abfragen:
 # 1. CUDA-Version Verwendung? => Exportpath
@@ -72,7 +72,7 @@ cd ${DST_DIR}
 #             6  # <Ctrl>-D
 #                $
 
-[ "${ExecuteAfterInstall}" == "GO" ] && exec ./$(basename $0)
+#[ "${ExecuteAfterInstall}" == "GO" ] && exec ./$(basename $0)
 
 exit 0
 

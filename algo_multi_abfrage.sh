@@ -18,7 +18,7 @@
 ###############################################################################
 
 # GLOBALE VARIABLEN, nützliche Funktionen
-[[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source globals.inc
+[[ ${#_GLOBALS_INCLUDED} -eq 0  ]]  && source globals.inc
 
 # Funktionen zum Abruf der KURSE/PORTS/AlgoNAmes/AlgoIDs aus dem Web incl. Aufbereiten der .in Datei
 # und zum Einlesen aus der aufbereiteten .in Datei mittels readarray
@@ -67,13 +67,30 @@ _check_InternetConnection () {
         printf "\n"
         let secs++
     done
-    printf "\n$(date \"+%F %H:%M:%S\") Internet Connection established\n" | tee -a ${ERRLOG} >>.InternetConnectionLost.log
+    detected=$(date "+%F %H:%M:%S")
+    printf "\n${detected} Internet Connection established\n" | tee -a ${ERRLOG} | tee -a .InternetConnectionLost.log
     rm -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 
 _check_InternetConnection
 declare -i SECS=31 nowSecs
 while :; do
+
+    # Wir warten mit dem Abruf, bis die Datei RUNNING_STATE 10s älter ist als SYNCFILE.
+    # Nach dem SYNCFILE touch haben die GPU's losgelegt, ...
+    #      der Multiminer hat auf deren Daten gewartet, ...
+    #      der Multiminer hat die Effizienz-Berechnungen durchgeführt, ...
+    read RunSecs  RunFrac <<<$(_get_file_modified_time_ ${RUNNING_STATE})
+    if [[ ${RunSecs} > 0 ]]; then
+        until (( ${RunSecs}  >= ${SleepingStart} )); do
+            sleep 1
+            _check_InternetConnection
+            read RunSecs  RunFrac <<<$(_get_file_modified_time_ ${RUNNING_STATE})
+        done
+        # der Multiminer hat die neue RUNNING_STATE geschrieben. Jetzt nicht zu früh abrufen und Startschuss geben.
+        # Die GPUs sollen erst mal Gelegenheit haben, die Miner zu stoppen und zu starten...
+        sleep ${RUN_SYNC_delay}
+    fi
 
     if [ ${PoolActive["sn"]} -eq 1 ]; then
         echo "------------------   WhatToMine BLOCK_REWARD  ----------------------"
@@ -100,7 +117,9 @@ while :; do
     [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) Strompreise in BTC Aktualisierung nicht erfolgreich." | tee -a ${ERRLOG}
 
     # Alle Daten stabil in den Dateien. Startschuss für die anderen Prozesse
-    touch $SYNCFILE
+    _reserve_and_lock_file ${SYNCFILE}
+    touch ${SYNCFILE}
+    _remove_lock
 
 ##############################################
 ##############################################
@@ -118,7 +137,7 @@ while :; do
     while :; do
         _check_InternetConnection
         nowSecs=$(date +%s)
-#        [[ $(( ${nowSecs} - ${SleepingStart} )) -le ${SECS} ]] && sleep 1 || break
+        # [[ $(( ${nowSecs} - ${SleepingStart} )) -le ${SECS} ]] && sleep 1 || break
         (( ${nowSecs} - ${SleepingStart} <= ${SECS} )) && sleep 1 || break
     done
 done

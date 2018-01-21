@@ -19,6 +19,12 @@ ARCHIVE_NAME=lmms.tar.gz
 # Im Moment wird nur noch die all.miner.fees übergeben
 #   ${SRC_DIR}/miners/* \
 
+# ACHTUNG:
+# -------
+#
+# ../miners - Verzeichnis ist kritisch. Soll nicht immer überschrieben werden
+#             wegen der minerfolder, etc.
+# globals.inc ist kritisch wegen des CUDAExport-Pfades
 
 tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/algo_infos.inc \
@@ -36,7 +42,7 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/kwh_solar_kosten.in \
     ${SRC_DIR}/logfile_analysis.inc \
     ${SRC_DIR}/miner-func.inc \
-    ${SRC_DIR}/m_m_calc.sh \
+    ${SRC_DIR}/set_live_miners.sh \
     ${SRC_DIR}/multi_mining_calc.inc \
     ${SRC_DIR}/multi_mining_calc.sh \
     ${SRC_DIR}/perfmon.sh \
@@ -48,9 +54,6 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/benchmarking/auto_benchmark_all_missing.sh \
     ${SRC_DIR}/benchmarking/bench_30s_2.sh \
     ${SRC_DIR}/benchmarking/nvidia-befehle/nvidia-query.inc \
-    ${SRC_DIR}/benchmarking/nvidia-befehle/nvidia-settings \
-    ${SRC_DIR}/benchmarking/nvidia-befehle/smi \
-    ${SRC_DIR}/benchmarking/nvidia-befehle/smi.copy \
     ${SRC_DIR}/benchmarking/README_BENCH_GER.md \
     ${SRC_DIR}/benchmarking/tweak_commands.sh \
     ${SRC_DIR}/GPU-skeleton/benchmark_skeleton.json \
@@ -61,7 +64,12 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/GPU-skeleton/README.md \
     ${SRC_DIR}/miners/* \
     ${SRC_DIR}/distribution/make_install_package.sh \
-    ${SRC_DIR}/distribution/multi_mining_calc.sh.header
+    ${SRC_DIR}/distribution/multi_mining_calc.sh.header \
+    ${SRC_DIR}/tar_logs.sh
+
+#    ${SRC_DIR}/benchmarking/nvidia-befehle/nvidia-settings \
+#    ${SRC_DIR}/benchmarking/nvidia-befehle/smi \
+#    ${SRC_DIR}/benchmarking/nvidia-befehle/smi.copy \
 
 # Wir machen das Archiv selbstextrahierend
 cat multi_mining_calc.sh.header ${ARCHIVE_NAME} >multi_mining_calc.install.sh

@@ -34,8 +34,6 @@ debug=1
 # >7.< Auswertung und Miner-Steuerungen"
 # >8.< Eintritt in den WARTEZYKLUS..."
 #
-# 2: pstree-Dauerschleife vom Beginn bis zum Ende der Berechnungen (Punkte >5.< und >6.<) in Datei "pstree.log"
-#    ACHTUNG: die pstree-Informationen haben keine neuen Erkenntnisse ergeben!
 performanceTest=1
 
 # Sicherheitshalber alle .pid Dateien löschen.
@@ -43,16 +41,48 @@ performanceTest=1
 # Sonst startet er die Prozesse nicht.
 # Die .pid ist in der Endlosschleife der Hinweis, dass der Prozess läuft und NICHT gestartet werden muss.
 #
-find . -name \*.pid  -delete
-find . -name \*.lock -delete
-find . -name ALGO_WATTS_MINES\.in -delete
+find . -name \*\.pid                 -delete
+find . -name \*\.lock                -delete
+find . -name ALGO_WATTS_MINES\.in    -delete
+find . -name .sort_profit_algoIdx_\* -delete
 
-# Aktuelle PID der 'multi_mining-controll.sh' ENDLOSSCHLEIFE
+# Aufräumen, kann beim nächsten mal wieder raus. Diese Dateien wurden in ein Unterverzeichnis verlegt.
+rm -f benchmarking/bench_*.log
+
+# Aktuelle PID der 'multi_mining_calc.sh' ENDLOSSCHLEIFE
 echo $$ >$(basename $0 .sh).pid
+# Ermittlung der Process Group ID, die beim multi_mining_calc.sh seiner eigenen PID gleicht.
+# Alles, was er aufruft, sollte die selbe Group-ID haben, also auch die gpu_gv-algos und algo_multi_abfrage.sh
+# Interessant wird es bei den gpu_gv-algo.sh's, wenn die wiederum etwas rufen.
+# Wie lautet dann die Group-ID?
+#  PID  PGID   SID TTY          TIME CMD
+# 9462  9462  1903 pts/0    00:00:00 multi_mining_ca
+# ps -j --pid $$ | grep $$
+
+export MULTI_MINERS_PID=$$
 export ERRLOG=${LINUX_MULTI_MINING_ROOT}/$(basename $0 .sh).err
+rm -f ${ERRLOG}
+
+# Einmal zu prüfen und dann den Code wieder rauszuwerfen, dann ist die Umstellung durch, die Erweiterung um den gpu_idx
+if [ -s BENCH_ALGO_DISABLED ]; then
+    _reserve_and_lock_file BENCH_ALGO_DISABLED
+    cat BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR_in
+
+    # Erwartet werden weiter unten nur die $algorithm's in diesem Array, das wir jetzt neu erstellen
+    for actRow in "${BENCH_ALGO_DISABLED_ARR_in[@]}"; do
+        read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
+        REGEXPAT="^[[:digit:]]+$"
+        if [[ ! "${gpuIdx}" =~ ${REGEXPAT} ]]; then
+            # Die Datei ist eine zu alte Version und muss entfernt werden.
+            rm -f BENCH_ALGO_DISABLED
+            break
+        fi
+    done
+    _remove_lock                                     # ... und wieder freigeben
+fi
 
 function _delete_temporary_files () {
-    rm -f ${ERRLOG} ${SYNCFILE} ${SYSTEM_STATE}.lock ._reserve_and_lock_counter.* \
+    rm -f ${SYNCFILE} ${SYSTEM_STATE}.lock .bc_result_GPUs_* .bc_prog_GPUs_* ._reserve_and_lock_counter.* \
        I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 _delete_temporary_files
@@ -62,23 +92,25 @@ _delete_temporary_files
 #
 function _terminate_all_log_ptys () {
     for gpu_idx in ${!LOG_PTY_CMD[@]}; do
-        broken_pipe_text+="Beenden des Logger-Terminals GPU #${gpu_idx} ... "
-        REGEXPAT="${LOG_PTY_CMD[${gpu_idx}]//\//\\/}"
-        REGEXPAT="${REGEXPAT//\+/\\+}"
-        kill_pids=$(ps -ef \
-          | grep -e "${REGEXPAT}" \
-          | grep -v 'grep -e ' \
-          | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-        if [ ! "$kill_pids" == "" ]; then
-            kill $kill_pids >/dev/null
-            broken_pipe_text+="done.\n"
+        if [ -n "${LOG_PTY_CMD[${gpu_idx}]}" ]; then
+            broken_pipe_text+="Beenden des Logger-Terminals GPU #${gpu_idx} ... "
+            REGEXPAT="${LOG_PTY_CMD[${gpu_idx}]//\//\\/}"
+            REGEXPAT="${REGEXPAT//\+/\\+}"
+            kill_pids=$(ps -ef \
+                      | grep -e "${REGEXPAT}" \
+                      | grep -v 'grep -e ' \
+                      | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
+            if [ ! "$kill_pids" == "" ]; then
+                kill $kill_pids >/dev/null
+                broken_pipe_text+="done.\n"
+            fi
         fi
     done
 }
 
 function _terminate_all_processes_of_script () {
     kill_pids=$(ps -ef \
-       | grep -e "/bin/bash.*$1" \
+       | grep -e "/bin/bash.*${LINUX_MULTI_MINING_ROOT}.*$1.*" \
        | grep -v 'grep -e ' \
        | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
     if [ ! "$kill_pids" == "" ]; then
@@ -89,16 +121,20 @@ function _terminate_all_processes_of_script () {
 }
 
 function _On_Exit () {
-    broken_pipe_text="MultiMiner: _On_Exit() ENTRY, CLEANING UP RESOURCES NOW...\n"
+    broken_pipe_text="MultiMiner: _On_EXIT() ENTRY, CLEANING UP RESOURCES NOW...\n"
     _terminate_all_processes_of_script "gpu_gv-algo.sh"
     _terminate_all_processes_of_script "algo_multi_abfrage.sh"
-    _terminate_all_log_ptys
     broken_pipe_text+="\n"
     printf ${broken_pipe_text}
 
-    [[ ${#pstreePID} -gt 0 ]] && kill ${pstreePID}
     # Temporäre Dateien löschen
     [[ $debug -eq 0 ]] && _delete_temporary_files
+    _terminate_all_log_ptys
+
+    # Das sollte eigentlich sowieso alles erledigen?
+    # Aber wir wollen lieber kein gleichzeitiges kill -15 an alle, sondern versuchen es vorher geregelt, damit alles sauber bereinigt wird.
+    # Dieser kill soll die restlichen Prozesse noch wegmachen, die übrig geblieben sind...
+    kill -- -$$
     rm -f $(basename $0 .sh).pid
 }
 trap _On_Exit EXIT
@@ -151,15 +187,14 @@ gnome-terminal --hide-menubar \
 # Besteht nun hauptsächlich aus der Funktion _func_gpu_abfrage_sh
 source ./gpu-abfrage.sh
 
-# Anzahl der GPUs wird u.a. von _reserve_and_lock_file() benutzt, um unterschiedliche Fallbackzeiten zu produzieren
-# Und war am Anfang immer leer, obwohl der multiminer sie gesetzt hatte.
 declare -ig GPU_COUNT
 export GPU_COUNT
+echo ${BEST_ALGO_CNT} >BEST_ALGO_CNT
 
 # Das gibt Informationen der gpu-abfrage.sh aus
 ATTENTION_FOR_USER_INPUT=1
 while : ; do
-    printf "=========         Beginn neuer Zyklus um:     $(date "+%Y-%m-%d %H:%M:%S" )         =========\n"
+    printf "\n=========         Beginn neuer Zyklus um:     $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >1.< While Loop ENTRY" >>perfmon.log
 
@@ -176,15 +211,16 @@ while : ; do
     for lfdUuid in "${!uuidEnabledSOLL[@]}"; do
         if [ ${uuidEnabledSOLL[${lfdUuid}]} -eq 1 ]; then
             if [ ! -f ${lfdUuid}/gpu_gv-algo.pid ]; then
-                workdir=$(pwd)
 
                 # Ins GPU-Verzeichnis wechseln
                 cd ${lfdUuid}
+
                 lfd_gpu_idx=$(< gpu_index.in)
                 GPU_GV_LOG="gpu_gv-algo_${lfdUuid}.log"
                 rm -f ${GPU_GV_LOG}
                 echo "GPU #${lfd_gpu_idx}: Starting process in the background..."
-                ./gpu_gv-algo.sh >>${GPU_GV_LOG} &
+                ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
+                BG_PIDs+=( $! )
                 # gnome-terminal -x ./abc.sh
                 #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
                 ofsX=$((ii*60+50))
@@ -196,7 +232,7 @@ while : ; do
                                -e "${LOG_PTY_CMD[${lfd_gpu_idx}]}"
                 let ii++
 
-                cd ${workdir} >/dev/null
+                cd ${_WORKDIR_} >/dev/null
             fi
         fi
     done
@@ -212,23 +248,39 @@ while : ; do
         ofsY=$((ii*30+50))
         rm -f algo_multi_abfrage.log
         echo "Starting algo_multi_abfrage.sh in the background..."
-        ./algo_multi_abfrage.sh &>>algo_multi_abfrage.log &
-        LOG_PTY_CMD[998]="tail -f algo_multi_abfrage.log"
+        ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.sh &>>algo_multi_abfrage.log &
+        BG_PIDs+=( $! )
+        LOG_PTY_CMD[998]="tail -f ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.log"
         gnome-terminal --hide-menubar \
                        --title="\"RealTime\" Algos und Kurse aus dem Web" \
                        --geometry="100x24+${ofsX}+${ofsY}" \
                        -e "${LOG_PTY_CMD[998]}"
     fi
 
+    if [ ${debug} -eq 1 ]; then
+        if [ ${#BG_PIDs[@]} -gt 0 ]; then
+            echo "Process-IDs from Processes in the Background:" ${BG_PIDs[@]}
+        else
+            echo "Keine Background-PIDs gesammelt. Komisch. ???"
+        fi
+    fi
+
+    ###############################################################################################
+    #
+    # Wieviele Profitabelste Wats/MInes-Werte sollen pro GPU in die Gesamtberechnung einfließen?
+    #
+    ###############################################################################################
+    [ -s BEST_ALGO_CNT ] && BEST_ALGO_CNT=$(< BEST_ALGO_CNT)
+    
     ###############################################################################################
     #
     # Einlesen des bisherigen RUNNING Status
     #
     ###############################################################################################
     # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
-    _reserve_and_lock_file ${RUNNING_STATE}          # Zum Lesen reservieren...
-    _read_in_actual_RUNNING_STATE                    # ... einlesen...
-    rm -f ${RUNNING_STATE}.lock                      # ... und wieder freigeben
+    _reserve_and_lock_file ${RUNNING_STATE}  # Zum Lesen reservieren...
+    _read_in_actual_RUNNING_STATE            # ... einlesen...
+    _remove_lock                                     # ... und wieder freigeben
 
     # Folgende Arrays stehen uns jetzt zur Verfügung, die uns sagen, welche GPU seit den
     # vergangenen 31s mit welchem Algorithmus und welchem Watt-Konsum laufen sollte,
@@ -270,10 +322,10 @@ while : ; do
     [[ "${_progressbar}" != "\r" ]] && printf "\n"
     #  Das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available} merken für später.
     #  Die GPUs haben schon losgelegt, das heisst, dass SYNCFILE da ist und in etwa 31s neu getouched wird
-    declare -i new_Data_available=$(stat -c %Y ${SYNCFILE})
+    #new_Data_available=$(stat -c %Y ${SYNCFILE})
+    read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
+    SynSecs=$((${new_Data_available} + ${MM_validating_delay}))
 
-    # Testabbruch nach etwa 4 Stunden mit der anderen Arraybehandlung
-    # [[ ${performanceTest} -ge 2 ]] && [[ ${TestZeitEnde} -le ${new_Data_available} ]] && break
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >2.< Startschuss: Neue Daten sind verfügbar" >>perfmon.log
 
     ###############################################################################################
@@ -292,34 +344,53 @@ while : ; do
     # Zunächst also warten, bis die "Mines"-Berechnungen und die Wattangaben alle verfügbar sind.
 
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "Going to wait for all GPUs to calculate their ALGO_WATTS_MINES.in"
+    [ ${debug} -eq 1 ] && echo "Maximum waittime until: \${SynSecs}.\${SynFrac} ${SynSecs}.${SynFrac}"
+
+    unset ALGO_WATTS_MINES_delivering_GPUs validation_time NumValidatedGPUs
+    declare -i  NumValidatedGPUs=0
+    declare -Ag ALGO_WATTS_MINES_delivering_GPUs validation_time
     if [ ${NumEnabledGPUs} -gt 0 ]; then
 
-        # Alle GPUs müssen abgehakt werden können
-        unset GPUs_abhaken;   declare -A GPUs_abhaken
-        #for (( i=0; i<${NumEnabledGPUs}; i++ )); do
-        for UUID in ${!uuidEnabledSOLL[@]}; do GPUs_abhaken[${UUID}]=0; done
-        
-        numAbgehakt=$(( $(pos_join '+' "${GPUs_abhaken[@]}") ))
-        while (( $numAbgehakt < ${NumEnabledGPUs} )) ; do
-            declare -i AWMTime=new_Data_available+3600
-
+        # Warten bis zu 5 Sekunden, bis wenigstens 1 GPU gültige Werte signalisiert hat.
+        touch .now_$$
+        read nowSecs nowFrac <<<$(_get_file_modified_time_ .now_$$)
+        until (( ${nowSecs} >= ${SynSecs} || ( ${nowSecs} == ${SynSecs} && ${nowFrac} > ${SynFrac} ) )); do
             for UUID in ${!uuidEnabledSOLL[@]}; do
                 if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
-                    if [[ -f ${UUID}/ALGO_WATTS_MINES.in ]] \
-                       && [[ $(( $(date --utc --reference=${UUID}/ALGO_WATTS_MINES.in +%s) >= ${new_Data_available} )) ]]; then
-                        if [ ! -f ${UUID}/ALGO_WATTS_MINES.lock ]; then
-                            GPUs_abhaken[${UUID}]=1
+
+                    if [ ${#ALGO_WATTS_MINES_delivering_GPUs[${UUID}]} -eq 0 ]; then
+                        read valSecs valFrac <<<$(_get_file_modified_time_ ${UUID}/${GPU_VALID_FLAG})
+                        if [[ ${valSecs} -ge ${new_Data_available} || (${valSecs} -eq ${new_Data_available} && ${valFrac} -gt ${SynFrac}) ]]; then
+                            # Diese GPU UUID wird in den Berechnungen berücksichtigt
+                            ALGO_WATTS_MINES_delivering_GPUs[${UUID}]=${GPU_idx[${UUID}]}
+                            let NumValidatedGPUs++
                         fi
                     fi
                 fi
             done
+            [ ${NumEnabledGPUs} -eq ${NumValidatedGPUs} ] && break
+
             sleep .1
-            numAbgehakt=$(( $(pos_join '+' "${GPUs_abhaken[@]}") ))
+            touch .now_$$
+            read nowSecs            nowFrac <<<$(_get_file_modified_time_ .now_$$)
+            read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
+            SynSecs=$((${new_Data_available} + ${MM_validating_delay}))
+        done
+        rm -f .now_$$ ..now_$$.lock
+    else
+        echo "---> ACHTUNG: Im Moment sind ALLE GPU's DISABLED..."
+    fi
+    if [ ${#ALGO_WATTS_MINES_delivering_GPUs[@]} -gt 0 ]; then
+        # Diese GPU UUID wird in den Berechnungen berücksichtigt
+        echo "Die folgenden GPU's werden in der nun folgenden Berechnung berücksichtigt:"
+        for UUID in ${!ALGO_WATTS_MINES_delivering_GPUs[@]}; do
+            printf "    GPU #%s mit UUID %s\n" ${ALGO_WATTS_MINES_delivering_GPUs[${UUID}]} "${UUID}"
         done
     else
-        echo "Im Moment sind ALLE GPU's DISABLED..."
+        echo "---> ACHTUNG: Im Moment werden KEINE GPU's bei der Berechnung berücksichtigt, weil sie zu spät Werte abgeliefert haben"
     fi
 
+    [ ${debug} -eq 1 ] && echo "Last read nowSecs: \${nowSecs}.\${nowFrac} ${nowSecs}.${nowFrac}"
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >3.< GPUs haben alle Daten geschrieben" >>perfmon.log
 
@@ -328,15 +399,15 @@ while : ; do
     #    Info über Algos, die DISABLED wurden und sind ausgeben
     #
     if [ -f GLOBAL_ALGO_DISABLED ]; then
-        echo "-------------> Die folgenden Algos sind GENERELL DISABLED: <-------------"
+        echo "------------->         Die folgenden Algos sind GENERELL DISABLED:                            <-------------"
         cat GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$'
     fi
     if [ -f BENCH_ALGO_DISABLED ]; then
-        echo "-------------> Die folgenden Algos sind aufgrund des Benchmarings DAUERHAFT DISABLED: <-------------"
+        echo "------------->         Die folgenden Algos sind aufgrund des Benchmarings DAUERHAFT DISABLED: <-------------"
         cat BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$'
     fi
     if [ -f MINER_ALGO_DISABLED ]; then
-        echo "-------------> Die folgenden Algos sind für 5 Minuten DISABLED: <-------------"
+        echo "------------->         Die folgenden Algos sind für 5 Minuten DISABLED:                       <-------------"
         cat MINER_ALGO_DISABLED | sort -k 3
     fi
 
@@ -347,7 +418,11 @@ while : ; do
     # m_m_calc.sh wird zwar das selbe auch tun, aber wir brauchen die Daten, wenn wir die Ergebnisse von m_m_calc.sh bekommen,
     # denn diese Ergebnisse sind nur exakte Pointer/Zeiger in diese Datenmenge hinein, die wir brauchen, um die Anweisungen
     # über ${RUNNING_STATE} an die GPUs weitergeben zu können. Wir können uns das Einlesen also nicht ersparen.
-    _read_in_All_ALGO_WATTS_MINESin
+
+    # Alt:
+    #    _read_in_All_ALGO_WATTS_MINESin
+    # Neu:
+    _read_in_Validated_ALGO_WATTS_MINESin
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >4.< Alle Algos aller GPUs sind eigelesen." >>perfmon.log
 
@@ -439,14 +514,7 @@ while : ; do
     #     unter Berücksichtigung eines entsprechenden "solar" Anteils, wodurch die Kosten sinken.
     # Die Kombination mit dem besten GV-Verhältnis merken wir uns jeweils in MAX_PROFIT und MAX_PROFIT_GPU_Algo_Combination:
     
-    if [[ ${performanceTest} -ge 1 ]]; then
-        MessungsStart=$(date --utc +%s)
-        echo "${MessungsStart}: >5.< Berechnungen beginnen mit Einzelberechnungen" >>perfmon.log
-        if [[ ${performanceTest} -ge 2 ]]; then
-            rm -f pstree.log; ./pstree_log.sh ${MessungsStart} &
-            pstreePID=$!
-        fi
-    fi
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >5.< Berechnungen beginnen mit Einzelberechnungen" >>perfmon.log
 
     #####################################################################################################
     #
@@ -463,37 +531,386 @@ while : ; do
     #     darauf hin untersuchen, welche "effektiver" ist, welche z.B. bei gleichem Gewinn den minimalsten Strom
     #     verbraucht und diesen dann vorziehen.
 
-    #    MAX_PROFIT=".0"
-    #    MAX_PROFIT_GPU_Algo_Combination=''
-    #    MAX_FP_MINES=".0"
-    #    MAX_FP_WATTS=0
-    #    MAX_FP_GPU_Algo_Combination=''
-    #    declare -ig GLOBAL_GPU_COMBINATION_LOOP_COUNTER=0
-    #    declare -ig GLOBAL_MAX_PROFIT_CALL_COUNTER=0
+    MAX_PROFIT=".0"
+    OLD_MAX_PROFIT=".0"
+    MAX_PROFIT_GPU_Algo_Combination=''
+    MAX_FP_MINES=".0"
+    OLD_MAX_FP_MINES=".0"
+    MAX_FP_WATTS=0
+    MAX_FP_GPU_Algo_Combination=''
+    declare -ig GLOBAL_GPU_COMBINATION_LOOP_COUNTER=0
+    declare -ig GLOBAL_MAX_PROFIT_CALL_COUNTER=0
+    unset MAX_PROFIT_MSG_STACK MAX_FP_MSG_STACK
 
-    ################################################################################
-    #
-    #                Einzel- und Gesamtsystemberechnung extern
-    #
-    ################################################################################
-    ./m_m_calc.sh ${SolarWattAvailable} "p${performanceTest}" "v${verbose}" "d${debug}"
+    echo "=========  GPU Einzelberechnungen  ========="
+    echo "Ermittlung aller gewinnbringenden Algorithmen durch Berechnung:"
+    echo "Jede GPU für sich betrachtet, wenn sie als Einzige laufen würde UND Beginn der Ermittlung und des Hochfahrens von MAX_PROFIT !"
+    if [ ${verbose} == 1 ]; then
+        echo "Damit sparen wir uns später den Fall '1 GPU aus MAX_GOOD möglichen GPUs' und können gleich mit 2 beginnen!"
+    fi
 
-    ################################################################################
+    # Die meisten der folgenden Arrays, die wir erstellen werden, sind nichts weiter als eine Art "View"
+    # auf die GPU{realer_gpu_index}Algos/Watts/Mines Arrays, die die Rohdaten halten und
+    #     die diese Rohdaten NUR dort halten.
+    # Die meisten der folgenden Arrays sind also Hilfs-Arrays oder "Zwischenschritt"-Arrays, die immer
+    #     irgendwie mit den Rohdaten-Arrays synchron gehalten werden, damit man immer auch sofort
+    #     auf die Rohdaten zugreifen kann, wenn man sie braucht.
+    # Meistens enthalten diese Arrays nur den realen GPU-Index, der in dem Namen der Rohdaten-Arrays steckt,
+    #     z.B. "4"  für  "GPU4Algos"
     #
-    #                Einlesen des Endergebnisses Beste GPU/Algo-Kombination
+    # Ermittlung derjenigen GPU-Indexes, die
+    # 1. auszuschalten sind in dem Array SwitchOffGPUs[]
+    #    z.B. hatte das GPU3Algos/Watts/Mines Array-Gespann von oben 0 Member und wäre dann in diesem
+    #         Array SwitchOffGPUs[] enthalten:
+    #         SwitchOffGPUs[0]="3"
     #
-    ################################################################################
-    unset MAX_PROFIT_DATA
-    readarray -n 0 -O 0 -t MAX_PROFIT_DATA <MAX_PROFIT_DATA.out
-    MAX_PROFIT_GPU_Algo_Combination=${MAX_PROFIT_DATA[0]}
-    MAX_FP_GPU_Algo_Combination=${MAX_PROFIT_DATA[1]}
-    unset PossibleCandidateGPUidx
-    read -a PossibleCandidateGPUidx <<<"${MAX_PROFIT_DATA[2]}"
+    # 2. mit mindestens einem Algo im Gewinn betrieben werden könnten.
+    #    Der Algo, der letztlich tatsächlich laufen soll, wird durch "Ausprobieren" der Kombinationen mit
+    #    den Algos der anderen GPUs ermittelt in oder über das Array PossibleCandidateGPUidx[]
+    #    z.B. hatte das GPU5Algos/Watts/Mines Array-Gespann von oben 3 Member und wäre dann in diesem
+    #         Array PossibleCandidateGPUidx[] enthalten:
+    #         PossibleCandidateGPUidx[0]="5"
+    #
+    #    Und auf die gewinnbringenden Algos dieser GPU können wir zugreifen, indem wir uns die Index-Nummern
+    #        der Algorithmen merken, die Gewinn machen; in dem weiteren Hilfs/View-Array
+    #        PossibleCandidate${ "5" }AlgoIndexes[]
+    #        z.B. hatte das GPU5Algos/Watts/Mines Array-Gespann von oben die 3 Member
+    #             GPU5Algos[0]="cryptonight"
+    #                      [1]="equihash"
+    #                      [2]="daggerhashimoto"
+    #        Nehmen wir an, dass nur "cryptonight" keinen Gewinn machen würde, dann wären die gewinnbringenden
+    #             Algo-Indexes der GPU#5 also
+    #                      [1]="equihash"
+    #             und      [2]="daggerhashimoto"
+    #        Deswegen würden wir uns in dem Hilfs-Array PossibleCandidate${ "5" }AlgoIndexes[] diese beiden
+    #             Algo-Indexes merken, wodurch es dann so aussehen würde:
+    #             PossibleCandidate5AlgoIndexes[0]="1"
+    #             PossibleCandidate5AlgoIndexes[1]="2"
+    #
+    #    Und um uns die Arbeit in den späteren Schleifen leichter zu machen, merken wir uns noch die Anzahl
+    #        der gewinnbringenden Algos dieser GPU in dem
+    #        (weiteren zu PossibleCandidateGPUidx[0] synchronen Hilfs-) Array
+    #        exactNumAlgos[5]=2
+    #
+
+    # Die folgenden beiden Arrays halten nur GPU-Indexnummern als Werte. Nichts weiter!
+    # Wir bauen diese Arrays jetzt anhand der Kriterien aus den Rohdaten-Arrays in einer
+    #     alle im System befindlichen GPUs durchgehenden Schleife auf.
     unset SwitchOffGPUs
-    read -a SwitchOffGPUs <<<"${MAX_PROFIT_DATA[3]}"
-    GLOBAL_GPU_COMBINATION_LOOP_COUNTER=${MAX_PROFIT_DATA[4]}
-    GLOBAL_MAX_PROFIT_CALL_COUNTER=${MAX_PROFIT_DATA[5]}
-    MAX_FP_WATTS=${MAX_PROFIT_DATA[6]}
+    declare -a SwitchOffGPUs           # GPUs anyway aus, keine gewinnbringenden Algos zur Zeit
+    unset SwitchNotGPUs
+    declare -a SwitchNotGPUs           # GPUs anyway aus, keine gewinnbringenden Algos zur Zeit
+    unset PossibleCandidateGPUidx
+    declare -a PossibleCandidateGPUidx # GPUs mit mindestens 1 gewinnbringenden Algo.
+    # Welcher es werden soll, muss errechnet werden
+    # gefolgt von mind. 1x declare -a "PossibleCandidate${gpu_index}AlgoIndexes" ...
+    unset exactNumAlgos
+    declare -a exactNumAlgos  # ... und zur Erleichterung die Anzahl Algos der entsprechenden "PossibleCandidate" GPU's
+
+    for (( idx=0; $idx<${#index[@]}; idx++ )); do
+        gpu_idx=${index[$idx]}
+        declare -n actGPUAlgos="GPU${gpu_idx}Algos"
+        declare -n actAlgoWatt="GPU${gpu_idx}Watts"
+        declare -n actAlgoMines="GPU${gpu_idx}Mines"
+        declare -n actAlgoProfit="GPU${gpu_idx}Profit"
+        declare -n dstAlgoWatts="GPU${gpu_idx}WATTS"
+        declare -n dstAlgoMines="GPU${gpu_idx}MINES"
+
+        numAlgos=${#actGPUAlgos[@]}
+        # Wenn die GPU seit neuestem generell DISABLED ist, pushen wir sie hier auf den
+        # SwitchOffGPUs Stack, indem wir die numAlgos künslich auf 0 setzen:
+        if [[ "${uuidEnabledSOLL[${uuid[${gpu_idx}]}]}" == "0" ]]; then
+            numAlgos=0
+        fi
+        case "${numAlgos}" in
+
+            "0")
+                # Karte ist auszuschalten. Kein (gewinnbringender) Algo im Moment.
+                # Es kam offensichtlich nichts aus der Datei ALGO_WATTS_MINES.in.
+                # Vielleicht wegen einer Vorabfilterung durch gpu_gv-algo.sh (unwahrscheinlich aber machbar)
+                # ---> ARRAYPUSH 2 <---
+                SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${gpu_idx}
+                ;;
+
+            *)
+                # Es werden nur diejenigen GPUs berücksichtigt, die erklärt haben, dass gültige Werte in der ALGO_WATTS_MINES.in waren
+                if [ ${#ALGO_WATTS_MINES_delivering_GPUs[${uuid[${gpu_idx}]}]} -gt 0 ]; then
+                    # GPU kann mit mindestens einem Algo laufen.
+                    # Wir filtern jetzt noch diejenigen Algorithmen raus, die unter den momentanen Realen
+                    # Verhältnissen KEINEN GEWINN machen werden, wenn sie allein, also ohne "Konkrrenz" laufen würden.
+                    # Gleichzeitig halten wir von denen, die Gewinn machen, denjenigen Algo fest,
+                    # der den grössten Gewinn macht.
+                    # Wir lassen jetzt schon MAX_PROFIT und die entsprechende Kombiantion aus GPU und Algo hochfahren.
+                    # Damit sparen wir uns später diesen Lauf mit 1 GPU, weil der auch kein anderes Ergebnis
+                    # bringen wird!
+                    unset profitableAlgoIndexes; declare -a profitableAlgoIndexes
+
+                    for (( algoIdx=0; $algoIdx<${numAlgos}; algoIdx++ )); do
+                        # Achtung: actGPUAlgos[$algoIdx] ist ein String und besteht aus 5 Teilen:
+                        #          "$coin#$pool#$miningAlgo#$miner_name#$miner_version"
+                        # Wenn uns davon etwas interessiert, können wir es so in Variablen einlesen.
+                        # Einst war die folgende Zeile hier aktiv, aber actAlgoName ist nirgends abgefragt oder verwendet worden.
+                        # Deshalb wurde es am 24.12.2017 herausgenommen. Nach der großen Trennung von $algo in $coin und $miningAlgo
+                        #read actAlgoName muck <<<"${actGPUAlgos[$algoIdx]//#/ }"
+
+                        _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
+                            ${SolarWattAvailable} ${actAlgoWatt[$algoIdx]} "${actAlgoMines[$algoIdx]}"
+
+                        # Wenn das NEGATIV ist, muss der Algo dieser Karte übergangen werden. Uns interessieren nur diejenigen,
+                        # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
+                        # if [[ ! $(expr index "${ACTUAL_REAL_PROFIT}" "-") == 1 ]]; then
+                        # Punkt raus und gucken, ob > 0, sonst interessiert uns das ebenfalls nicht
+                        _octal_=${ACTUAL_REAL_PROFIT//\.}
+                        _octal_=${_octal_//0}
+                        if [[ "${ACTUAL_REAL_PROFIT:0:1}" != "-" && ${#_octal_} -gt 0 ]]; then
+                            profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
+                            actAlgoProfit[${algoIdx}]=${ACTUAL_REAL_PROFIT}
+                        fi
+                        if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
+                            MAX_PROFIT_GPU_Algo_Combination="${gpu_idx}:${algoIdx},"
+                            msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+                            MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
+                        fi
+
+                        # (17.11.2017)
+                        # Wir halten jetzt auch die MAX_FP_MINES und die dabei verbrauchten Watt in MAX_FP_WATTS fest
+                        # Das sind Daten, die wir "nebenbei" festhalten für den Fall,
+                        #     dass IM MOMENT (für den kommenden Zyklus) GARANTIERT KEINE NETZPOWER BEZOGEN WERDEN MUSS
+                        if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
+                            MAX_FP_WATTS=${actAlgoWatt[$algoIdx]}
+                            MAX_FP_GPU_Algo_Combination="${gpu_idx}:${algoIdx},"
+                            msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+                            MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
+                        fi
+                        #fi
+                    done
+
+                    profitableAlgoIndexesCnt=${#profitableAlgoIndexes[@]}
+                    if [[ ${profitableAlgoIndexesCnt} -gt 0 ]]; then
+
+                        ###
+                        ### Jetzt steht fest, dass diese GPU mindestens 1 Algo hat, der mit Gewinn rechnet.
+                        ###
+                        PossibleCandidateGPUidx[${#PossibleCandidateGPUidx[@]}]=${gpu_idx}
+
+                        # Hilfsarray für AlgoIndexe vor dem Neuaufbau immer erst löschen
+                        declare -n deleteIt="PossibleCandidate${gpu_idx}AlgoIndexes";    unset deleteIt
+                        declare -ag "PossibleCandidate${gpu_idx}AlgoIndexes"
+                        declare -n actCandidatesAlgoIndexes="PossibleCandidate${gpu_idx}AlgoIndexes"
+
+                        ###
+                        ### Bevor wir das Array nun endgültig freigeben, sortieren wir es und packen nur die BEST_ALGO_CNT=5 Stück drauf.
+                        ###
+                        ### profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
+                        ### actAlgoProfit[${algoIdx}]=${ACTUAL_REAL_PROFIT}
+                        rm -f .sort_profit_algoIdx_${gpu_idx}.in
+                        for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
+                            algoIdx=${profitableAlgoIndexes[${sortIdx}]}
+                            echo ${actAlgoProfit[${algoIdx}]} ${algoIdx} >>.sort_profit_algoIdx_${gpu_idx}.in
+                        done
+                        unset SORTED_PROFITS
+                         sort -n -r .sort_profit_algoIdx_${gpu_idx}.in \
+                            | tee .sort_profit_algoIdx_${gpu_idx}.out \
+                            | readarray -n 0 -O 0 -t SORTED_PROFITS
+                        [ ${profitableAlgoIndexesCnt} -gt ${BEST_ALGO_CNT} ] && profitableAlgoIndexesCnt=${BEST_ALGO_CNT}
+                        for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
+                            algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
+                            actCandidatesAlgoIndexes[${sortIdx}]=${algoIdx}
+                            dstAlgoWatts[${sortIdx}]=${actAlgoWatt[${algoIdx}]}
+                            dstAlgoMines[${sortIdx}]=${actAlgoMines[${algoIdx}]}
+                        done
+                        exactNumAlgos[${gpu_idx}]=${profitableAlgoIndexesCnt}
+                    else
+                        # Wenn kein Algo übrigbleiben sollte, GPU aus.
+                        SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${gpu_idx}
+                    fi
+                else
+                    SwitchNotGPUs+=( ${gpu_idx} )
+                fi
+                ;;
+        esac
+    done
+
+    if [ ${verbose} == 1 ]; then
+        # Auswertung zur Analyse
+        if [[ ${#PossibleCandidateGPUidx[@]} -gt 0 ]]; then
+            unset gpu_string
+            for (( i=0; $i<${#PossibleCandidateGPUidx[@]}; i++ )); do
+                gpu_string+="#${PossibleCandidateGPUidx[$i]} with ${exactNumAlgos[${PossibleCandidateGPUidx[$i]}]} Algos, "
+            done
+            echo "GPU Kandidaten mit Gewinn bringenden Algos: ${gpu_string%, }"
+        fi
+        if [[ ${#SwitchOffGPUs[@]} -gt 0 ]]; then
+            unset gpu_string
+            for (( i=0; $i<${#SwitchOffGPUs[@]}; i++ )); do
+                gpu_string+="#${SwitchOffGPUs[$i]}, "
+            done
+            echo "Switch OFF GPU's ${gpu_string%, }"
+        fi
+        if [[ ${#SwitchNotGPUs[@]} -gt 0 ]]; then
+            unset gpu_string
+            for (( i=0; $i<${#SwitchNotGPUs[@]}; i++ )); do
+                gpu_string+="#${SwitchNotGPUs[$i]}, "
+            done
+            echo "Switch NOT GPU's ${gpu_string%, }"
+        fi
+    fi
+    if [ ${debug} -eq 1 ]; then
+        echo "Summe SwitchOffGPUs + SwitchNotGPUs + PossibleCandidateGPUidx = $((${#PossibleCandidateGPUidx[@]}+${#SwitchOffGPUs[@]}+${#SwitchNotGPUs[@]}))"
+        echo "Anzahl System-GPUs                                            = ${#index[@]}"
+    fi
+
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >6.< Beginn mit der Gesamtsystemberechnung" >>perfmon.log
+    
+    # Sind überhaupt irgendwelche Date eingelesen worden und prüfbare GPU's ermittelt worden?
+    # Wenn nicht, gabe es keine Einzelberechnung und dann ist auch keine Gesamtberechnung nötig.
+    if [[ ${#PossibleCandidateGPUidx[@]} -gt 0 ]]; then
+
+        echo "=========  Gesamtsystemberechnung  ========="
+
+        # Für die Mechanik der systematischen GV-Werte Ermittlung
+        # Hilfsarray testGPUs, das die "GPU${idx}Algos/Watts/Mines" Algos/Watts/Mines indexiert
+        unset MAX_GOOD_GPUs; declare -i MAX_GOOD_GPUs  # Wieviele GPUs haben mindestens 1 möglichen Algo
+
+        # Die folgenden 3 Variablen werden bei jedem Aufruf von _CALCULATE_GV_of_all_TestCombinationGPUs_members
+        # neu gesetzt und verwendet. (Vorletzte "Schale")
+        unset MAX_GPU_TIEFE; declare -i MAX_GPU_TIEFE  # Wieviele dieser GPUs sollen berechnet werden
+        unset lfdGPU; declare -i lfdGPU                # Laufender Zähler analog dem meist verwendeten $i
+        # Nachdem diese Aufgabe aus der bash entfernt wurde, wird dieses Stellwerk nicht mehr benutzt.
+        #unset testGPUs; declare -A testGPUs            # Test-Zähler-Stellwerk
+
+        # Diese Nummer bildet die globale, die äusserste, letzte "Schale", von der aus die anderen gestartet/verwendet werden
+        unset numGPUs; declare -i numGPUs
+
+        MAX_GOOD_GPUs=${#PossibleCandidateGPUidx[@]}
+        # Wir starten alle Kombinationene parallel
+        #     Key(!)=BackgroundPID, Value=OutputFileNameGPU_TIEFE
+        #     bc_THREAD_PIDS[${bc_thread_pid}]=".bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi}"
+        unset bc_THREAD_PIDS
+        declare -Ag bc_THREAD_PIDS
+
+        if [[ ${MAX_GOOD_GPUs} -gt 1 ]]; then      # Den Fall für 1 GPU allein haben wir ja schon ermittelt.
+
+            # Bei zu wenig Solarpower könnte das ins Minus rutschen...
+            #     [ DAS MÜSSEN WIR NOCH CHECKEN, OB DAS WIRKLICH SICHTBAR WIRD ]
+            # Deshalb werden wir auch noch Kombinationen mit weniger als der vollen Anzahl an gewinnbringenden GPUs
+            #     durchrechnen.
+            # Dazu entwickeln wir eine rekursive Funktion, die ALLE möglichen Kombinationen
+            #     angefangen mit jeweils ZWEI laufenden GPUs von MAX_GOOD_GPUs
+            #                           (EINE laufende GPU haben wir oben schon durchgerechnet)
+            #     über DREI laufende GPUs von MAX_GOOD_GPUs
+            #     bis hin zu ALLEN laufenden MAX_GOOD_GPUs.
+            #
+            # numGPUs:        Anzahl zu berechnender GPU-Kombinationen mit numGPUs GPU's
+            #
+            rm -f .bc_result_GPUs_* .bc_prog_GPUs_*
+            start[$c]=$(date +%s)
+            echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
+            for (( numGPUs=2; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
+                # Parameter: $1 = maxTiefe
+                #            $2 = Beginn Pointer1 bei Index 0
+                #            $3 = Ende letzter Pointer 5
+                #            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
+                #                 in der sie sich selbst gerade befindet.
+                echo "Berechnung aller Kombinationen des Falles, dass nur ${numGPUs} GPUs von ${MAX_GOOD_GPUs} laufen:"
+                _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES \
+                    ${MAX_GOOD_GPUs} 0 $((${MAX_GOOD_GPUs} - ${numGPUs} + 1))
+            done
+
+            # Woher wissen wir nun, wann der Prozess beendet ist?
+            # PID und Befehlszeile - bc >.bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi} ?
+
+            # Die folgenden Dateien werden von den bekannten PIDs erzeugt
+            #     Key(!)=BackgroundPID, Value=OutputFileNameGPU_TIEFE
+            #     bc_THREAD_PIDS[${bc_thread_pid}]=".bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi}"
+            
+
+            # Die folgenden Aktionen wurden früher von der bash Version nach der Schleife durchgeführt, die jetzt auch angepasst werden müssen:
+            # Das machen wir im Hauptmodul, was meist der m_m_calc.sh ist
+            #let GLOBAL_GPU_COMBINATION_LOOP_COUNTER++
+            #MAX_PROFIT_GPU_Algo_Combination=${algosCombinationKey}
+            #msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+            #MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
+            #MAX_FP_WATTS=${CombinationWatts}
+            #MAX_FP_GPU_Algo_Combination=${algosCombinationKey}
+            #msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+            #MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
+
+            # So sieht der Output des bc aus (Zwischenmeldungen werden im Moment nicht auf den msg-Stack gelegt):
+            #TOTAL NUMBER OF LOOPS = 58*54*54 = 169128
+            #MAX_PROFIT_GPU_Algo_Combination: 0:21,1:17,2:17
+            #MAX_PROFIT:                      15580.31473048
+            #MAX_FP_GPU_Algo_Combination:     0:21,1:17,2:17
+            #MAX_FP_MINES:                    15580.31499102
+            #MAX_FP_WATTS:                    675
+
+            num_threads=${#bc_THREAD_PIDS[@]}
+            while (( num_threads )); do
+                for thread_pid in ${!bc_THREAD_PIDS[@]}; do
+                    kill_pid=$(ps -ef | grep -w -e "${thread_pid}" \
+                                      | grep -v 'grep -w -e ' \
+                                      | gawk -e '$2 == '${thread_pid}' {print $2; exit}' )
+                    [ "${thread_pid}" != "${kill_pid}" ] && unset bc_THREAD_PIDS[${thread_pid}]
+                done
+                sleep .2
+                num_threads=${#bc_THREAD_PIDS[@]}
+            done
+            ende[$c]=$(date +%s)
+            echo "Benötigte Zeit zur parallelen Berechnung aller Kombinationen:" $(( ${ende[$c]} - ${start[$c]} )) Sekunden
+
+            touch .MAX_PROFIT.in.lock .MAX_FP_MINES.in.lock .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock
+            cat $(ls .bc_result_GPUs_*) \
+                | tee >(grep -E -e '#TOTAL ' | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER; \
+                        rm -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock) \
+                | grep -E -v -e '^#|^$' \
+                | tee >(grep -e '^MAX_PROFIT:'   | sort -g -r -k2 | grep -E -m1 '*' >.MAX_PROFIT.in; \
+                        rm -f .MAX_PROFIT.in.lock) \
+                      >(grep -e '^MAX_FP_MINES:' | sort -g -r -k2 | grep -E -m1 '*' >.MAX_FP_MINES.in; \
+                        rm -f .MAX_FP_MINES.in.lock) \
+                      >/dev/null
+            while [[ -f .MAX_PROFIT.in.lock || -f .MAX_FP_MINES.in.lock || -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock ]]; do sleep .01; done
+
+            read muck MAX_PROFIT   MAX_PROFIT_GPU_Algo_Combination                    <<<$(< .MAX_PROFIT.in)   #${_MAX_PROFIT_in}
+            if [ ${#MAX_PROFIT} -eq 0 ]; then
+                exit 77
+            fi
+            read muck MAX_FP_MINES MAX_FP_GPU_Algo_Combination     muck2 MAX_FP_WATTS <<<$(< .MAX_FP_MINES.in) #${_MAX_FP_MINES_in}
+            GLOBAL_GPU_COMBINATION_LOOP_COUNTER=$(< .GLOBAL_GPU_COMBINATION_LOOP_COUNTER)
+            msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+            MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
+            msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+            MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
+            let GLOBAL_MAX_PROFIT_CALL_COUNTER+=GLOBAL_GPU_COMBINATION_LOOP_COUNTER
+            #exit 77
+        else
+            echo "Keine Gesamtberechnung nötig. Es ist nur 1 GPU aktiv und die wurde schon berechnet."
+        fi  # if [[ ${MAX_GOOD_GPUs} -gt 0 ]]; then
+
+        # Warten auf die bc Threads und Auswerten der Ergebnisse.
+
+        echo "=========    Berechnungsverlauf    ========="
+        for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
+            echo ${MAX_PROFIT_MSG_STACK[$msg]}
+        done
+        if [[ "${MAX_PROFIT_GPU_Algo_Combination}" != "${MAX_FP_GPU_Algo_Combination}" \
+                    && "${MAX_FP_MINES}" > "${MAX_PROFIT}" ]]; then
+            echo "FULL POWER MINES ${MAX_FP_MINES} wären mehr als die EFFIZIENZ Mines ${MAX_PROFIT}"
+            FP_echo="FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower"
+            FP_echo+=" und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
+            if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
+                for msg in ${!MAX_FP_MSG_STACK[@]}; do
+                    echo ${MAX_FP_MSG_STACK[$msg]}
+                done
+                echo ${FP_echo}
+            else
+                echo "KEIN(!)" ${FP_echo}
+            fi
+        fi
+    else
+        echo "ACHTUNG: Keine Berechnungsdaten verfügbar oder alle GPU's Disabled. Es finden im Moment keine Berechnungen statt."
+        echo "ACHTUNG: GPU's, die sich selbst für ein Benchmarking aus dem System genommen haben, kommen auch von selbst wieder zurück"
+        echo "ACHTUNG: und beginnen damit, wieder Daten zu liefern."
+    fi
 
     ################################################################################
     #
@@ -501,12 +918,11 @@ while : ; do
     #
     ################################################################################
 
-    [[ ${performanceTest} -ge 2 ]] && [[ ${#pstreePID} -gt 0 ]] && kill ${pstreePID}; unset pstreePID
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >7.< Auswertung und Miner-Steuerungen" >>perfmon.log
 
     printf "=========       Endergebnis        =========\n"
     echo "\$GLOBAL_GPU_COMBINATION_LOOP_COUNTER: $GLOBAL_GPU_COMBINATION_LOOP_COUNTER"
-    echo "\$GLOBAL_MAX_PROFIT_CALL_COUNTER: $GLOBAL_MAX_PROFIT_CALL_COUNTER"
+    echo "\$GLOBAL_MAX_PROFIT_CALL_COUNTER     : $GLOBAL_MAX_PROFIT_CALL_COUNTER"
 
     # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
     _reserve_and_lock_file ${RUNNING_STATE}          # Zum Schreiben reservieren...
@@ -523,8 +939,8 @@ while : ; do
 
     # Man könnte noch gegenchecken, dass die Summe aus laufenden und abgeschalteten
     #     GPU's die Anzahl GPU's ergeben muss, die im System sind.
-    # Es gibt ja ${MAX_GOOD_GPUs}, ${SwitchOnCnt}, ${SwitchOffCnt} und ${GPUsCnt}
-    # Es müsste gelten: ${MAX_GOOD_GPUs} + ${SwitchOffCnt} == ${GPUsCnt}
+    # Es gibt ja ${MAX_GOOD_GPUs}, ${SwitchOnCnt}, ${SwitchOffCnt}, ${SwitchNotCnt} und ${GPUsCnt}
+    # Es müsste gelten: ${MAX_GOOD_GPUs} + ${SwitchOffCnt}, ${SwitchNotCnt} == ${GPUsCnt}
     #              und: ${MAX_GOOD_GPUs} >= ${SwitchOnCnt},
     #                   da möglicherweise die beste Kombination aus weniger als ${MAX_GOOD_GPUs} besteht.
     # Dann hätten wir diejenigen ${MAX_GOOD_GPUs} - ${SwitchOnCnt} noch zu überprüfen und zu stoppen !?!?
@@ -555,9 +971,12 @@ while : ; do
 
         declare -n actGPUalgoName="GPU${gpu_idx}Algos"
         declare -n actGPUalgoWatt="GPU${gpu_idx}Watts"
+        # Korrektur vom bc-indirekt-AlgoIdx zum tatsächlichen algoIdx
+        declare -n actCandidatesAlgoIndexes="PossibleCandidate${gpu_idx}AlgoIndexes"
+        algoidx=${actCandidatesAlgoIndexes[${algoidx}]}
         gpu_uuid=${uuid[${gpu_idx}]}
 
-        if [ ! ${#RunningGPUid[@]} -eq 0 ]; then
+        if [ ! ${#RunningGPUid[${gpu_uuid}]} -eq 0 ]; then
             #############################   CHAOS BEHADLUNG Anfang  #############################
             ### Schweres Thema: IST DER GPU-INDEX NOCH DER SELBE ??? <-----------------------
             #echo "\${gpu_idx}:${gpu_idx} == \${RunningGPUid[\${gpu_uuid}:${gpu_uuid}]}:${RunningGPUid[${gpu_uuid}]}"
@@ -698,16 +1117,13 @@ while : ; do
     # Die Guten GPUs sind raus aus PossibleCandidateGPUidx.
     # PossibleCandidateGPUidx enthält jetzt nur noch ebenfalls abzuschaltende GPUs,
     # die wir jetzt auf's SwitchOffGPUs Array packen
-    SwitchOffGPUs=(${SwitchOffGPUs[@]} ${PossibleCandidateGPUidx[@]})
+    SwitchOffGPUs+=( ${PossibleCandidateGPUidx[@]} )
 
     ###                                                             ###
     #   ... dann die GPU's, die abgeschaltet werden sollen            #
     ###                                                             ###
 
     declare -i SwitchOffCnt=${#SwitchOffGPUs[@]}
-    if [ $((${SwitchOffCnt} + ${SwitchOnCnt})) -ne ${GPUsCnt} ]; then
-        echo "---> ??? Oh je, ich glaube fast, wir haben da ein paar GPU's vergessen abzuschalten ??? <---"
-    fi
 
     # Auch hier kann es natürlich vorkommen, dass sich eine Indexnummer geändert hat
     #      und dass dann die CHAOS-BEHANDLUNG durchgeführt werden muss.
@@ -720,7 +1136,7 @@ while : ; do
             gpu_idx=${SwitchOffGPUs[$i]}
             gpu_uuid=${uuid[${gpu_idx}]}
 
-            if [ ! ${#RunningGPUid[@]} -eq 0 ]; then
+            if [ ! ${#RunningGPUid[${gpu_uuid}]} -eq 0 ]; then
                 #############################   CHAOS BEHADLUNG Anfang  #############################
                 ### Schweres Thema: IST DER GPU-INDEX NOCH DER SELBE ??? <-----------------------
                 if [[ "${gpu_idx}" != "${RunningGPUid[${gpu_uuid}]}" ]]; then
@@ -748,12 +1164,56 @@ while : ; do
             printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:0:\n" >>${RUNNING_STATE}
         done
     fi
+
+    declare -i SwitchNotCnt=${#SwitchNotGPUs[@]}
+    if [ ${SwitchNotCnt} -gt 0 ]; then
+        if [[ ${verbose} == 1 ]]; then
+            echo "Die folgenden Karten müssen unverändert durchgeschleift werden:"
+        fi
+
+        for (( i=0; $i<${SwitchNotCnt}; i++ )); do
+            gpu_idx=${SwitchNotGPUs[$i]}
+            gpu_uuid=${uuid[${gpu_idx}]}
+            runningWatts=0
+
+            if [ ! ${#RunningGPUid[${gpu_uuid}]} -eq 0 ]; then
+                #############################   CHAOS BEHADLUNG Anfang  #############################
+                ### Schweres Thema: IST DER GPU-INDEX NOCH DER SELBE ??? <-----------------------
+                if [[ "${gpu_idx}" != "${RunningGPUid[${gpu_uuid}]}" ]]; then
+                    _notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING "${name[${gpu_idx}]}" \
+                                                                  "${gpu_uuid}" \
+                                                                  "${RunningGPUid[${gpu_uuid}]}" \
+                                                                  "${gpu_idx}"
+                    exit
+                fi
+                #############################   CHAOS BEHADLUNG  Ende  #############################
+
+                if ((${WasItEnabled[${gpu_uuid}]} == 1)); then
+                    runningWatts=${RunningWatts[${gpu_uuid}]}
+                    #
+                    # Die Karte WAR generell ENABLED
+                    #
+                    if [[ -n "${WhatsRunning[${gpu_uuid}]}" ]]; then
+                        # MINER- Behandlung
+                        echo "---> SWITCH-NOT: GPU#${gpu_idx} läuft noch mit \"${WhatsRunning[${gpu_uuid}]}\""
+                    fi
+                fi
+            fi
+            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${runningWatts}:${WhatsRunning[${gpu_uuid}]}\n" >>${RUNNING_STATE}
+        done
+    fi
+
+    #if [ $((${SwitchOffCnt} + ${SwitchOnCnt})) -ne ${GPUsCnt} ]; then
+    if [ $((${SwitchOffCnt} + ${SwitchOnCnt} + ${SwitchNotCnt})) -ne ${GPUsCnt} ]; then
+        echo "---> ??? Oh je, ich glaube fast, wir haben da ein paar GPU's vergessen abzuschalten ??? <---"
+    fi
+
     if [[ ${verbose} == 1 ]]; then
         echo "-------------------------------------------------"
     fi
 
     # Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
-    rm -f ${RUNNING_STATE}.lock                      # ... und wieder freigeben
+    _remove_lock                                     # ... und wieder freigeben
 
     echo "Zugriff auf neues globales Switching Sollzustand Kommandofile ${RUNNING_STATE} freigegeben:"
     cat ${RUNNING_STATE}
@@ -767,8 +1227,8 @@ while : ; do
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 
-    printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )         =========\n\n"
-    while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
+    printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
+    while [ "${new_Data_available}" == "$(date --reference=${SYNCFILE} +%s)" ] ; do
         sleep 1
     done
 

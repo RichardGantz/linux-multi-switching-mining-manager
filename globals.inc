@@ -15,6 +15,9 @@ cd ${_WORKDIR_} >/dev/null
 # An jeder Stelle im Source-Code, wo diese Zeile gefunden wird, kann sie also entfernt werden.
 shopt -s lastpipe
 
+# Die Anzahl der besten Algos, die bei der globalen Berechnung pro GPU berücksichtigt werden sollen
+BEST_ALGO_CNT=5
+
 # Die SLEEP Zeit nach dem Abbruch eines Miners in Sekunden. Experimentell, .5 bis 3 ???
 Erholung=.9
 
@@ -53,6 +56,7 @@ declare domain=${POOLS["sn"]}
 ### gpu-abfrage.sh spezifische Variablen
 SYSTEM_FILE="${LINUX_MULTI_MINING_ROOT}/gpu_system.out"
 SYSTEM_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_SYSTEM_STATE"
+FATAL_ERRORS="${LINUX_MULTI_MINING_ROOT}/FATAL_ERRORS.log"
 # Wieviele Zeilen der gpu_system.out gehören zu jeweils einer GPU
 declare -ig num_gpu_rows=6
 
@@ -114,37 +118,68 @@ if [ $HOME == "/home/richard" ]; then
     PATH=${PATH}:${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle
     Erholung=.001
     PoolActive["sn"]=1
+    PoolActive["mh"]=1
 fi
+
+GPU_alive_delay=2
+GPU_ALIVE_FLAG=.willing_to_deliver_data
+GPU_VALID_FLAG=.valid_data_delivered
+MM_validating_delay=5
+RUN_SYNC_delay=5
 
 # Diese Funktion ist bequem, aber langsamer als die Member eines Arrays in einer for-Schleife zu verbinden.
 # Für große Datenmengen, große Arrays, daher besser in einem Array zusammen-joinen.
 # UND: Wenn die Funktion OFT gerufen wird, dann ebenfalls lieber eine for-Schleife schreiben.
-function pos_join { local IFS="$1"; shift; echo "$*"; }
+pos_join () { local IFS="$1"; shift; echo "$*"; }
 
-#
-# $1 - Dateiname der für andere zu sperrenden bzw. für Schreiben/Lesen zu reservierenden Datei
-#      z.B.: ${IMPORTANT_BENCHMARK_JSON}, ${RUNNING_STATE}, etc.
-#
-function _reserve_and_lock_file () {
-    declare -i locked_loop_counter=0
+_remove_lock () {
+    flock -u 999                                     # ... und wieder freigeben
+    [[ "$1" != "--do_not_log" ]] && \
+	echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Released the exclusive Lock now" \
+             >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.${LockBase}
+}
 
-    while [ -f ${1}.lock ]; do
-        fall_back_in_milli_seconds="000"$(( (${RANDOM} * ++locked_loop_counter) % GPU_COUNT + 1 ))
-        sleep .${fall_back_in_milli_seconds:$(( ${#fall_back_in_milli_seconds} - 4 ))}
-    done
-    touch ${1}.lock
-    echo $(date "+%Y-%m-%d %H:%M:%S") ": Locked by" $(basename $0) >>${1}.lock
-    if [[ ${locked_loop_counter} -gt 0 ]]; then
-        cat ${1}.lock >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.$(basename ${1})
-        echo $(date "+%Y-%m-%d %H:%M:%S") ":" ${locked_loop_counter} $(basename $0) \
-             >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.$(basename ${1})
+_reserve_and_lock_file () {
+
+    LockBase=$(basename ${1})
+    LockFile="${1%${LockBase}}.${LockBase}.lock"
+
+    # 6-stellige PID-Nummern (eigentlich gehen sie nur bis 32k) mit führenden Nullen
+    own_PID="00000"$$
+    own_PID=${own_PID:$(( ${#own_PID} - 6 ))}
+
+    exec 999>${LockFile}
+    flock -x 999
+    [[ "$2" != "--do_not_log" ]] && \
+	echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Got the exclusive Lock now" \
+             >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.${LockBase}
+}
+
+_get_file_modified_time_ () {
+    # 0.1 deshalb, weil führende Nullen bei Dezimalzahlen als Oktalzahlen interpretiert werden, die dann zu gross für die "aktuelle Basis" sind.
+    # Bei den Ziffern hinter dem Komma müssen wir also immer die führenden Nullen wegnehmen.
+    # Und wenn hier "0.0" stehen würde, würde die Fraction hinter dem Komma komplett entfernt und die entsprechende Variable wäre leer,
+    # was zu einem Fehler "Operand erwartet" führen würde.
+    # Aus diesem Grund prüfen wir die Fraction gleich und lassen führende Nullen hier schon weg
+    declare _modified_time_="0" _fraction_="1"
+
+    _reserve_and_lock_file "$1" "--do_not_log"
+    if [ -f ${1} ]; then
+	_modified_time_=$(stat -c "%Y" ${1}) #.${_fraction_}
+	_fraction_=$(find ${1} -printf "%TS" )
+	_fraction_=${_fraction_#*\.}
+	REGEXPAT="^0+([[:digit:]]*)"
+	[[ "${_fraction_}" =~ ${REGEXPAT} ]] && _fraction_=${BASH_REMATCH[1]}
+	[[ "${_fraction_}" == ""          ]] && _fraction_="1"
     fi
+    _remove_lock "--do_not_log"
+    echo "${_modified_time_} ${_fraction_}"
 }
 
 #####################################################
 # Einlesen des bisherigen Status laufender GPUs
 ####################################################
-function _read_in_actual_RUNNING_STATE () {
+_read_in_actual_RUNNING_STATE () {
     if [ -f ${RUNNING_STATE} ]; then
         unset RUNNING_STATE_CONTENT
         unset RunningGPUid; declare -Ag RunningGPUid

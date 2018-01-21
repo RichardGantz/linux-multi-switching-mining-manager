@@ -388,25 +388,25 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
         gpu_idx=${TestCombinationGPUs[${lfdGPU}]}
         FN_combi+="_${gpu_idx}"
 
-        declare -n actAlgoWatt="GPU${gpu_idx}Watts"
-        declare -n actAlgoMines="GPU${gpu_idx}Mines"
+        declare -n actAlgoWatt="GPU${gpu_idx}WATTS"
+        declare -n actAlgoMines="GPU${gpu_idx}MINES"
 
-        exactNumAlgos=${#actAlgoWatt[@]}
-        total_number_of_loops_str+="${exactNumAlgos}*"
+        numAlgos=${exactNumAlgos[${gpu_idx}]}
+        total_number_of_loops_str+="${numAlgos}*"
 
-        if [ ${exactNumAlgos} -gt 150 ]; then
+        if [ ${numAlgos} -gt 150 ]; then
             echo "Mehr als 150 Algos pro GPU können im Moment nicht verarbeitet werden."
             echo "DAS BITTE KURZ EINPROGRAMMIEREN."
             echo "Wir beenden die Berechnungen an dieser Stelle und brechen total ab!"
             exit 77
         fi
 
-        if [ ${#exactNumAlgos} -eq 3 ]; then                             # 3-stellige Anzahl benötigter Arays
-            bc_algo_array_str_len=$(( (exactNumAlgos - 100) * 11 + 990 ))
-        elif [ ${#exactNumAlgos} -eq 2 ]; then                           # 2-stellige Anzahl benötigter Arays
-            bc_algo_array_str_len=$(( (exactNumAlgos -  10) * 10 +  90 ))
-        else                                                             # 1-stellige Anzahl benötigter Arays
-            bc_algo_array_str_len=$(( (exactNumAlgos      ) *  9       ))
+        if   [ ${#numAlgos} -eq 3 ]; then                             # 3-stellige Anzahl benötigter Arays
+            bc_algo_array_str_len=$(( (numAlgos - 100) * 11 + 990 ))
+        elif [ ${#numAlgos} -eq 2 ]; then                             # 2-stellige Anzahl benötigter Arays
+            bc_algo_array_str_len=$(( (numAlgos -  10) * 10 +  90 ))
+        else                                                          # 1-stellige Anzahl benötigter Arays
+            bc_algo_array_str_len=$(( (numAlgos      ) *  9       ))
         fi
 
         # Elegantes Füllen der Array-Strings mit den jeweiligen Werten
@@ -419,7 +419,7 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
 
         # Die for-Schleifenköpfe folgen ebenfalls hitereinander und werden in dieser Variablen gesammelt
         for_header+="
-for ("${bc_loop_var[$lfdGPU]}"=0;"${bc_loop_var[$lfdGPU]}"<"${exactNumAlgos}";"${bc_loop_var[$lfdGPU]}"++){"
+for ("${bc_loop_var[$lfdGPU]}"=0;"${bc_loop_var[$lfdGPU]}"<"${numAlgos}";"${bc_loop_var[$lfdGPU]}"++){"
         # Die entsprechenden for-Schleifen abschließenden Klamern folgen ebenfalls hitereinander und werden in dieser Variablen gesammelt
         for_footer+="}
 "
@@ -545,10 +545,10 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
             # Das Array TestCombinationGPUs, das die zu untersuchenden GPU-Indexe enthält,
             # wird jetzt komplett für die Berechnungsroutine aufgebaut.
             TestCombinationGPUs=($* ${PossibleCandidateGPUidx[${iii}]})
-            if [[ ${debug} -eq 1 ]]; then
-                echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
-                echo "Testkombinationsarray $iii hat ${#TestCombinationGPUs[@]} Member:" ${TestCombinationGPUs[@]}
-            fi
+            #if [[ ${debug} -eq 1 ]]; then
+            #    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
+            #    echo "Testkombinationsarray $iii hat ${#TestCombinationGPUs[@]} Member:" ${TestCombinationGPUs[@]}
+            #fi
 
             _CALCULATE_GV_of_all_TestCombinationGPUs_members
         done
@@ -666,3 +666,56 @@ _read_in_All_ALGO_WATTS_MINESin () {
         fi
     done
 }
+
+_read_in_Validated_ALGO_WATTS_MINESin () {
+    ###############################################################################################
+    #
+    #    EINLESEN ALLER ALGORITHMEN, WATTS und MINES, AUF DIE WIR GERADE GEWARTET HABEN
+    #
+    # In dieser Datei hat die jeweilige GPU jetzt aber ALL ihre Algos,
+    #           die dabei verbrauchten Watts
+    #           und die "Mines" in BTC, die sie dabei errechnet, festgehalten:
+    # ALGO_WATTS_MINES.in
+    # Und kann wie üblich über readarray eingelesen werden.
+
+    #
+    # Und wir speichern diese in einem Array-Drilling, der immer synchron zu setzen ist:
+    #     GPU{realer_gpu_index}Algos[]                 also u.a.  GPU5Algos[]
+    #     GPU{realer_gpu_index}Watts[]                 also u.a.  GPU5Watts[]
+    #     GPU{realer_gpu_index}Mines[]                 also u.a.  GPU5Mines[]
+    #
+    # Wenn zur Zeit mehrere Algos für eine GPU möglich sind, sieht das z.B. so aus im Fall von 3 Algos:
+    #     GPU{realer_gpu_index}Algos[0]="cryptonight"  also u.a.  GPU5Algos[0]="cryptonight"
+    #                               [1]="equihash"                         [1]="equihash"
+    #                               [2]="daggerhashimoto"                  [2]="daggerhashimoto"
+    #     GPU{realer_gpu_index}Watts[0]="55"           also u.a.  GPU5Watts[0]="55"
+    #                               [1]="104"                              [1]="104"    
+    #                               [2]="98"                               [2]="98"
+    #     GPU{realer_gpu_index}Mines[0]=".00011711"    also u.a.  GPU5Mines[0]=".00011711"
+    #                               [1]=".00017009"                        [1]=".00017009"    
+    #                               [2]=".00013999"                        [2]=".00013999"
+    #
+
+    local UUID idx
+    for UUID in "${!ALGO_WATTS_MINES_delivering_GPUs[@]}"; do
+        if [ -s ${UUID}/ALGO_WATTS_MINES.in ]; then
+            idx=${ALGO_WATTS_MINES_delivering_GPUs[${UUID}]}
+            declare -n actGPUAlgos="GPU${idx}Algos"
+            declare -n actAlgoWatt="GPU${idx}Watts"
+            declare -n actAlgoMines="GPU${idx}Mines"
+
+            unset READARR
+            readarray -n 0 -O 0 -t READARR <${UUID}/ALGO_WATTS_MINES.in
+            for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+                # Das ist eine sehr elegante Möglichkeit, einen neuen Wert auf ein Array zu pushen.
+                # Wir nehmen das jetzt aber alles mal raus und machen es anders und beobachten wieder
+                # die Durchlaufzeiten, ob die sich wieder mit der Zeit erhöhen UND ob sich
+                # der Speicherbedarf erhöht, OBWOHL alle Arrays immer erst durch UNSET zerstört werden
+                actGPUAlgos[${#actGPUAlgos[@]}]="${READARR[$i]}"
+                actAlgoWatt[${#actAlgoWatt[@]}]="${READARR[$i+1]}"
+                actAlgoMines[${#actAlgoMines[@]}]="${READARR[$i+2]}"
+            done
+        fi
+    done
+}
+

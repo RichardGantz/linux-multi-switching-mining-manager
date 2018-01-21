@@ -14,15 +14,16 @@ tar -cvf ${arch_name} \
     gpu_system.out \
     FATAL_* \
     MINER_ALGO_DISABLED_HISTORY \
-    MAX_PROFIT_DATA.out\
     ._reserve_and_lock_counter.* \
     .bc_* \
+    .sort_* \
     .InternetConnectionLost.log \
     benchmarking/test/*
+    benchmarking/autobenchlogs/*
     
 find . -name gpu_gv-algo_\*.log   -exec tar -rvf ${arch_name} {} +
 find . -name \*_benchmark.log     -exec tar -rvf ${arch_name} {} +
-find . -name ALGO_WATTS_MINES.in  -exec tar -rvf ${arch_name} {} +
+find . -name ALGO_WATTS_MINES.BAK -exec tar -rvf ${arch_name} {} +
 find . -name gpu_index.in         -exec tar -rvf ${arch_name} {} +
 find . -name .a[cln][tly]\*       -exec tar -rvf ${arch_name} {} +
 find . -name .C\*                 -exec tar -rvf ${arch_name} {} +

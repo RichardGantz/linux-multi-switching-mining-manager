@@ -19,6 +19,7 @@
 #   94: Internetconnection Lost detected
 #   93: Verbindung zum Server gestört (Retries oder Socket-Errors)
 #   92: Abbruch wegen zu vieler Booooooos
+#   91: LIVE-Benchmarking nur bei "nh" erlaubt.
 #if [ $# -eq 0 ]; then kill -9 $$; fi
 
 # GLOBALE VARIABLEN, nützliche Funktionen
@@ -822,6 +823,7 @@ _On_Exit () {
     fi  ## if [ ${BENCHMARKING_WAS_STARTED} -eq 1 ]
 
     if [ -f ${BENCHLOGFILE} ]; then
+        [ ${#LOGFILE_DATE} -eq 0 ] && LOGFILE_DATE="NoBenchStarted_"$(date "+%Y%m%d_%H%M%S")
         cp -f ${BENCHLOGFILE} ${LOGPATH}/${LOGFILE_DATE}_benchmark.log
     fi
 
@@ -1139,7 +1141,8 @@ _init_some_file_and_path_variables
 # Alle Einstellungen aller Algorithmen der ausgewählten GPU einlesen
 # Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da
 #
-_read_IMPORTANT_BENCHMARK_JSON_in without_miners
+bENCH_SRC="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/bENCH.in"
+_read_IMPORTANT_BENCHMARK_JSON_in # without_miners
 #echo "I'm here..."
 
 ################################################################################
@@ -1158,6 +1161,17 @@ _read_IMPORTANT_BENCHMARK_JSON_in without_miners
 # bis es keine MissingAlgos mehr gibt.
 #_test_=1
 _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
+
+# Alle fehlenden Pool-Infos setzen wie Coin, ServerName und Port
+# Ab hier sind die folgenden Informationen in den Arrays verfügbar
+#    actCoinsOfPool                        ="CoinsOfPool_${pool}"
+#    actMiningAlgosOfPool                  ="MiningAlgosOfPool_${pool}"
+#    UniqueMiningAlgoArray[${miningAlgo}] +="${coin}#${pool}#${server_name}#${algo_port} <SPACE!>"
+#    actCoinsPoolsOfMiningAlgo             ="CoinsPoolsOfMiningAlgo_${mining_Algo}"
+#
+#    #actServerNameOfPool="ServerNameOfPool_${pool}" (auskommentiert)
+#    #actPortsOfPool="PortsOfPool_${pool}"           (auskommentiert)
+_read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
 
 ################################################################################
 ################################################################################
@@ -1282,12 +1296,14 @@ if [ -s ../BENCH_ALGO_DISABLED ]; then
 
     for actRow in "${BENCH_ALGO_DISABLED_ARR[@]}"; do
         read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
-        if [ "${gpuIdx}" == "${gpu_idx}" ]; then
+        if [ ${gpuIdx} -eq ${gpu_idx} ]; then
             read mining_algo m_name m_version muck <<<"${lfdAlgorithm//#/ }"
             for ccoin in ${!actMiningAlgos[@]}; do
                 [ "${actMiningAlgos[$ccoin]}" == "${mining_algo}" ] && unset actMiningAlgos[$ccoin]
             done
+            [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
             actMissingAlgos=( $(echo ${actMissingAlgos[@]} | sed -e 's/\b'${mining_algo}'\b//g') )
+            [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
             disd_msg[${#disd_msg[@]}]="---> Algo ${lfdAlgorithm} wegen des Vorhandenseins in der Datei BENCH_ALGO_DISABLED herausgenommen."
         fi
     done
@@ -1365,7 +1381,8 @@ else
     ###          4.1.2. miningAlgo festlegen
     ###
     #declare -a menuItems=( ${actMiningAlgos[@]} )   # Dupletten besser raus
-    declare -a menuItems=( $(echo ${actMiningAlgos[@]} | sed -e 's/ /\n/g' | sort -u ))
+    #                                                    sed    's/ /\n/g'
+    declare -a menuItems=( $(echo ${actMiningAlgos[@]} | tr ' ' '\n' | sort -u ))
     numMiningAlgos=${#menuItems[@]}
 
     menuItems_list=''
@@ -1483,6 +1500,18 @@ for ccoin in ${!actMiningAlgos[@]}; do
     [[ "${actMiningAlgos[$ccoin]}" == "$miningAlgo" ]] && Products[${#Products[@]}]=$ccoin
 done
 
+if [ ${#Products[@]} -eq 0 ]; then
+    echo "Au weia, da würde was schwer schief gehen. Es gibt keine Coins, die der Miner minen könnte."
+    if [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
+        reason="Abbruch des Auto-Benchmarkings mit exit code 97 No coins for miningAlgo available."
+        _disable_algorithm "${algorithm}" "${reason}" "${gpu_idx}"
+        exit 97   # No coins for miningAlgo available
+    fi
+    _ask_user_whether_to_disable_the_algorithm
+    read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+    exec $0 ${initialParameters}
+fi
+
 # Hier errechnen wir einen Preis, wenn der LIVE-Mode möglich ist, als Entscheidungshilfe, was zu Minen ist.
 # Wir bevorzugen natürlich den Coin mit dem besten Preis-Leistungsverhältnis
 #
@@ -1502,6 +1531,11 @@ if [[  "${Preise_Kurse_valid}" == "1" \
     gv_calculation_possible=1
 fi
 
+if [ ${debug} -eq 1 ]; then
+    msg="GV Calculation is possible"
+    [ ${gv_calculation_possible} -eq 0 ] && echo "No ${msg}" || echo "${msg}"
+fi
+
 # Erster Durchlauf anhand der Online abgerufenen Daten, die eventuell einen Preis berechnen lassen.
 for pidx in ${!Products[@]}; do
     ccoin=${Products[$pidx]}
@@ -1513,7 +1547,9 @@ for pidx in ${!Products[@]}; do
                 "nh")
                     # Frage: Ist der Coin, den der Miner mittels des MiningAlgo generell produzieren kann
                     #        zufälligerweise unter den Produkten, die dieser Pool abnimmt, dabei?
+                    [ ${debug} -eq 1 ] && echo "Case \"${ppool}\" entered with \${Preise_Kurse_valid}=${Preise_Kurse_valid}"
                     if [  "${Preise_Kurse_valid}" == "1" ]; then
+                        [ ${debug} -eq 1 ] && echo "Case \"${ppool}\" entered, trying to find Coin ${REGEXPAT} in \${ALGOs[@]}: ${ALGOs[@]}"
                         if [[ "${ALGOs[@]}" =~ ${REGEXPAT} ]]; then
                             menuItems[${#menuItems[@]}]="${ccoin}#${ppool}"
                             # Einen Preis können wir vielleicht auch anbieten...
@@ -1553,39 +1589,48 @@ for pidx in ${!Products[@]}; do
                     ;;
 
                 "mh"|"sn")
+                    # ---> ACHTUNG: Hier ist noch ein Denkfehler drin.
+                    # ---> ACHTUNG: Das findet auch Kombinationen, die nicht wirklich in dem Pool enthalten sind!
+                    # ---> ACHTUNG: Wird momentan übergangen, indem wir die Kombinationen nur im LIVE-Modus auswrten ???
                     # Frage: Ist der Coin, den der Miner mittels des MiningAlgo generell produzieren kann
                     #        zufälligerweise unter den Produkten, die dieser Pool abnimmt, dabei?
+                    [ ${debug} -eq 1 ] && echo "Case \"${ppool}\" entered with \${Preise_Kurse_valid}=${Preise_Kurse_valid}"
                     if [  "${Preise_Kurse_valid}" == "1" ]; then
+                        [ ${debug} -eq 1 ] && echo "Case \"${ppool}\" entered, trying to find Coin ${REGEXPAT} in \${COINS[@]}: ${COINS[@]}"
                         if [[ "${COINS[@]}" =~ ${REGEXPAT} ]]; then
-                            menuItems[${#menuItems[@]}]="${ccoin}#${ppool}"
-                            # Einen Preis können wir vielleicht auch anbieten...
-                            coin_mines=".0"
-                            coin_kurs=${BlockReward[$ccoin]//[.0]}
-                            if [[          ${gv_calculation_possible}    -eq 1   \
-                                        && ${#coin_kurs}                 -gt 0   \
-                                        && ${#BlockTime[${ccoin}]}       -gt 0   \
-                                        && ${#CoinHash[${ccoin}]}        -gt 0   \
-                                        && ${#Coin2BTC_factor[${ccoin}]} -gt 0   \
-                                        && ${#PoolFee[${ppool}]}         -gt 0   \
-                                        && ${#MINER_FEES[${MINER}]}      -gt 0   \
-                                ]]; then
-                                # "Mines" in BTC berechnen
-                                algoMines=$(echo "scale=8;   86400 * ${BlockReward[${ccoin}]} * ${Coin2BTC_factor[${ccoin}]}   \
+                            declare -n  actCoinsPoolsOfMiningAlgo="CoinsPoolsOfMiningAlgo_${miningAlgo}"
+                            COINPOOLREGEXP="\b${ccoin}#${ppool}#[^#]+#[[:digit:]]+\b"
+                            if [[ "${actCoinsPoolsOfMiningAlgo[@]}" =~ ${COINPOOLREGEXP} ]]; then
+                                menuItems[${#menuItems[@]}]="${ccoin}#${ppool}"
+                                # Einen Preis können wir vielleicht auch anbieten...
+                                coin_mines=".0"
+                                coin_kurs=${BlockReward[$ccoin]//[.0]}
+                                if [[          ${gv_calculation_possible}    -eq 1   \
+                                            && ${#coin_kurs}                 -gt 0   \
+                                            && ${#BlockTime[${ccoin}]}       -gt 0   \
+                                            && ${#CoinHash[${ccoin}]}        -gt 0   \
+                                            && ${#Coin2BTC_factor[${ccoin}]} -gt 0   \
+                                            && ${#PoolFee[${ppool}]}         -gt 0   \
+                                            && ${#MINER_FEES[${MINER}]}      -gt 0   \
+                                    ]]; then
+                                    # "Mines" in BTC berechnen
+                                    algoMines=$(echo "scale=8;   86400 * ${BlockReward[${ccoin}]} * ${Coin2BTC_factor[${ccoin}]}   \
                                                / ( ${BlockTime[${ccoin}]} * (1 + ${CoinHash[${ccoin}]} / ${bENCH[$algorithm]}) ) \
                                                * ( 100 - "${PoolFee[${ppool}]}" )    \
                                                * ( 100 - "${MINER_FEES[${MINER}]}" ) \
                                                / 10000
                                             " | bc )
-                                minesValue=${algoMines//[.0]}
-                                if [ ${#minesValue} -gt 0 ]; then
-                                    coin_mines="${algoMines}"
+                                    minesValue=${algoMines//[.0]}
+                                    if [ ${#minesValue} -gt 0 ]; then
+                                        coin_mines="${algoMines}"
+                                        earnings_possible=1
+                                    fi
+                                elif [[ ${#coin_kurs} -gt 0 ]]; then
+                                    coin_mines=${BlockReward[$ccoin]}
                                     earnings_possible=1
                                 fi
-                            elif [[ ${#coin_kurs} -gt 0 ]]; then
-                                coin_mines=${BlockReward[$ccoin]}
-                                earnings_possible=1
+                                menuMines[${#menuMines[@]}]=${coin_mines}
                             fi
-                            menuMines[${#menuMines[@]}]=${coin_mines}
                         fi
                     else
                         found=$(grep -E -m 1 -c -e "^${ccoin}:${miningAlgo}:" ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$ppool]})
@@ -1599,6 +1644,12 @@ for pidx in ${!Products[@]}; do
         fi
     done
 done
+
+[ ${debug} -eq 1 ] && printf "MenuItems nach dem Durchsuchen der Online Daten für Preise/Kurse: ${#menuItems[@]}
+Verdienst wäre möglich bei \"\${earnings_possible}=1\". \${earnings_possible}=${earnings_possible}"
+
+# ${earnings_possible} war NICHT 1
+# Coin und Pool waren bei Lyra2z und myr-gr leer
 
 # Wenn Verdienst möglich ist, gibt es auch etwas zu sortieren.
 if [ ${earnings_possible} -eq 1 ]; then
@@ -1642,6 +1693,22 @@ if [ ${earnings_possible} -eq 1 ]; then
         algonr="a0"
     fi
 else
+    # Coin und Pool waren bei Lyra2z und myr-gr leer
+    # Es gibt den Fall, dass Coins bei dem Abruf der Preise/Kurse einfach nicht dabei sind (WhatToMine)
+    # In diesem Fall gibt es u.U. keinen menuItem!
+    # Das bedeutet, dass auf jeden Fall in den Offline-Mode geschaltet werden muss, auch wenn wir hier ein Menuitem erzwingen,
+    # damit der Offline-Benchmark vielleicht durchgeht.
+    if [ ${#menuItems[@]} -eq 0 ]; then
+        live_mode="o"
+        # Das könnte man vielleicht auch noch machen:
+        Preise_Kurse_valid=0
+
+        # ${coin}#${pool}#${server_name}#${algo_port}
+        mining_Algo=${miningAlgo//-/_}
+        declare -n  actCoinsPoolsOfMiningAlgo="CoinsPoolsOfMiningAlgo_${mining_Algo}"
+        read ccoin ppool srv_name pport <<<"${actCoinsPoolsOfMiningAlgo[0]//#/ }"
+        menuItems[0]="${ccoin}#${ppool}"
+    fi
     echo "Die Kombination \"${menuItems[0]}\" wird automatisch ausgewählt."
     algonr="a0"
 fi
@@ -1779,8 +1846,25 @@ if [ -z "$live_mode" ]; then
     exec $0 ${initialParameters}
 elif [ "$live_mode" == "l" ]; then
     # Ausschliesslich LIVE mode möglich
-    [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ] && \
-        echo "Im Moment ist nur der LIVE-Mode möglich, automatische Einstellung auf LIVE-Mode."
+    # Der darf aber nur beiNH angewendet werden, weil die anderen Pools eine Mindestmenge erwarten, bevor sie in BTC wechseln
+    # und der Kurs dann deutlich anders sein könnte...
+    if [ "${pool}" != "nh" ]; then
+        echo "Bis hierher wurde der OFFLINE-Mode bereits ausgeschlossen, es kann nur LIVE benchmarkt werden."
+        echo "Allerdings ist der ausgewählte Pool \"${pool}\", den wir NICHT LIVE benchmarken wollen, weil er nur MINDESTMENGEN in BTC wandelt".
+        if [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
+            # Wir disablen den Algo mal, damit wir nicht dauernd wieder hier rein kommen.
+            # Das hat noch nicht mal was mit irgendwelchen Hashwerten oder Wattwerten zu tun.
+            # Wir sind noch nicht mal zum Starten der Messung gekommen.
+            _disable_algorithm "${algorithm}" "Das Benchmarking im LIVE-Mode ist für Pool \"${pool}\" nicht erlaubt." "${gpu_idx}"
+            exit 91
+        fi
+        _ask_user_whether_to_disable_the_algorithm
+        read -p "Das Programm wird nach <ENTER> mit den selben Parametern \"${initialParameters}\" neu gestartet..." restart
+        exec $0 ${initialParameters}
+    else
+        [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ] && \
+            echo "Im Moment ist nur der LIVE-Mode möglich, automatische Einstellung auf LIVE-Mode."
+    fi
 elif [ "$live_mode" == "o" ]; then
     # Ausschliesslich OFFLINE mode möglich
     [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ] && \
@@ -1800,6 +1884,7 @@ else
         # Automatik bevorzugt den LIVE-Mode, weil die Kosten für den Test so oder so anfallen und im Live-Mode
         #           wenigstens noch ein paar SHares abgeliefert und bezahlt werden.
         live_mode="l"
+        [ ! "${pool}" == "nh" ] && live_mode="o"
     fi
 fi
 
@@ -1834,6 +1919,8 @@ echo "DIE FOLGENDEN KOMMANDOS WERDEN NACH BESTÄTIGUNG ABGESETZT:"
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
     echo "---> ${CmdStack[$i]} <---"
 done
+
+# Coin und Pool waren bei Lyra2z und myr-gr leer
 
 ################################################################################
 ###
@@ -1882,9 +1969,10 @@ elif [ "${pool}" == "sn" -o "${pool}" == "mh" ]; then
 fi
 
 if [ -z "${algo_port}" -o -z "${server_name}" ]; then
-    echo "Es kann kein SERVERNAME PORT für den Algo/Coin ${coin} in dem POOL \"${pool}\" gefunden werden!"
+    msg="Es kann kein SERVERNAME PORT für den Algo/Coin \"${coin}\" in dem POOL \"${pool}\" gefunden werden!"
+    echo ${msg}
     if [ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]; then
-        _disable_algorithm "${algorithm}" "Es kann kein SERVERNAME PORT für den Algo/Coin ${coin} in dem POOL \"${pool}\" gefunden werden!" "${gpu_idx}"
+        _disable_algorithm "${algorithm}" "${msg}" "${gpu_idx}"
         exit 98   # No algo_port found
     fi
     _ask_user_whether_to_disable_the_algorithm

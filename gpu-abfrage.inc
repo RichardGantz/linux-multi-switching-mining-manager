@@ -60,6 +60,7 @@ function _update_SYSTEM_STATEin_if_necessary () {
 }
 
 function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
+    local UUID
     unset READARR
     readarray -n 0 -O 0 -t READARR <${SYSTEM_FILE}
 
@@ -70,25 +71,37 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
     unset uuid;       declare -ag uuid        # gpu_row 3 or 4
     unset auslastung; declare -ag auslastung  # gpu_row 4 or 5
     unset defPowLim;  declare -ag defPowLim   # gpu_row 5 or 6
+
+    unset GPU_idx;    declare -Ag GPU_idx
     # Diese Felder sind ziemlich wichtig, so dass wir deren Anzahl in globals.inc hinterlegen
     #declare -ig num_gpu_rows=6
 
     for ((i=0; $i<${#READARR[@]}; i+=num_gpu_rows)) ; do
         j=$(expr $i / ${num_gpu_rows})
         index[$j]=${READARR[$i]}        # index[] = Grafikkarten-Index für miner
-        name[${index[$j]}]=${READARR[$i+1]}
-        bus[${index[$j]}]=${READARR[$i+2]}
-        uuid[${index[$j]}]=${READARR[$i+3]}
-        auslastung[${index[$j]}]=${READARR[$i+4]}
-        defPowLim[${index[$j]}]=${READARR[$i+5]}
+        act_gpu_idx=${index[$j]}
+        name[${act_gpu_idx}]=${READARR[$i+1]}
+        bus[${act_gpu_idx}]=${READARR[$i+2]}
+        UUID=${READARR[$i+3]}
+        uuid[${act_gpu_idx}]=${UUID}
+        auslastung[${act_gpu_idx}]=${READARR[$i+4]}
+        defPowLim[${act_gpu_idx}]=${READARR[$i+5]}
+
+        GPU_idx[${UUID}]=${act_gpu_idx}
         # EXTREM WICHTIGE Deklarationen!
         # Seitdem dieser Teil am Anfang einer Endlosschleife enthalten ist, müssen wir die Arrays erst mal löschen!
-        declare -n deleteIt="GPU${index[$j]}Algos";     unset deleteIt
-        declare -n deleteIt="GPU${index[$j]}Watts";     unset deleteIt
-        declare -n deleteIt="GPU${index[$j]}Mines";     unset deleteIt
-        declare -ag "GPU${index[$j]}Algos"
-        declare -ag "GPU${index[$j]}Watts"
-        declare -ag "GPU${index[$j]}Mines"
+        declare -n deleteIt="GPU${act_gpu_idx}Algos";     unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}Watts";     unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}Mines";     unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}Profit";    unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}WATTS";     unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}MINES";     unset deleteIt
+        declare -ag "GPU${act_gpu_idx}Algos"
+        declare -ag "GPU${act_gpu_idx}Watts"
+        declare -ag "GPU${act_gpu_idx}Mines"
+        declare -ag "GPU${act_gpu_idx}Profit"
+        declare -ag "GPU${act_gpu_idx}WATTS"
+        declare -ag "GPU${act_gpu_idx}MINES"
     done
 
     # Die folgende Datei GLOBAL_GPU_SYSTEM_STATE.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
@@ -127,20 +140,20 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
 # indem die GPU als disabled eingetragen ist und damit nicht auf sie gewartet wird, bis sie rechenergebnisse abliefert.
 # Der Multiminer wartet auf alle enabled GPU's, bis sie die Datei ALGO_WATTS_MINES.in geschrieben haben.
 function _disable_GPU_UUID_GLOBALLY () {
-    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen reservieren
+    _reserve_and_lock_file ${SYSTEM_STATE}                   # Zum Lesen reservieren
 
     REGEXPAT='s/^\('${gpu_uuid}':.*\):[[:digit:]]$/\1:0/g'
     sed -i -e "${REGEXPAT}" ${SYSTEM_STATE}.in
 
-    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
+    _remove_lock                                             # ... und wieder freigeben
 }
 
 function _enable_GPU_UUID_GLOBALLY () {
-    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen reservieren
+    _reserve_and_lock_file ${SYSTEM_STATE}                   # Zum Lesen reservieren
 
     REGEXPAT='s/^\('${gpu_uuid}':.*\):[[:digit:]]$/\1:1/g'
     sed -i -e "${REGEXPAT}" ${SYSTEM_STATE}.in
 
-    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben, weil _update selbst lockt
+    _remove_lock                                             # ... und wieder freigeben
 }
 

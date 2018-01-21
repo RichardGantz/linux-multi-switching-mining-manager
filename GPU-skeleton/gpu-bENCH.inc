@@ -14,6 +14,8 @@
 #     angesprochen werden können.
 #
 
+_GPU_BENCH_INCLUDED=1
+
 [[ ${#_MINERFUNC_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 
 # Extrem wichtige Funktion zur Erweiterung der JSON, falls notwendig.
@@ -91,6 +93,20 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
 {
     local w_o_miners=0
     if [ "$1" == "without_miners" ]; then w_o_miners=1; fi
+    if [ ${w_o_miners} -eq 0 ]; then
+        ################################################################################
+        #
+        # Feststellen der Menge an Algorithmen, die insgesamt im System möglich sind
+        #    und nur diese Menge an $algorithm-Objekten einlesen.
+        #
+        #################################################################################
+
+        # Einlesen aller $algorithm-Objekte (Algo#MinerName#MinerVersion) aus den ${miner_name}#${miner_version}.algos Dateien
+        # in ALLE die Arrays "Mining_${miner_name}_${miner_version//\./_}_Algos"
+        # Das Verzeichnis, das alle diese Informationen bereit hält ist: ${LINUX_MULTI_MINING_ROOT}/miners
+        _set_ALLE_MINER_from_path
+
+    fi
 
     # Das sind die Werte zu jedem einzelnen "${algorithm}" == "${algo}#${miner_name}#${miner_version}"
     unset bENCH               ; declare -Ag bENCH
@@ -109,7 +125,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
     unset LESS_THREADS        ; declare -Ag LESS_THREADS
     unset READARR
 
-    _reserve_and_lock_file ${IMPORTANT_BENCHMARK_JSON}
+    _reserve_and_lock_file ${IMPORTANT_BENCHMARK_JSON}    # Zum Lesen und Bearbeiten reservieren...
 
     # Dateialter zum Zeitpunkt des Array-Aufbaus festhalten
     IMPORTANT_BENCHMARK_JSON_last_age_in_seconds=$(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s)
@@ -214,34 +230,43 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
        }' ${IMPORTANT_BENCHMARK_JSON} \
         | tee $bENCH_SRC \
         | readarray -n 0 -O 0 -t READARR
+    _remove_lock                                     # ... und wieder freigeben
+
     constAnzahlParameter=15
     # Aus den MinerName:BenchmarkSpeed:WATT Paaren das assoziative Array bENCH erstellen
     for (( i=0; $i<${#READARR[@]}; i+=${constAnzahlParameter} )) ; do
-        bENCH[${READARR[$i]}]=${READARR[$i+1]}
-        declare -ig WATTS[${READARR[$i]}]=${READARR[$i+2]}
-        if [[ ${#READARR[$i+1]} -gt 0 && (${#READARR[$i+2]} == 0 || ${READARR[$i+2]} == 0) ]]; then
-           WATTS[${READARR[$i]}]=1000
+        lfdAlgorithm=${READARR[$i]}
+
+        # Nur diejenigen $algorithm-Objekte einlesen, die im System aktuell möglich sind 
+        if [ ${w_o_miners} -eq 0 ]; then
+            read lfdMiningAlgo m_name m_version <<<"${lfdAlgorithm//#/ }"
+            [[ ! ${#MINER_IS_AVAILABLE[${m_name}#${m_version}]} -eq 1 ]] && continue
+        fi
+
+        bENCH[${lfdAlgorithm}]=${READARR[$i+1]}
+        declare -ig WATTS[${lfdAlgorithm}]=${READARR[$i+2]}
+        if [[ "${bENCH[${lfdAlgorithm}]}" != "0" && (${#WATTS[${lfdAlgorithm}]} == 0 || ${WATTS[${lfdAlgorithm}]} == 0) ]]; then
+           WATTS[${lfdAlgorithm}]=1000
            notify-send -t 10000 -u critical "### Fehler in Benchmarkdatei ###" \
-                 "GPU-Dir: ${GPU_DIR} \n MiningAlgoName: ${READARR[$i]} \n KEINE WATT ANGEGEBEN. Verwende 1000"
+                 "GPU-Dir: ${GPU_DIR} \n MiningAlgoName: ${lfdAlgorithm} \n KEINE WATT ANGEGEBEN. Verwende 1000"
         fi
         # Die müssen alle in der richtigen Reihenfolge stehen!
         declare -i ofs=3
-        MAX_WATT[${READARR[$i]}]=${READARR[$i+ofs++]}
-        HASHCOUNT[${READARR[$i]}]=${READARR[$i+ofs++]}
-        HASH_DURATION[${READARR[$i]}]=${READARR[$i+ofs++]}
-        BENCH_DATE[${READARR[$i]}]=${READARR[$i+ofs++]}
-        BENCH_KIND[${READARR[$i]}]=${READARR[$i+ofs++]}
-        GRAFIK_CLOCK[${READARR[$i]}]=${READARR[$i+ofs++]}
-        MEMORY_CLOCK[${READARR[$i]}]=${READARR[$i+ofs++]}
-        FAN_SPEED[${READARR[$i]}]=${READARR[$i+ofs++]}
-        local -i P=${READARR[$i+ofs++]}
-        [[ ${P} -eq 0 ]] && P=${defPowLim[${gpu_idx}]}
-        POWER_LIMIT[${READARR[$i]}]=${P}
-        HashCountPerSeconds[${READARR[$i]}]=${READARR[$i+ofs++]}
-        BenchMode[${READARR[$i]}]=${READARR[$i+ofs++]}
-        LESS_THREADS[${READARR[$i]}]=${READARR[$i+ofs++]}
+        MAX_WATT[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        HASHCOUNT[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        HASH_DURATION[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        BENCH_DATE[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        BENCH_KIND[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        GRAFIK_CLOCK[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        MEMORY_CLOCK[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        FAN_SPEED[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        local -i PL=${READARR[$i+ofs++]}
+        [[ ${PL} -eq 0 ]] && PL=${defPowLim[${gpu_idx}]}
+        POWER_LIMIT[${lfdAlgorithm}]=${PL}
+        HashCountPerSeconds[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        BenchMode[${lfdAlgorithm}]=${READARR[$i+ofs++]}
+        LESS_THREADS[${lfdAlgorithm}]=${READARR[$i+ofs++]}
     done
-    rm -f ${IMPORTANT_BENCHMARK_JSON}.lock
 
     if [ ${w_o_miners} -eq 0 ]; then
         ################################################################################
@@ -251,15 +276,6 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
         #
         #################################################################################
 
-        # Einlesen aller Dateien ${miner_name}#Coin2Algo.names, die die Zuordnung der NH-Namen (Algo/Coin) zu den CC-Namen (Algorithmus) enthält
-        # Dann Einlesen der restlichen Algos aus den ${miner_name}#${miner_version}.algos Dateien
-        # in ALLE die Arrays "Mining_${miner_name}_${miner_version//\./_}_Algos"
-        #
-        # Das Verzeichnis, das alle diese Informationen bereit hält ist:
-        # ${LINUX_MULTI_MINING_ROOT}/miners
-
-        _set_ALLE_MINER_from_path ${LINUX_MULTI_MINING_ROOT}/miners
-
         # Dann alle Minerversionen und die entsprechenden Algos durchgehen und schauen, ob diese
         # Algos gerade aus der IMPORTANT_BENCHMARK_JSON eingelesen wurden.
         # Wenn nicht, Ausgabe einer entsprechenden Meldung
@@ -267,12 +283,93 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
         for minerName in ${ALLE_MINER[@]}; do
             read m_name m_version <<<"${minerName//#/ }"
             declare -n actMiningAlgos="Mining_${m_name}_${m_version//\./_}_Algos"
+            unset algo_checked
+            declare -A algo_checked
             for lfdMiningAlgo in ${actMiningAlgos[@]}; do
-                if [ ${#bENCH["${lfdMiningAlgo}#${m_name}#${m_version}"]} -eq 0 ]; then
-                    printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
-                           ${gpu_idx} "${lfdMiningAlgo}#${m_name}#${m_version}"
+                if [ ${#algo_checked[${lfdAlgorithm}]} -eq 0 ]; then
+                    lfdAlgorithm="${lfdMiningAlgo}#${m_name}#${m_version}"
+                    if [ ${#bENCH[${lfdAlgorithm}]} -eq 0 ]; then
+                        printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
+                               ${gpu_idx} ${lfdAlgorithm}
+                    fi
+                    algo_checked[${lfdAlgorithm}]=1
                 fi
             done
         done
     fi
 }
+
+################################################################################
+###
+### Funktionen für die Benchmark-Auswertungen.
+### Gleichzeitig von MinerShell und bench_30s verwendete Routinen
+###
+################################################################################
+
+_init_some_file_and_path_variables () {
+    LOG_CONLOSS_ALL=${LINUX_MULTI_MINING_ROOT}/log_ConLoss
+    LOG_CONLOSS=${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/log_ConLoss_${coin_algorithm}
+    LOG_BOOOOOS_ALL=${LINUX_MULTI_MINING_ROOT}/log_Booooos
+    LOG_BOOOOOS=${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/log_Booooos_${coin_algorithm}
+}
+
+################################################################################
+###
+###          Ganz schöne Ääction wegen der "continent"e Verwaltung
+###
+################################################################################
+_init_NH_continent_handling () {
+    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+    declare -ig nowSecs=$(date +%s) timestamp
+    if [ "${pool}" == "nh" ]; then
+        CONTINENTFILE="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/act_continent_${coin_algorithm}"
+        while :; do
+            declare -ig location_ptr=0                         # Index in das optimal aufgebaute LOCATION Array, beginnend mit "eu"
+            if [[ "${continent}" == "SelbstWahl" ]]; then
+                if [ -s ${CONTINENTFILE} ]; then
+                    read _date_ _oclock_ timestamp location_ptr continent <<<$(tail -n 1 ${CONTINENTFILE})
+                    if   [ ${location_ptr} -eq 0 ]; then
+                        continent=${LOCATION[${location_ptr}]}
+                    elif [ ${nowSecs} -gt $((${timestamp}+3600)) ]; then
+                        # Let's try the best one again ...
+                        location_ptr=0
+                        continent=${LOCATION[${location_ptr}]}
+                        echo "# Probieren wir es nach 1h wieder von vorne mit dem Besten..." >>${CONTINENTFILE}
+                        echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}              >>${CONTINENTFILE}
+                    fi
+                else
+                    continent=${LOCATION[${location_ptr}]}
+                    echo "# Beginnen wir neu mit dem Besten..."             >>${CONTINENTFILE}
+                    echo ${nowDate} ${nowSecs} ${location_ptr} ${continent} >>${CONTINENTFILE}
+                fi
+                break
+            else
+                for (( location_ptr=0; $location_ptr<${#LOCATION[@]}; location_ptr++ )); do
+                    [[ "${LOCATION[$location_ptr]}" == "${continent}" ]] && break
+                done
+                # Eventuell nicht vorhandenen continent übergeben, dann umstellen auf SelbstWahl
+                if [[ $location_ptr -eq ${#LOCATION[@]} ]]; then
+                    continent="SelbstWahl"
+                else
+                    echo "# Entscheidung wurde per Parameter übergeben..."  >>${CONTINENTFILE}
+                    echo ${nowDate} ${nowSecs} ${location_ptr} ${continent} >>${CONTINENTFILE}
+                    break
+                fi
+            fi
+        done
+        # Das brauchen wir, um bei einem Verbindungsabbruch einen Anhaltspunkt zu haben um zu wissen,
+        # wann wir alle "continent"e durch sind und weitere Verbindungsversuche bleiben lassen können.
+        declare -i initial_location_ptr=$location_ptr
+    fi
+}
+
+_disable_algo_for_5_minutes () {
+    # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
+    _reserve_and_lock_file ../MINER_ALGO_DISABLED_HISTORY
+    printf "disable " >>../MINER_ALGO_DISABLED_HISTORY
+    printf "${nowDate} ${nowSecs} ${coin_algorithm}\n" \
+        | tee -a ../MINER_ALGO_DISABLED \
+              >>../MINER_ALGO_DISABLED_HISTORY
+    _remove_lock                                     # ... und wieder freigeben
+}
+

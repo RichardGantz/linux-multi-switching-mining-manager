@@ -5,7 +5,7 @@
 #
 #
 
-minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ccminer-2.2.2"
+minerfolder="/home/miner/mining/miner/ccminer-2.2.2"
 
 LIVE_START_CMD='%s/%s -o stratum+tcp://%s:%s -u %s.%s -p %s --devices %s -a %s --no-color'
 LIVE_PARAMETERSTACK=(

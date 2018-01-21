@@ -31,6 +31,15 @@ NOT_CONNECTED_MSGs=(
     ' : SOCKET ERROR - '
 )
 
+OVERCLOCKING_MSGs=(
+    # equihash "zm"
+    #2018-01-18 21:50:05|gpu_id 0 76 3 the launch timed out and was terminated
+    #2018-01-18 21:50:05|gpu 0 unresponsive - check overclocking
+    #2018-01-18 21:50:05|cudaMemcpy 1 failed
+    'gpu_id[ [:digit:]]*the launch timed out and was terminated'
+    'gpu [[:digit:]]+ unresponsive - check overclocking'
+)
+
 # Regexp Patterns, die gezählt werden müssen und erst nach einer bestimmten Anzahl eine Aktion erfordern
 # (meist für gawk)
 # Hier: "ABGELEHNT" - Meldungen
@@ -82,6 +91,7 @@ YES_ACCEPTED_MSGs=(
 #      Nach 10x Algo Disablen für 5 Minuetn oder so...
 
 # Joining all Arraymembers by '|'...
+OVREXPR=$(pos_join '|' "${OVERCLOCKING_MSGs[@]}")
 CONEXPR=$(pos_join '|' "${NOT_CONNECTED_MSGs[@]}")
 BOOEXPR=$(pos_join '|' "${NOT_ACCEPTED_MSGs[@]}")
 YESEXPR=$(pos_join '|' "${YES_ACCEPTED_MSGs[@]}")

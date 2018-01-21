@@ -6,9 +6,13 @@
 # Hier muss auch das Benchmarking mit dem Live-Kommando gemacht werden!
 #
 
-minerfolder="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/ewbf-eq"
+minerfolder="/home/miner/mining/miner/zm_0.5.7"
 
-LIVE_START_CMD='%s/%s --server %s --port %s --user %s.%s --pass %s --cuda_devices %s --solver 0 --intensity 64 --log 2 --logfile %s'
+# Laut Doku sicherheitshalber der server vorne und die options hinten:
+#Usage:
+# zm --server hostname --port port_nr --user user_name
+#    [--pass password] [options]...
+LIVE_START_CMD='%s/%s --server %s --port %s --user %s.%s --pass %s --dev %s --time'
 LIVE_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"
@@ -18,7 +22,6 @@ LIVE_PARAMETERSTACK=(
     "worker"
     "password"
     "miner_device"
-    "LIVE_LOGFILE"
 )
 
 function PREP_LIVE_PARAMETERSTACK () {
@@ -39,11 +42,12 @@ function PREP_LIVE_PARAMETERSTACK () {
 
 # Wenn kein BENCH_START_CMD angegeben ist, wird nur LIVE Benchmarked.
 #
-
-if [ ${NoCards} ]; then
+#if [ ${NoCards} ]; then
+if [ 1 -eq 1 ]; then
     # Das ist ein Fake auf einem System ohne GPUs, um das Benchmarkkommando auch im Offline-Mode testen zu können
 
-    BENCH_START_CMD='%s/%s --server %s --port %s --user %s.%s --pass %s --cuda_devices %s --solver 0 --intensity 64 --log 2 --logfile %s'
+    #BENCH_START_CMD='%s/%s --server %s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time --logfile %s'
+    BENCH_START_CMD='%s/%s --server %s --port %s --user %s.%s --pass %s --dev %s --time'
     BENCH_PARAMETERSTACK=(
         "minerfolder"
         "miner_name"
@@ -53,23 +57,22 @@ if [ ${NoCards} ]; then
         "worker"
         "password"
         "miner_device"
-        "BENCH_LOGFILE"
     )
 
     function PREP_BENCH_PARAMETERSTACK () {
-        # ${pool} muss von gpu_gv-algo.sh an die MinerShell mit übergeben werden
-        #         und  von bench_30s_2.sh selbst richtig eingestellt werden (was bereits der Fall ist)
-        case "${pool}" in
-            "nh")
-                server_name="${coin}.${continent}.${domain}"
-                user_name="12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
-                password=x
-                ;;
-            "sn")
-                user_name="unbekannt"
-                password=x
-                ;;
-        esac
+    # ${pool} muss von gpu_gv-algo.sh an die MinerShell mit übergeben werden
+    #         und  von bench_30s_2.sh selbst richtig eingestellt werden (was bereits der Fall ist)
+    case "${pool}" in
+        "nh")
+            server_name="${coin}.${continent}.${domain}"
+            user_name="12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
+            password=x
+            ;;
+        "sn")
+            user_name="unbekannt"
+            password=x
+            ;;
+    esac
     }
 
     #function PREP_BENCH_PARAMETERSTACK () {

@@ -26,11 +26,20 @@
 #)
 
 # GLOBALE VARIABLEN, nützliche Funktionen
-[[ ${#_GLOBALS_INCLUDED} -eq 0 ]]     && source ../globals.inc
+[[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
+[[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/GPU-skeleton/gpu-bENCH.inc
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
 debug=1
+
+# Auch diese Messung hat ergeben, dass die MinerShell, gerufen von gpu_gv-algo.sh, gerufen von multi_mining_calc.sh
+# zu der selben Prozessgruppe gehört wie der Multi_Miner !
+#  PID  PGID   SID TTY          TIME CMD
+# 9462  9462  1903 pts/0    00:00:00 multi_mining_ca
+#echo "MinerShell $(basename $0) gehört zu folgender Prozess-Gruppe:"
+#ps -j --pid $$
+#echo "Die Prozessgruppe, die der MULTI_MINER eröffnet hat, hat die PID == PGID == ${MULTI_MINERS_PID}"
 
 ####################################################################################
 ################################################################################
@@ -68,52 +77,8 @@ MINER=${miner_name}#${miner_version}
 algorithm=${miningAlgo}#${MINER}
 coin_algorithm=${coin}#${pool}#${algorithm}
 
-################################################################################
-###
-###          Ganz schöne Ääction wegen der "continent"e Verwaltung
-###
-################################################################################
-nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-declare -i nowSecs=$(date +%s) timestamp
-if [ "${pool}" == "nh" ]; then
-    while :; do
-        declare -i location_ptr=0                         # Index in das optimal aufgebaute LOCATION Array, beginnend mit "eu"
-        if [[ "${continent}" == "SelbstWahl" ]]; then
-            if [ -s act_continent_${coin_algorithm} ]; then
-                read _date_ _oclock_ timestamp location_ptr continent <<<$(tail -n 1 act_continent_${coin_algorithm})
-                if   [ ${location_ptr} -eq 0 ]; then
-                    continent=${LOCATION[${location_ptr}]}
-                elif [ ${nowSecs} -gt $((${timestamp}+3600)) ]; then
-                    # Let's try the best one again ...
-                    location_ptr=0
-                    continent=${LOCATION[${location_ptr}]}
-                    echo "# Probieren wir es nach 1h wieder von vorne mit dem Besten..." >>act_continent_${coin_algorithm}
-                    echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}              >>act_continent_${coin_algorithm}
-                fi
-            else
-                continent=${LOCATION[${location_ptr}]}
-                echo "# Beginnen wir neu mit dem Besten..."             >>act_continent_${coin_algorithm}
-                echo ${nowDate} ${nowSecs} ${location_ptr} ${continent} >>act_continent_${coin_algorithm}
-            fi
-            break
-        else
-            for (( location_ptr=0; $location_ptr<${#LOCATION[@]}; location_ptr++ )); do
-                [[ "${LOCATION[$location_ptr]}" == "${continent}" ]] && break
-            done
-            # Eventuell nicht vorhandenen continent übergeben, dann umstellen auf SelbstWahl
-            if [[ $location_ptr -eq ${#LOCATION[@]} ]]; then
-                continent="SelbstWahl"
-            else
-                echo "# Entscheidung wurde per Parameter übergeben..."  >>act_continent_${coin_algorithm}
-                echo ${nowDate} ${nowSecs} ${location_ptr} ${continent} >>act_continent_${coin_algorithm}
-                break
-            fi
-        fi
-    done
-    # Das brauchen wir, um bei einem Verbindungsabbruch einen Anhaltspunkt zu haben um zu wissen,
-    # wann wir alle "continent"e durch sind und weitere Verbindungsversuche bleiben lassen können.
-    declare -i initial_location_ptr=$location_ptr
-fi
+_init_some_file_and_path_variables
+_init_NH_continent_handling
 
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle gleich ist.
@@ -125,7 +90,7 @@ source ../miners/${MINER}.starts
 [[ ! -d live/${MINER}/${miningAlgo} ]] && mkdir live/${MINER}/${miningAlgo}
 
 LOGPATH="live/${MINER}/${miningAlgo}"
-BENCHLOGFILE="live/${MINER}_${miningAlgo}_mining.log"
+BENCHLOGFILE="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/live/${MINER}_${miningAlgo}_mining.log"
 # Einer der letzten zu setzenden Parameter für den Parameterstack des equihash "miner"
 LIVE_LOGFILE=${BENCHLOGFILE}
 if [ ${NoCards} ]; then
@@ -133,7 +98,8 @@ if [ ${NoCards} ]; then
     BENCH_LOGFILE=${BENCHLOGFILE}
 fi
 
-function _build_minerstart_commandline () {
+
+_build_minerstart_commandline () {
     # ---> Die folgenden Variablen müssen noch vollständig implementiert werden! <---
     # "LOCATION eu, usa, hk, jp, in, br"  <--- von der Webseite https://www.nicehash.com/algorithm
     # Wird übergeben, aber:# Noch nicht vollständig implementiert!      <--------------------------------------
@@ -154,15 +120,6 @@ function _build_minerstart_commandline () {
     printf -v minerstart "${LIVE_START_CMD}" ${PARAMETERSTACK}
 }
 
-function _disable_algo () {
-    # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
-    _reserve_and_lock_file ../MINER_ALGO_DISABLED_HISTORY
-    printf "disable " >>../MINER_ALGO_DISABLED_HISTORY
-    printf "${nowDate} ${nowSecs} ${coin_algorithm}\n" \
-        | tee -a ../MINER_ALGO_DISABLED \
-              >>../MINER_ALGO_DISABLED_HISTORY
-    rm -f ../MINER_ALGO_DISABLED_HISTORY.lock
-}
 
 ####################################################################################
 ################################################################################
@@ -171,58 +128,71 @@ function _disable_algo () {
 ###
 ################################################################################
 ####################################################################################
-function _terminate_Logger_Terminal () {
+
+_terminate_Logger_Terminal () {
     printf "Beenden des Logger-Terminals alias ${MINER} ... "
     REGEXPAT="${Bench_Log_PTY_Cmd//\//\\/}"
     REGEXPAT="${REGEXPAT//\+/\\+}"
-    kill_pids=$(ps -ef \
-          | grep -e "${REGEXPAT}" \
-          | grep -v 'grep -e ' \
-          | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-    if [ -n "$kill_pids" ]; then
-        kill $kill_pids # >/dev/null
-        printf "done.\n"
+    if [ ${#REGEXPAT} -eq 0 ]; then
+        printf "\nDas Logger-Terminal soll beendet werden, die Variable \${Bench_Log_PTY_Cmd} ist aber leer:\n--->${Bench_Log_PTY_Cmd}<---\n"
     else
-        printf "NOT FOUND!!!\n"
+        kill_pids=$(ps -ef \
+                  | grep -E -e "${REGEXPAT}" \
+                  | grep -v 'grep -E -e ' \
+                  | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
+        if [ -n "$kill_pids" ]; then
+            kill $kill_pids # >/dev/null
+            printf "done.\n"
+        else
+            printf "NOT FOUND!!!\n"
+        fi
     fi
 }
 
-function _terminate_Miner () {
-    MINER_pid=$(< ${MINER}.pid)
-    if [ -n "${MINER_pid}" ]; then
-        printf "Beenden des Miners alias ${coin_algorithm} mit PID ${MINER_pid} ... "
-        REGEXPAT="${minerstart//\//\\/}"
-        REGEXPAT="${REGEXPAT//\+/\\+}"
-        kill_pid=$(ps -ef | gawk -e '$2 == '${MINER_pid}' && /'"${REGEXPAT}"'/ {print $2; exit }')
-        if [ -n "$kill_pid" ]; then
-            kill $kill_pid
-            if [[ $? -eq 0 ]]; then
-                printf "KILL SIGNAL SUCCESSFULLY SENT.\n"
-                sleep $Erholung                               # "Erholung" vor einem Neustart
-            else
-                kill -9 $kill_pid
+
+_terminate_Miner () {
+    if [ -s ${MINER}.pid ]; then
+        MINER_pid=$(< ${MINER}.pid)
+        if [ -n "${MINER_pid}" ]; then
+            printf "Beenden des Miners alias ${coin_algorithm} mit PID ${MINER_pid} ... "
+            REGEXPAT="${minerstart//\//\\/}"
+            REGEXPAT="${REGEXPAT//\+/\\+}"
+            kill_pid=$(ps -ef | gawk -e '$2 == '${MINER_pid}' && /'"${REGEXPAT}"'/ {print $2; exit }')
+            if [ -n "$kill_pid" ]; then
+                kill $kill_pid
                 if [[ $? -eq 0 ]]; then
-                    printf "KILL SIGNAL SUCCESSFULLY SENT, but had to be \"kill -9 $kill_pid\" !\n"
-                    sleep $Erholung                           # "Erholung" vor einem Neustart
+                    printf "KILL SIGNAL SUCCESSFULLY SENT.\n"
+                    sleep $Erholung                               # "Erholung" vor einem Neustart
                 else
-                    printf "KILL SIGNAL COULD NOT BE SENT SUCCESSFULLY, even not \"kill -9 $kill_pid\" !\n"
+                    kill -9 $kill_pid
+                    if [[ $? -eq 0 ]]; then
+                        printf "KILL SIGNAL SUCCESSFULLY SENT, but had to be \"kill -9 $kill_pid\" !\n"
+                        sleep $Erholung                           # "Erholung" vor einem Neustart
+                    else
+                        printf "KILL SIGNAL COULD NOT BE SENT SUCCESSFULLY, even not \"kill -9 $kill_pid\" !\n"
+                    fi
                 fi
+            else
+                printf "PID ${MINER_pid} NOT FOUND IN PROCESS TABLE!!!\n"
+                printf "GPU #${gpu_idx}: ${This}.sh: PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE!!!\n
+awk -e \"$2 == ${MINER_pid} && /${REGEXPAT}/ {print $2; exit }\"\n" >>${ERRLOG}
             fi
-        else
-            printf "PID ${MINER_pid} NOT FOUND IN PROCESS TABLE!!!\n"
-            printf "GPU #${gpu_idx}: ${This}.sh: PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE!!!\n" >>${ERRLOG}
         fi
+    else
+        echo "Miner ${MINER} soll beendet werden, es gibt aber keine entsprechende .pid Datei. Möglicherweise wurde er gar nicht gestartet."
     fi
     rm -f ${MINER}.pid
 }
 
-function _delete_temporary_files () {
+
+_delete_temporary_files () {
     [[ -n "${MINER}" ]] && rm -f ${MINER}.retry ${MINER}.booos
 }
 _delete_temporary_files
 rm -f ${BENCHLOGFILE}
 
-function _On_Exit () {
+
+_On_Exit () {
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "MinerShell ${This}: _On_Exit() ENTRY, CLEANING UP RESOURCES NOW..."
 
     _terminate_Logger_Terminal
@@ -299,7 +269,7 @@ while :; do
     if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
         echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) \
              "GPU #${gpu_idx}: ${This}.sh: Abbruch des Miners alias ${coin_algorithm} wegen NO INTERNET..." \
-            | tee -a ../log_ConLoss log_ConLoss_${coin_algorithm} ${ERRLOG} \
+            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
                   >>${BENCHLOGFILE}
         break
     fi
@@ -315,7 +285,7 @@ while :; do
         _build_minerstart_commandline
         echo "GPU #${gpu_idx}: Starting Miner alias ${coin_algorithm} with the following command line:"
         echo ${minerstart}
-        ${minerstart} >>${BENCHLOGFILE} &
+        ${minerstart}  >>${BENCHLOGFILE} 2>>${BENCHLOGFILE} &
         echo $! > ${MINER}.pid
         Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
         gnome-terminal --hide-menubar \
@@ -340,19 +310,30 @@ while :; do
     ###
     ################################################################################
 
+    # ---> Noch zu implementieren:
+    #      Hash/Sol/s messen (einige Werte oder eine besimmte Zeit lang) und mit dem Wert in der benchmark_JSON vergleichen.
+    #      x% Abweichung sind erlaubt.
+    # ---> Noch zu implementieren:
+    
+    touch ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
     hashCount=$(cat ${BENCHLOGFILE} \
-                  | tee >(grep -c -m1 -e "${CONEXPR//[|]/\\|}" >${MINER}.retry) \
-                        >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
-                               BEGIN { yeses=0; booos=0; seq_booos=0 }
-                               $0 ~ BOO { booos++; seq_booos++; next }
-                               $0 ~ YES { yeses++; seq_booos=0;
-                                            if (match( $NF, /[+*]+/ ) > 0)
-                                               { yeses+=(RLENGTH-1) }
-                                          }
-                               END { print seq_booos " " booos " " yeses }' >${MINER}.booos) \
+                       | tee >(grep -c -m1 -e "${CONEXPR//[|]/\\|}" >${MINER}.retry; \
+                               rm -f ${MINER}.retry.lock) \
+                             >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+                                   BEGIN { yeses=0; booos=0; seq_booos=0 }
+                                   $0 ~ BOO { booos++; seq_booos++; next }
+                                   $0 ~ YES { yeses++; seq_booos=0;
+                                               if (match( $NF, /[+*]+/ ) > 0)
+                                                  { yeses+=(RLENGTH-1) }
+                                            }
+                                   END { print seq_booos " " booos " " yeses }' >${MINER}.booos; \
+                               rm -f ${MINER}.booos.lock) \
+                             >(grep -c -m1 -e "${OVREXPR//[|]/\\|}" >${MINER}.overclock; \
+                               rm -f ${MINER}.overclock.lock) \
                   | sed -e 's/ *(yes!)$//g' \
                   | gawk -e "${detect_zm_hash_count}" \
                   | grep -E -c "/s *$")
+    while [[ -f ${MINER}.retry.lock || -f ${MINER}.booos.lock || -f ${MINER}.overclock.lock ]]; do sleep .01; done
 
     ################################################################################
     ###
@@ -360,6 +341,14 @@ while :; do
     ###          Ist vor dem endgültigen Abbruch der "continent" zu wechseln?
     ###
     ################################################################################
+
+    # Check Overclocking
+    if [[ $(< ${MINER}.overclock) -eq 1 ]]; then
+        # Overclockings zählen ?
+        # Miner abbrechen und neu starten?
+        # Algo für 5 Minuten deaktivieren für diese Karte
+        :
+    fi
 
     if [[ $(< ${MINER}.retry) -eq 1 ]]; then
         echo "GPU #${gpu_idx}: Connection loss detected..."
@@ -390,7 +379,7 @@ while :; do
             # BENCHLOGFILE neu beginnen...
             echo ${nowDate} ${nowSecs} \
                  "GPU #${gpu_idx}: Neustart des Miners alias ${coin_algorithm} nach Internet-Verbindungsfehler..." \
-                | tee -a ../log_ConLoss log_ConLoss_${coin_algorithm} ${ERRLOG} \
+                | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
                       >${BENCHLOGFILE}
             inetLost_detected=0
             continue
@@ -421,17 +410,17 @@ while :; do
                             # In allen anderen Fällen setzen wir ihn auf 0 == "eu"
                             location_ptr=0
                             continent=${LOCATION[${location_ptr}]}
-                            echo "# Keiner war erreichbar, deshalb nextes mal von vorne mit dem Besten..." >>act_continent_${coin_algorithm}
-                            echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}                        >>act_continent_${coin_algorithm}
+                            echo "# Keiner war erreichbar, deshalb nextes mal von vorne mit dem Besten..." >>${CONTINENTFILE}
+                            echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}                        >>${CONTINENTFILE}
                         fi
 
                         # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
-                        _disable_algo
+                        _disable_algo_for_5_minutes
 
                         # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
                         echo ${nowDate} ${nowSecs} \
                              "GPU #${gpu_idx}: BEENDEN des Miners alias ${coin_algorithm} wegen NiceHash Servers WORLDWIDE unavailable." \
-                            | tee -a ../log_ConLoss log_ConLoss_${coin_algorithm} ${ERRLOG} \
+                            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
                                   >>${BENCHLOGFILE}
                         break
 
@@ -442,7 +431,7 @@ while :; do
                         ###
                         ################################################################################
                         echo ${nowDate} ${nowSecs} "GPU #${gpu_idx}: Abbruch des Miners alias ${coin_algorithm}..." \
-                            | tee -a ../log_ConLoss log_ConLoss_${coin_algorithm} ${ERRLOG} \
+                            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
                                   >>${BENCHLOGFILE}
                         _terminate_Logger_Terminal
                         _terminate_Miner
@@ -459,13 +448,13 @@ while :; do
 
                         nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
                         nowSecs=$(date +%s)
-                        echo "# Neuer Continent \"$continent\" nach Verbindungsabbruch des ${coin_algorithm}" >>act_continent_${coin_algorithm}
-                        echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}                          >>act_continent_${coin_algorithm}
+                        echo "# Neuer Continent \"$continent\" nach Verbindungsabbruch des ${coin_algorithm}" >>${CONTINENTFILE}
+                        echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}                               >>${CONTINENTFILE}
 
                         # BENCHLOGFILE neu beginnen...
                         echo ${nowDate} ${nowSecs} \
                              "GPU #${gpu_idx}: ... und Neustart des Miners alias ${coin_algorithm} nach Continent-Wechsel zu \"${continent}\"..." \
-                            | tee -a ../log_ConLoss log_ConLoss_${coin_algorithm} ${ERRLOG} \
+                            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
                                   >${BENCHLOGFILE}
                         if [ $NoCards ]; then
                             cat ../benchmarking/test/bnch_retry_catch_fake.log >>${BENCHLOGFILE}
@@ -474,15 +463,15 @@ while :; do
                     fi
                     ;;
 
-                "sn")
+                "mh"|"sn")
                     # Abbruch des Miners nach disablen des Algos
                     # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
-                    _disable_algo
+                    _disable_algo_for_5_minutes
 
                     # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
                     echo ${nowDate} ${nowSecs} \
                          "GPU #${gpu_idx}: BEENDEN des Miners alias ${coin_algorithm} wegen dem Verlust der Server-Connection." \
-                        | tee -a ../log_ConLoss log_ConLoss_${coin_algorithm} ${ERRLOG} \
+                        | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
                               >>${BENCHLOGFILE}
                     break
                     ;;
@@ -503,12 +492,12 @@ while :; do
         nowSecs=$(date +%s)
 
         # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
-        _disable_algo
+        _disable_algo_for_5_minutes
 
         # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
         echo ${nowDate} ${nowSecs} \
              "GPU #${gpu_idx}: Abbruch des Miners alias ${coin_algorithm} wegen zu vieler 'booooos'..." \
-            | tee -a ../log_Booooos log_Booooos_${coin_algorithm} ${ERRLOG} \
+            | tee -a ${LOG_BOOOOOS} ${LOG_BOOOOOS_ALL} ${ERRLOG} \
                   >>${BENCHLOGFILE}
         break
     elif [[ ${booos} -ge 5 ]]; then
@@ -537,7 +526,7 @@ while :; do
         nowSecs=$(date +%s)
 
         # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
-        _disable_algo
+        _disable_algo_for_5_minutes
 
         # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
         echo ${nowDate} ${nowSecs} \

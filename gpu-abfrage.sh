@@ -66,25 +66,25 @@
 [[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 
 # Erst mal die beiden Funktionen _read_in_SYSTEM_FILE_and_SYSTEM_STATEin und _update_SYSTEM_STATEin_if_necessary
-[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source gpu-abfrage.inc
+[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
 
 
 function _func_gpu_abfrage_sh () {
 
     # Jeder, der ${SYSTEM_FILE} und/oder ${SYSTEM_STATE}.in lesen möchte, muss erst ${SYSTEM_STATE}.lock für sich reserviert haben.
     #        und muss es natürlich anschließend wieder freigeben.
-    _reserve_and_lock_file ${SYSTEM_STATE}          # Zum Lesen und Bearbeiten reservieren...
+    _reserve_and_lock_file ${SYSTEM_STATE}         # Zum Lesen und Bearbeiten reservieren...
 
 
     # Hier überschreiben wir ${SYSTEM_FILE}...
     #
     if [ $NoCards ]; then
-        GPU_COUNT=$(cat .FAKE.nvidia-smi.output \
+        GPU_COUNT=$(cat ${LINUX_MULTI_MINING_ROOT}/.FAKE.nvidia-smi.output \
                    | grep -E -v -e "^#|^$"      \
                    | gawk -e 'BEGIN {FS=", "} { \
 print $1; print $2; print $3; print $4
-if ($5 ~ /\[Not Supported\]/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
-if ($6 ~ /\[Not Supported\]/) { print "0" } else { print substr( $6, 1, index($6,".")-1 ) }
+if ($5 !~ /^[[:digit:]]+ %$/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
+if ($6 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $6, 1, index($6,".")-1 ) }
 }' \
                    | tee ${SYSTEM_FILE} \
                    | wc -l)
@@ -92,8 +92,8 @@ if ($6 ~ /\[Not Supported\]/) { print "0" } else { print substr( $6, 1, index($6
         GPU_COUNT=$(nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit --format=csv,noheader \
                    | gawk -e 'BEGIN {FS=", "} { \
 print $1; print $2; print $3; print $4
-if ($5 ~ /\[Not Supported\]/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
-if ($6 ~ /\[Not Supported\]/) { print "1" } else { print substr( $6, 1, index($6,".")-1 ) }
+if ($5 !~ /^[[:digit:]]+ %$/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
+if ($6 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $6, 1, index($6,".")-1 ) }
 }' \
                   | tee ${SYSTEM_FILE} \
                   | wc -l )
@@ -115,7 +115,7 @@ if ($6 ~ /\[Not Supported\]/) { print "1" } else { print substr( $6, 1, index($6
     # Falls sie bei ersten mal noch nicht vorhanden war, muss sie jetzt da sein und kann eingelesen werden
     [ ${#uuidEnabledSOLL[@]} -eq 0 ] && _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 
-    rm -f ${SYSTEM_STATE}.lock                      # ... und wieder freigeben
+    _remove_lock                                     # ... und wieder freigeben
 
     _set_Miner_Device_to_Nvidia_GpuIdx_maps
 

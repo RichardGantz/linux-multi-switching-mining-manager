@@ -14,14 +14,16 @@ zec:equihash:zec.suprnova.cc:4142
 mona:lyra2rev2:mona.suprnova.cc:2995
 vtc:lyra2v2:vtc.suprnova.cc:5678
 stak:lyra2v2:stak.suprnova.cc:7706
-xzc:lyra2z:xzc.suprnova.cc:1569
 dcr:decred:dcr.suprnova.cc:3252
-dgbg:myr-gr:dgbg.suprnova.cc:7978
 dgbq:qubit:dgbq.suprnova.cc:8531
 geo:qubit:geo.suprnova.cc:6009
 btg:equihash:btg.suprnova.cc:8816
 sib:sib:sib.suprnova.cc:3458
 lbc:lbry:lbry.suprnova.cc:6256
+#
+# Die folgenden Beiden Coins waren bei keinem Preise-/Kurse-Webabruf dabei
+xzc:lyra2z:xzc.suprnova.cc:1569
+dgbg:myr-gr:dgbg.suprnova.cc:7978
 #
 ### Nachzuliefern:
 # xmr:cryptonight:<- nicht in suprnova enthalten

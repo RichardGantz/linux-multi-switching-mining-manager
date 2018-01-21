@@ -149,11 +149,12 @@ echo $$ >${This}.pid
 # Alles, was er aufruft, sollte die selbe Group-ID haben, also auch die gpu_gv-algos und algo_multi_abfrage.sh
 # Interessant wird es bei den gpu_gv-algo.sh's, wenn die wiederum etwas rufen.
 # Wie lautet dann die Group-ID?
+# Die folgenden Teilen haben gezeigt, dass die gpu_gv-algi der selben Prozessgruppe angehört.
 #  PID  PGID   SID TTY          TIME CMD
 # 9462  9462  1903 pts/0    00:00:00 multi_mining_ca
-echo "GPU #${gpu_idx} gehört zu folgender Prozess-Gruppe:"
-ps -j --pid $$
-echo "Die Prozessgruppe, die der MULTI_MINER eröffnet hat, hat die PID == PGID == ${MULTI_MINERS_PID}"
+#echo "GPU #${gpu_idx} gehört zu folgender Prozess-Gruppe:"
+#ps -j --pid $$
+#echo "Die Prozessgruppe, die der MULTI_MINER eröffnet hat, hat die PID == PGID == ${MULTI_MINERS_PID}"
 
 #
 # Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
@@ -268,7 +269,7 @@ source gpu-bENCH.sh
 # Später prüfen, ob die Datei erneuert wurde und frisch eingelesen werden muss
 #  8. Ruft _read_IMPORTANT_BENCHMARK_JSON_in() und hat jetzt die beiden Arrays zur Verfügung und kennt das "Alter"
 #     der Benchmarkdatei zum Zeitpunkt des Einlesens in der Variablen ${IMPORTANT_BENCHMARK_JSON_last_age_in_seconds}
-_read_IMPORTANT_BENCHMARK_JSON_in  # without_miners
+_read_IMPORTANT_BENCHMARK_JSON_in  # without_miners Muss AUF JEDEN FALL die Miner beachten.
 
 ###############################################################################
 #
@@ -281,7 +282,6 @@ _read_IMPORTANT_BENCHMARK_JSON_in  # without_miners
 # 10. Definiert _read_in_ALGO_PORTS_KURSE(), welches die Datei "../KURSE_PORTS.in" in das Array KURSE["AlgoName"] aufnimmt.
 #     Das Alter dieser Datei ist unwichtig, weil sie IMMER durch algo_multi_abfrage.sh aus dem Web aktualisiert wird.
 #     Andere müssen dafür sorgen, dass die Daten in dieser Datei gültig sind!
-[[ ${#_MINERFUNC_INCLUDED} -eq 0 ]]   && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 [[ ${#_ALGOINFOS_INCLUDED} -eq 0 ]]   && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 [[ ${#_NVIDIACMD_INCLUDED} -eq 0 ]]   && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
 [[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
@@ -296,6 +296,7 @@ fi
 #       Seit Ende 2017 die Trennung von gpu_idx und miner_dev. In einem Assoziativen Array vorgehalten,
 #       das bei jedem Start und dann bei jeder Änderung wieder upgedatet werden muss
 _set_Miner_Device_to_Nvidia_GpuIdx_maps
+_set_ALLE_LIVE_MINER
 
 # 10.2. Alle Miner-Arrays setzen wie ALLE_MINER[i], MINER_FEES[ miningAlgo ], Miner_${MINER}_Algos[ ${coin} ] etc.
 #       Im Moment begnügen wir uns damit, VOR der Endlosschleife alle Arrays zu setzen.
@@ -380,7 +381,7 @@ while :; do
         #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
         if [[ $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds < $(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s) ]]; then
             echo "GPU #${gpu_idx}: ###---> Updating Arrays bENCH[] and WATTs[] (and more) from $IMPORTANT_BENCHMARK_JSON"
-            _read_IMPORTANT_BENCHMARK_JSON_in without_miners
+            _read_IMPORTANT_BENCHMARK_JSON_in # without_miners
         fi
 
         # Die Reihenfolge der Dateierstellungen durch ../algo_multi_abfrage.sh ist:
@@ -418,6 +419,7 @@ while :; do
         _remove_lock                             # ... und wieder freigeben
 
         if [ ${#RunningGPUid[${gpu_uuid}]} -gt 0 ]; then
+            echo "GPU #${gpu_idx}: Alter bzw. bisheriger RUNNING_STATE eingelesen."
             [[ "${RunningGPUid[${gpu_uuid}]}" != "${gpu_idx}" ]] \
                 && echo "Konsistenzcheck FEHLGESCHLAGEN!!! GPU-Idx aus RUNNING_STATE anders als er sein soll !!!"
             IamEnabled=${WasItEnabled[${gpu_uuid}]}
@@ -481,12 +483,12 @@ while :; do
         #    Ermittlung aller Algos, die zu Enablen sind und die Algos, die Disabled sind.
         #
         ######################################
-        _reserve_and_lock_file ../MINER_ALGO_DISABLED_HISTORY
 
-        nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-        declare -i nowSecs=$(date +%s)
         unset MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
         declare -Ag MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
+        _reserve_and_lock_file ../MINER_ALGO_DISABLED_HISTORY
+        nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+        declare -i nowSecs=$(date +%s)
         if [ -s ../MINER_ALGO_DISABLED ]; then
             if [ $debug -eq 1 ]; then echo "Reading ../MINER_ALGO_DISABLED ..."; fi
             declare -i timestamp
@@ -516,38 +518,40 @@ while :; do
                 printf "${MINER_ALGO_DISABLED_DAT[${coin_algorithm}]} ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} ${coin_algorithm}\n" >>../MINER_ALGO_DISABLED
             done
         fi
-
         _remove_lock                                     # ... und wieder freigeben
 
         #    Zusätzlich die über BENCH_ALGO_DISABLED Algos rausnehmen...
         unset BENCH_ALGO_DISABLED_ARR BENCH_ALGO_DISABLED_ARR_in
         declare -a BENCH_ALGO_DISABLED_ARR
+        _reserve_and_lock_file ../BENCH_ALGO_DISABLED
         if [ -s ../BENCH_ALGO_DISABLED ]; then
-            _reserve_and_lock_file ../BENCH_ALGO_DISABLED
             cat ../BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR_in
-            _remove_lock                                     # ... und wieder freigeben
 
             # Erwartet werden weiter unten nur die $algorithm's in diesem Array, das wir jetzt neu erstellen
             for actRow in "${BENCH_ALGO_DISABLED_ARR_in[@]}"; do
                 read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
-                [ "${gpuIdx}" == "${gpu_idx}" ] && BENCH_ALGO_DISABLED_ARR+=( ${lfdAlgorithm} )
+                [ ${gpuIdx} -eq ${gpu_idx} ] && BENCH_ALGO_DISABLED_ARR+=( ${lfdAlgorithm} )
             done
         fi
+        _remove_lock                                     # ... und wieder freigeben
 
         #    Zusätzlich die über GLOBAL_ALGO_DISABLED Algos rausnehmen...
         unset GLOBAL_ALGO_DISABLED_ARR
+        _reserve_and_lock_file ../GLOBAL_ALGO_DISABLED
         if [ -s ../GLOBAL_ALGO_DISABLED ]; then
-            _reserve_and_lock_file ../GLOBAL_ALGO_DISABLED
             cat ../GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
-            _remove_lock                                     # ... und wieder freigeben
 
-            if [ $debug -eq 1 ]; then echo "Die Datei GLOBAL_ALGO_DISABLED hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"; fi
+            if [ $debug -eq 1 ]; then
+                echo "GPU #${gpu_idx}: Vor  der Prüfung: GLOBAL_ALGO_DISABLED_ARRAY hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"
+                declare -p GLOBAL_ALGO_DISABLED_ARR
+            fi
             for ((i=0; $i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
                 unset disabled_algos_GPUs
                 read -a disabled_algos_GPUs <<<${GLOBAL_ALGO_DISABLED_ARR[$i]//:/ }
                 if [ ${#disabled_algos_GPUs[@]} -gt 1 ]; then
                     # Nur für bestimmte GPUs disabled. Wenn die eigene GPU nicht aufgeführt ist, übergehen
-                    if [[ ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ^.*:${gpu_uuid} ]]; then
+                    REGEXPAT="^.*:${gpu_uuid}\b"
+                    if [[ ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ${REGEXPAT} ]]; then
                         GLOBAL_ALGO_DISABLED_ARR[$i]=${disabled_algos_GPUs[0]}
                     else
                         unset GLOBAL_ALGO_DISABLED_ARR[$i]
@@ -555,28 +559,29 @@ while :; do
                 fi
             done
             if [ $debug -eq 1 ]; then
-                echo "GPU #${gpu_idx}: Das GLOBAL_ALGO_DISABLED_ARRAY hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"
+                echo "GPU #${gpu_idx}: Nach der Prüfung: GLOBAL_ALGO_DISABLED_ARRAY hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"
                 declare -p GLOBAL_ALGO_DISABLED_ARR
             fi
         fi
+        _remove_lock                                     # ... und wieder freigeben
 
         # Mal sehen, ob es überhaupt schon Benchmarkwerte gibt oder ob Benchmarks nachzuholen sind.
         # Erst mal alle MiningAlgos ermitteln, die möglich sind und gegen die vorhandenen JSON Einträge checken.
         _set_Miner_Device_to_Nvidia_GpuIdx_maps
+        _set_ALLE_LIVE_MINER
         _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
         _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
 
         # Gibt es MissingAlgos, ziehen wir die Disabled Algos noch davon ab
         unset ALL_MISSING_ALGOS I_want_to_Disable_myself_for_AutoBenchmarking
         declare -a ALL_MISSING_ALGOS
-        #declare -p ALLE_MINER
-        if [ ${#actMissingAlgos[@]} -gt 0 ]; then
-            for minerName in "${ALLE_MINER[@]}"; do
-                read m_name m_version <<<"${minerName//#/ }"
-                declare -n   actMissingAlgos="Missing_${m_name}_${m_version//\./_}_Algos"
-                #declare -p "Missing_${m_name}_${m_version//\./_}_Algos"
-                #declare -p "Mining_${m_name}_${m_version//\./_}_Algos"
-                #declare -p "Available_${m_name}_${m_version//\./_}_Algos"
+        for minerName in "${ALLE_MINER[@]}"; do
+            read m_name m_version <<<"${minerName//#/ }"
+            declare -n   actMissingAlgos="Missing_${m_name}_${m_version//\./_}_Algos"
+            #declare -p "Missing_${m_name}_${m_version//\./_}_Algos"
+            #declare -p "Mining_${m_name}_${m_version//\./_}_Algos"
+            #declare -p "Available_${m_name}_${m_version//\./_}_Algos"
+            if [ ${#actMissingAlgos[@]} -gt 0 ]; then
                 for miningAlgo in ${actMissingAlgos[@]}; do
                     algorithm="${miningAlgo}#${m_name}#${m_version}"
                     if [[ "${#BENCH_ALGO_DISABLED_ARR[@]}" > 0 ]]; then
@@ -589,8 +594,8 @@ while :; do
                         [[ ! "${GLOBAL_ALGO_DISABLED_ARR[@]}" =~ ${REGEXPAT}  ]] && ALL_MISSING_ALGOS+=( ${algorithm} )
                     fi
                 done
-            done
-        fi
+            fi
+        done
         [ ${#ALL_MISSING_ALGOS[@]} -gt 0 ] && I_want_to_Disable_myself_for_AutoBenchmarking=1
         [ ${debug} -eq 1 ] && echo "GPU #${gpu_idx}: Anzahl vermisster Algos: ${#ALL_MISSING_ALGOS[@]} DisableMyself: ->$I_want_to_Disable_myself_for_AutoBenchmarking<-"
 
@@ -611,6 +616,7 @@ while :; do
         #     Algorithmen mit fehlenden Benchmark- oder Wattangaben, etc. werden NICHT beachtet.
         #
 
+        rm -f .ALGO_WATTS_MINES.in
         for algorithm in "${!bENCH[@]}"; do
 
             # Manche Algos kommen erst gar nicht in die Datei rein, z.B. wenn sie DISABLED wurden
@@ -627,8 +633,10 @@ while :; do
 
             read miningAlgo miner_name miner_version muck888 <<<${algorithm//#/ }
             MINER=${miner_name}#${miner_version}
+            [ ${#ALLE_LIVE_MINER[${MINER}]} -eq 0 ] && continue
+
             declare -n actCoinsPoolsOfMiningAlgo="CoinsPoolsOfMiningAlgo_${miningAlgo//-/_}"
-            [ $debug -eq 1 ] && (echo ${actCoinsPoolsOfMiningAlgo[@]} | sed -e 's/ /\n/g' >.${!actCoinsPoolsOfMiningAlgo})
+            [ $debug -eq 1 ] && (echo ${actCoinsPoolsOfMiningAlgo[@]} | tr ' ' '\n' >.${!actCoinsPoolsOfMiningAlgo})
 
             unset      coin_algorithm_Calculated
             declare -A coin_algorithm_Calculated
@@ -669,7 +677,11 @@ while :; do
                                                            / 10000
                                              " \
                                                        | bc )
-                                    printf "${coin_algorithm}\n${WATTS[${algorithm}]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
+                                    # Wenn gerade nichts für den Algo bezahlt wird, übergehen:
+                                    _octal_=${algoMines//\.}
+                                    _octal_=${_octal_//0}
+                                    [[ ${#_octal_} -gt 0 ]] \
+                                        && printf "${coin_algorithm} ${WATTS[${algorithm}]} ${algoMines}\n" >>.ALGO_WATTS_MINES.in
                                 else
                                     echo "GPU #${gpu_idx}: KEINE BTC \"Mines\" BERECHNUNG möglich bei \"nh\" ${coin_algorithm} !!! \<---------------"
                                     DO_AUTO_BENCHMARK_FOR["${algorithm}"]=1
@@ -699,8 +711,10 @@ while :; do
                                              " \
                                                        | bc )
                                     # Wenn gerade nichts für den Algo bezahlt wird, übergehen:
-                                    [[ ((${algoMines//\./} > 0)) ]] \
-                                        && printf "${coin_algorithm}\n${WATTS[${algorithm}]}\n${algoMines}\n" >>ALGO_WATTS_MINES.in
+                                    _octal_=${algoMines//\.}
+                                    _octal_=${_octal_//0}
+                                    [[ ${#_octal_} -gt 0 ]] \
+                                        && printf "${coin_algorithm} ${WATTS[${algorithm}]} ${algoMines}\n" >>.ALGO_WATTS_MINES.in
                                 else
                                     echo "GPU #${gpu_idx}: KEINE BTC \"Mines\" BERECHNUNG möglich bei \"sn\" ${coin_algorithm} !!! \<---------------"
                                     DO_AUTO_BENCHMARK_FOR["${algorithm}"]=1
@@ -712,13 +726,21 @@ while :; do
             done
         done
 
+        DataWorth="Valid Data"
+        if [ -s .ALGO_WATTS_MINES.in ]; then
+            sort -n -r -k3 .ALGO_WATTS_MINES.in >.ALGO_WATTS_MINES.out
+            cat .ALGO_WATTS_MINES.out \
+                | tr ' ' '\n' \
+                     >ALGO_WATTS_MINES.in
+        else
+            touch ALGO_WATTS_MINES.in
+            DataWorth="EMPTY DATA"
+        fi
         _reserve_and_lock_file ${_WORKDIR_}/${GPU_VALID_FLAG}
         touch ${_WORKDIR_}/${GPU_VALID_FLAG}
         _remove_lock
         read ValSecs ValFrac <<<$(_get_file_modified_time_ ${_WORKDIR_}/${GPU_VALID_FLAG})
-        echo "GPU #${gpu_idx}: ${ValSecs}.${ValFrac} Valid Data are now available in ALGO_WATTS_MINES.in"
-
-        if [ $debug -eq 1 ]; then nowSecs=$(date +%s); echo "GPU #${gpu_idx}: ALGO_WATTS_MINES.in UNLOCKED at ${nowSecs}"; fi
+        echo "GPU #${gpu_idx}: ${ValSecs}.${ValFrac} ${DataWorth} are now UNLOCKED in ALGO_WATTS_MINES.in"
 
         #############################################################################
         #############################################################################
@@ -798,6 +820,7 @@ while :; do
 
         unset Ja_der_Miner_laeuft_und_soll_auch_weiterlaufen
         StartMiner=0
+        echo "\${RunningGPUid[${gpu_uuid}]}: --->${RunningGPUid[${gpu_uuid}]}<---"
         [[ "${RunningGPUid[${gpu_uuid}]}" != "${gpu_idx}" ]] \
             && echo "Konsistenzcheck FEHLGESCHLAGEN!!! GPU-Idx aus RUNNING_STATE anders als er sein soll !!!"
         if [ -n "${IamEnabled}" ]; then
@@ -1034,13 +1057,14 @@ while :; do
 
                 # ALL_MISSING_ALGOS abarbeiten
                 cd ../benchmarking
+                mkdir -p autobenchlogs
                 for algorithm in ${ALL_MISSING_ALGOS[@]}; do
 
                     echo "GPU #${gpu_idx}: ###---> Going to Auto-Benchmark Algorithm/Miner ${algorithm}, trying to produce some Coins on the fly..."
                     parameters="-d"
-                    [ ${NoCards} ] && parameters="-d -w 3 -m 3"
+                    [ ${NoCards} ] && parameters="-d -w 5 -m 5"
                     [ -n "${parameters}" ] && echo "        ###---> HardCoded additional Parameters for bench_30s_2.sh: \"${parameters}\""
-                    ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters}
+                    ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_${gpu_idx}_${algorithm}.log
 
                 done
                 cd ${_WORKDIR_}

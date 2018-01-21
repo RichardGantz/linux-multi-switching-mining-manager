@@ -36,8 +36,8 @@ function _notify_about_NO_VALID_DATA_FROM_THE_WEB () {
                  Entscheide bitte, wie lange Du die gerade laufenden Miner \
                  mit den immer mehr veraltenden Daten laufen lassen möchtest!"
         if [[ ! "$NoAlgoNames_recorded" == "1" ]]; then
-            echo $(date "+%F %H:%M:%S") "curl/w3m - $1 hatte anderen Inhalt als erwartet." >>FATAL_ERRORS.log
-            echo "                    Suchmuster \'$3\' wurde nicht gefunden." >>FATAL_ERRORS.log
+            echo $(date "+%F %H:%M:%S") "curl/w3m - $1 hatte anderen Inhalt als erwartet." >>${FATAL_ERRORS}
+            echo "                    Suchmuster \'$3\' wurde nicht gefunden." >>${FATAL_ERRORS}
             NoAlgoNames_recorded=1
         fi
         NoAlgoNames_notified=1
