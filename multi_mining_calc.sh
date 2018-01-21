@@ -709,16 +709,26 @@ while : ; do
                             echo ${actAlgoProfit[${algoIdx}]} ${algoIdx} >>.sort_profit_algoIdx_${gpu_idx}.in
                         done
                         unset SORTED_PROFITS
-                         sort -n -r .sort_profit_algoIdx_${gpu_idx}.in \
+                        sort -n -r .sort_profit_algoIdx_${gpu_idx}.in \
                             | tee .sort_profit_algoIdx_${gpu_idx}.out \
                             | readarray -n 0 -O 0 -t SORTED_PROFITS
                         [ ${profitableAlgoIndexesCnt} -gt ${BEST_ALGO_CNT} ] && profitableAlgoIndexesCnt=${BEST_ALGO_CNT}
-                        for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
-                            algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
-                            actCandidatesAlgoIndexes[${sortIdx}]=${algoIdx}
-                            dstAlgoWatts[${sortIdx}]=${actAlgoWatt[${algoIdx}]}
-                            dstAlgoMines[${sortIdx}]=${actAlgoMines[${algoIdx}]}
-                        done
+                        if [ ! : ]; then
+                            for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
+                                dstIdx=$((${profitableAlgoIndexesCnt}-${sortIdx}-1))
+                                algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
+                                actCandidatesAlgoIndexes[${dstIdx}]=${algoIdx}
+                                dstAlgoWatts[${dstIdx}]=${actAlgoWatt[${algoIdx}]}
+                                dstAlgoMines[${dstIdx}]=${actAlgoMines[${algoIdx}]}
+                            done
+                        else
+                            for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
+                                algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
+                                actCandidatesAlgoIndexes[${sortIdx}]=${algoIdx}
+                                dstAlgoWatts[${sortIdx}]=${actAlgoWatt[${algoIdx}]}
+                                dstAlgoMines[${sortIdx}]=${actAlgoMines[${algoIdx}]}
+                            done
+                        fi
                         exactNumAlgos[${gpu_idx}]=${profitableAlgoIndexesCnt}
                     else
                         # Wenn kein Algo übrigbleiben sollte, GPU aus.

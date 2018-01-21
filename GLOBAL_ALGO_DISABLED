@@ -11,3 +11,6 @@
 #Algorithmen OHNE folgende UUIDs sind FÜR ALLE GPUs disabled, z.B. scrypt
 
 scrypt
+x11
+x15
+x13

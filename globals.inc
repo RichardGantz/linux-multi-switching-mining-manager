@@ -63,6 +63,8 @@ declare -ig num_gpu_rows=6
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
 RUNNING_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_ALGO_RUNNING_STATE"
 
+SYSTEM_MALFUNCTIONS_REPORT="${LINUX_MULTI_MINING_ROOT}/.SYSTEM_MALFUNCTIONS_REPORT"
+
 ### algo_multi_abfrage.sh spezifische Variablen
 algoID_KURSE_PORTS_WEB="${LINUX_MULTI_MINING_ROOT}/KURSE.json"
 algoID_KURSE_PORTS_ARR="${LINUX_MULTI_MINING_ROOT}/KURSE_PORTS.in"

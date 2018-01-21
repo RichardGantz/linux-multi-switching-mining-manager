@@ -13,6 +13,7 @@ tar -cvf ${arch_name} \
     BENCH_ALGO_DISABLED \
     gpu_system.out \
     FATAL_* \
+    .SYSTEM_MALFUNCTIONS_REPORT \
     MINER_ALGO_DISABLED_HISTORY \
     ._reserve_and_lock_counter.* \
     .bc_* \

@@ -773,11 +773,11 @@ _On_Exit () {
                               | gawk -e '/H\/s *$/ {print "H/s"; next}{print "Sol/s"}')
 
         summary="\nZusammenfassung der ermittelten Werte:\n"
-        summary+="$(printf " Summe WATT   : %12s; Messwerte: %5s\n" $wattSum $wattCount)\n"
-        summary+="$(printf " Durchschnitt : %12s\n" $avgWATT)\n"
-        summary+="$(printf " Max WATT Wert: %12s\n" ${maxWATT})\n"
-        summary+="$(printf " Summe HASH   : %12s; Messwerte: %5s\n" ${hashSum:0:$(($(expr index "$hashSum" ".")+2))} $hashCount)\n"
-        summary+="$(printf " Durchschnitt : %12s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} ${temp_einheit})\n"
+        summary+="$(printf " Summe WATT   : %18s; Messwerte: %5s\n" $wattSum $wattCount)\n"
+        summary+="$(printf " Durchschnitt : %18s\n" $avgWATT)\n"
+        summary+="$(printf " Max WATT Wert: %18s\n" ${maxWATT})\n"
+        summary+="$(printf " Summe HASH   : %18s; Messwerte: %5s\n" ${hashSum:0:$(($(expr index "$hashSum" ".")+2))} $hashCount)\n"
+        summary+="$(printf " Durchschnitt : %18s %6s\n" ${avgHASH:0:$(($(expr index "${avgHASH}" ".")+2))} ${temp_einheit})\n"
         printf "${summary}" | tee -a ${BENCHLOGFILE}
 
         benchMode=${live_mode}
@@ -823,8 +823,23 @@ _On_Exit () {
     fi  ## if [ ${BENCHMARKING_WAS_STARTED} -eq 1 ]
 
     if [ -f ${BENCHLOGFILE} ]; then
-        [ ${#LOGFILE_DATE} -eq 0 ] && LOGFILE_DATE="NoBenchStarted_"$(date "+%Y%m%d_%H%M%S")
-        cp -f ${BENCHLOGFILE} ${LOGPATH}/${LOGFILE_DATE}_benchmark.log
+        [[ ${#LOGFILE_DATE} -eq 0 ]] && LOGFILE_DATE="NoBenchStarted_"$(date "+%Y%m%d_%H%M%S")
+        if [[ ${#LOGPATH} -eq 0 || ${#BENCHLOGFILE} -eq 0 ]]; then
+            chaos="$(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
+Offensichtlich erfolgte der Abbruch noch bevor die Variable \${LOGPATH} \"${LOGPATH}\" gesetzt wurde, also irgendwann vor 4.3
+Nach 4.3 steht der \${coin_algorithm} \"${coin_algorithm}\" fest.
+Ein paar Variablen zu diesem Zeitpunkt:
+\${gpu_uuid}: ${gpu_uuid}
+\${miner_name}: ${miner_name}
+\${miner_version}: ${miner_version}
+\${miningAlgo}: ${miningAlgo}
+\${BENCHLOGFILE}: >${BENCHLOGFILE}<
+Wenn LOGPATH nicht gesetzt ist, kann eigentlich auch nichts in BENCHLOGFILE drin sein.
+Aus welchem Grund ist er dann bei der Prüfung auf -f ${BENCHLOGFILE} hier rein gekommen?\n"
+            printf "${chaos}" >>${SYSTEM_MALFUNCTIONS_REPORT}
+        else
+            cp -f ${BENCHLOGFILE} ${LOGPATH}/${LOGFILE_DATE}_benchmark.log
+        fi
     fi
 
     [ $debug -eq 0 ] && _delete_temporary_files
@@ -1136,7 +1151,8 @@ cd ${_WORKDIR_} >/dev/null
 # Um Codeteile, die ursprüngöich in der MinerShell entwickelt wurden und dann als Funktion
 # in die gpu-bENCH.inc übernommen wurden, auch hier rufen zu können und entsprechende Variablen
 # initialisiert zu haben.
-_init_some_file_and_path_variables
+# Hier ist der ${coin_algorithm} mit drin, weswegen wir das später rufen müssen
+#_init_some_file_and_path_variables
 
 # Alle Einstellungen aller Algorithmen der ausgewählten GPU einlesen
 # Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da
@@ -1296,7 +1312,7 @@ if [ -s ../BENCH_ALGO_DISABLED ]; then
 
     for actRow in "${BENCH_ALGO_DISABLED_ARR[@]}"; do
         read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
-        if [ ${gpuIdx} -eq ${gpu_idx} ]; then
+        if [ ${gpuIdx#0} -eq ${gpu_idx} ]; then
             read mining_algo m_name m_version muck <<<"${lfdAlgorithm//#/ }"
             for ccoin in ${!actMiningAlgos[@]}; do
                 [ "${actMiningAlgos[$ccoin]}" == "${mining_algo}" ] && unset actMiningAlgos[$ccoin]
@@ -1742,6 +1758,12 @@ fi
 if   [ ! -d ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo} ]; then
     mkdir   ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}
 fi
+
+# Um Codeteile, die ursprüngöich in der MinerShell entwickelt wurden und dann als Funktion
+# in die gpu-bENCH.inc übernommen wurden, auch hier rufen zu können und entsprechende Variablen
+# initialisiert zu haben.
+# Hier ist der ${coin_algorithm} mit drin
+_init_some_file_and_path_variables
 
 LOGPATH="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}"
 BENCHLOGFILE="test/${miningAlgo}_${gpu_uuid}_benchmark.log"
