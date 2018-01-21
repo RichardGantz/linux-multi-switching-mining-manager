@@ -197,13 +197,15 @@ function _read_in_COIN_PRICING () {
     # i=6: CoinHash
     readarray -n 0 -O 0 -t READARR <${COIN_PRICING_ARR}
     for ((i=0; $i<${#READARR[@]}; i+=7)) ; do
-        COINS[${READARR[$i+2]}]=${READARR[$i+1]}
-        CoinNames[${READARR[$i+1]}]=${READARR[$i]}
-        CoinAlgo[${READARR[$i+1]}]=${READARR[$i+3]}
-        COIN_IDs[${READARR[$i+1]}]=${READARR[$i+2]}
-        BlockTime[${READARR[$i+1]}]=${READARR[$i+4]}
-        BlockReward[${READARR[$i+1]}]=${READARR[$i+5]}
-        CoinHash[${READARR[$i+1]}]=${READARR[$i+6]}
+        ccoin=${READARR[$i+1]}
+        ccoinId=${READARR[$i+2]}
+        COINS[${ccoinId}]=${ccoin}
+        COIN_IDs[${ccoin}]=${ccoinId}
+        CoinNames[${ccoin}]=${READARR[$i]}
+        CoinAlgo[${ccoin}]=${READARR[$i+3]}
+        BlockTime[${ccoin}]=${READARR[$i+4]}
+        BlockReward[${ccoin}]=${READARR[$i+5]}
+        CoinHash[${ccoin}]=${READARR[$i+6]}
     done
 }
 

@@ -1662,7 +1662,7 @@ for pidx in ${!Products[@]}; do
 done
 
 [ ${debug} -eq 1 ] && printf "MenuItems nach dem Durchsuchen der Online Daten für Preise/Kurse: ${#menuItems[@]}
-Verdienst wäre möglich bei \"\${earnings_possible}=1\". \${earnings_possible}=${earnings_possible}"
+Verdienst wäre möglich bei \"\${earnings_possible}=1\". \${earnings_possible}=${earnings_possible}\n"
 
 # ${earnings_possible} war NICHT 1
 # Coin und Pool waren bei Lyra2z und myr-gr leer
@@ -1705,7 +1705,7 @@ if [ ${earnings_possible} -eq 1 ]; then
             algonr="${algonr##* }"
         fi
     else
-        echo "Der einzige Coin mit Verdienstmöglichkeit wird automatisch ausgewählt."
+        echo "Der einzige Coin mit Verdienstmöglichkeit wird automatisch ausgewählt: ${menuItems[0]}"
         algonr="a0"
     fi
 else
