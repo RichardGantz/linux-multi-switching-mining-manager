@@ -19,8 +19,12 @@ tar -cvf ${arch_name} \
     .bc_* \
     .sort_* \
     .InternetConnectionLost.log \
-    benchmarking/test/*
-    benchmarking/autobenchlogs/*
+    benchmarking/test/* \
+    benchmarking/autobenchlogs/* \
+    .GLOBAL_GPU_COMBINATION_LOOP_COUNTER \
+    .MAX_PROFIT.in \
+    .MAX_FP_MINES.in \
+    .broken_pipe_text
     
 find . -name gpu_gv-algo_\*.log   -exec tar -rvf ${arch_name} {} +
 find . -name \*_benchmark.log     -exec tar -rvf ${arch_name} {} +

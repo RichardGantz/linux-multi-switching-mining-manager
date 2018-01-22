@@ -125,7 +125,7 @@ function _On_Exit () {
     _terminate_all_processes_of_script "gpu_gv-algo.sh"
     _terminate_all_processes_of_script "algo_multi_abfrage.sh"
     broken_pipe_text+="\n"
-    printf ${broken_pipe_text}
+    printf ${broken_pipe_text} | tee -a .broken_pipe_text
 
     # Temporäre Dateien löschen
     [[ $debug -eq 0 ]] && _delete_temporary_files
@@ -873,18 +873,24 @@ while : ; do
                 | tee >(grep -E -e '#TOTAL ' | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER; \
                         rm -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock) \
                 | grep -E -v -e '^#|^$' \
-                | tee >(grep -e '^MAX_PROFIT:'   | sort -g -r -k2 | grep -E -m1 '*' >.MAX_PROFIT.in; \
+                | tee >(grep -e '^MAX_PROFIT:'   | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_PROFIT.in; \
                         rm -f .MAX_PROFIT.in.lock) \
-                      >(grep -e '^MAX_FP_MINES:' | sort -g -r -k2 | grep -E -m1 '*' >.MAX_FP_MINES.in; \
+                      >(grep -e '^MAX_FP_MINES:' | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_FP_MINES.in; \
                         rm -f .MAX_FP_MINES.in.lock) \
                       >/dev/null
             while [[ -f .MAX_PROFIT.in.lock || -f .MAX_FP_MINES.in.lock || -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock ]]; do sleep .01; done
 
+            # Das steht in .MAX_PROFIT.in:
+            # MAX_PROFIT:   .00274536 1:0,2:0,3:0,4:0,5:0,6:0
             read muck MAX_PROFIT   MAX_PROFIT_GPU_Algo_Combination                    <<<$(< .MAX_PROFIT.in)   #${_MAX_PROFIT_in}
             if [ ${#MAX_PROFIT} -eq 0 ]; then
+                echo "${ende[$c]}: Stopping MultiMiner because of no MAX_PROFIT with exit code 77" | tee -a ${ERRLOG} .MM_STOPPED_INTERALLY
                 exit 77
             fi
+            # Das steht in .MAX_FP_MINES.in:
+            # MAX_FP_MINES: .00295375 1:0,2:0,3:0,4:0,5:0,6:1 MAX_FP_WATTS: 1199
             read muck MAX_FP_MINES MAX_FP_GPU_Algo_Combination     muck2 MAX_FP_WATTS <<<$(< .MAX_FP_MINES.in) #${_MAX_FP_MINES_in}
+
             GLOBAL_GPU_COMBINATION_LOOP_COUNTER=$(< .GLOBAL_GPU_COMBINATION_LOOP_COUNTER)
             msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
             MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}

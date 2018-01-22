@@ -161,25 +161,46 @@ _terminate_Miner () {
             if [ -n "$kill_pid" ]; then
                 kill $kill_pid
                 if [[ $? -eq 0 ]]; then
-                    printf "KILL SIGNAL SUCCESSFULLY SENT.\n"
-                    sleep $Erholung                               # "Erholung" vor einem Neustart
+                    printf "KILL SIGTERM SIGNAL SUCCESSFULLY SENT.\n"
                 else
                     kill -9 $kill_pid
                     if [[ $? -eq 0 ]]; then
-                        printf "KILL SIGNAL SUCCESSFULLY SENT, but had to be \"kill -9 $kill_pid\" !\n"
-                        sleep $Erholung                           # "Erholung" vor einem Neustart
+                        printf "KILL SIGKILL SIGNAL SUCCESSFULLY SENT, but had to be \"kill -9 $kill_pid\" !\n"
                     else
-                        printf "KILL SIGNAL COULD NOT BE SENT SUCCESSFULLY, even not \"kill -9 $kill_pid\" !\n"
+                        printf "\n---> KILL_PANIC: KILL SIGKILL SIGNAL COULD NOT BE SENT SUCCESSFULLY, even not \"kill -9 $kill_pid\" !\n"
                     fi
                 fi
+                sleep $Erholung   # "Erholung" nach jedem kill und vor vor einem Neustart
+
+                # Und nochmal suchen:
+                printf "Check PID ${MINER_pid} again after $Erholung seconds ... "
+                kill_pid=$(ps -ef | gawk -e '$2 == '${MINER_pid}' && /'"${REGEXPAT}"'/ {print $2; exit }')
+                if [ -n "$kill_pid" ]; then
+                    printf "\n---> KILL_PANIC: GPU #${gpu_idx}: ${This}.sh: PID ${MINER_pid} of Miner ${MINER} ...
+nach $Erholung Sekunden Erholzeit nach kill 15 immer noch vorhanden.
+Es folgt ein kill -9... "
+                    kill -9 $kill_pid
+                    if [[ $? -eq 0 ]]; then
+                        printf "KILL -9 SIGNAL SUCCESSFULLY SENT.\n"
+                    else
+                        printf "\n---> KILL_PANIC: KILL -9 SIGNAL COULD NOT BE SENT SUCCESSFULLY!\n"
+                    fi
+                else
+                    printf "no longer there.\n"
+                fi
             else
-                printf "PID ${MINER_pid} NOT FOUND IN PROCESS TABLE!!!\n"
-                printf "GPU #${gpu_idx}: ${This}.sh: PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE!!!\n
-awk -e \"$2 == ${MINER_pid} && /${REGEXPAT}/ {print $2; exit }\"\n" >>${ERRLOG}
+                printf "---> KILL_PANIC: GPU #${gpu_idx}: ${This}.sh:
+PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE after the following search:
+awk -e \"\$2 == \${MINER_pid} && /\${REGEXPAT}/ {print $2; exit }\"
+awk -e \"\$2 == ${MINER_pid} && /${REGEXPAT}/ {print $2; exit }\"\n" | tee -a ${ERRLOG}
             fi
+        else
+            printf "---> KILL_PANIC: Sehr komisch. Miner ${MINER} soll beendet werden, es gibt auch eine -s .pid Datei.
+---> KILL_PANIC: Nach dem Einlesen des Dateiinhalts in die Variable \${MINER_pid} ist die aber leer \"${MINER_pid}\".\n" | tee -a ${ERRLOG}
         fi
     else
-        echo "Miner ${MINER} soll beendet werden, es gibt aber keine entsprechende .pid Datei. Möglicherweise wurde er gar nicht gestartet."
+        printf "---> KILL_PANIC: Miner ${MINER} soll beendet werden, es gibt aber keine entsprechende .pid Datei.
+---> KILL_PANIC: Möglicherweise wurde er gar nicht gestartet?\n" | tee -a ${ERRLOG}
     fi
     rm -f ${MINER}.pid
 }
@@ -286,7 +307,7 @@ while :; do
         echo "GPU #${gpu_idx}: Starting Miner alias ${coin_algorithm} with the following command line:"
         echo ${minerstart}
         ${minerstart}  >>${BENCHLOGFILE} 2>>${BENCHLOGFILE} &
-        echo $! > ${MINER}.pid
+        echo $! | tee ${MINER}.pid
         Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
         gnome-terminal --hide-menubar \
                        --title="GPU #${gpu_idx}  -  Mining ${coin_algorithm}" \

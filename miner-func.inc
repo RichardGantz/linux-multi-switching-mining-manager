@@ -153,18 +153,17 @@ function _split_into_Available_and_Missing_Miner_Algo_Arrays () {
     declare -n actAvailableAlgos="Available_${1}_${2//\./_}_Algos"
 
     for lfdMiningAlgo in ${actMiningAlgos[@]}; do
+        #echo "\$lfdMiningAlgo $lfdMiningAlgo"
         found=0
         # Wurde die IMPORTANT_BENCHMARK_JSON vielleicht schon eingelesen?
         if [ ${#bENCH[@]} -gt 0 ]; then
-            if [ ${#bENCH["${lfdMiningAlgo}#${1}#${2}"]} -eq 0 ]; then
-                found=99
-            fi
+            [ ${#bENCH[${lfdMiningAlgo}#${1}#${2}]} -eq 0 ] && found=99 || found=100
         else
             # Da in der JSON sehr wohl zwei Einträge pro MinigAlgo sein können (Effektiv- und FullPower-Mode),
             #    müssen wir sicherstellen, dass nur das Effektiv-Objekt in den MissingAlgos landet.
             # Wenn wir also auf 888 stossen, suchen wir weiter.
             # Ist das 888 nicht da, brechen wir ab
-            sed -n -e '/"Name": "'${lfdMiningAlgo}'",/{           # if found ${miningAlgo}
+            sed -n -e '/"Name": "'${lfdMiningAlgo}'",/{               # if found ${miningAlgo}
                          N;/"MinerName": "'${1}'",/{                  # appe(N)d 1 line;  if found $1 == ${miner_name}
                          N;/"MinerVersion": "'${2}'",/{               # appe(N)d 1 line;  if found $2 == ${miner_version}
                             N;N;N;N;N;N;N;/"BENCH_KIND": 888,/d;{     # appe(N)d 7 lines; if found 888, (d)elete and continue

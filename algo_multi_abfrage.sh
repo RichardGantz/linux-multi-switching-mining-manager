@@ -55,7 +55,7 @@ _check_InternetConnection () {
     msg1="### INTERNET CONNECTION LOST ###"
     msg2="Waiting for response from one of the 4 choosen IP-Addresses..."
     notify-send -u critical "$msg1" "$msg2"
-    echo "${detected} $msg1" | tee -a ${ERRLOG} >>.InternetConnectionLost.log
+    echo "${detected} $msg1" | tee -a ${ERRLOG} .InternetConnectionLost.log
     local -i secs=1
     while :; do
         echo "${msg2}, Ping-Cycle Nr. $secs"
@@ -68,7 +68,7 @@ _check_InternetConnection () {
         let secs++
     done
     detected=$(date "+%F %H:%M:%S")
-    printf "\n${detected} Internet Connection established\n" | tee -a ${ERRLOG} | tee -a .InternetConnectionLost.log
+    printf "${detected} Internet Connection established\n" | tee -a ${ERRLOG} .InternetConnectionLost.log
     rm -f I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 

@@ -1298,79 +1298,73 @@ _disable_algorithm () {
     echo "Der Algorithm ${algorithm} wurde in die Datei BENCH_ALGO_DISABLED eingetragen."
 }
 
-# Vorher ausfiltern aller GLOBAL und Dauerhaft disabled Algos, denn sie sollen nicht angeboten werden
-# und die Automatik soll sie nicht durchführen
-#    Zunächst die über BENCH_ALGO_DISABLED Algos rausnehmen...
-disd_msg[${#disd_msg[@]}]="--->-------------------------------------------------------------------------------<---"
-disd_msg[${#disd_msg[@]}]="--->         Beginn mit der Durchsuchung der DISABLED Algos und/oder Coins         <---"
-unset BENCH_ALGO_DISABLED_ARR
-if [ -s ../BENCH_ALGO_DISABLED ]; then
-
-    _reserve_and_lock_file ../BENCH_ALGO_DISABLED
-    cat ../BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR
-    _remove_lock                                     # ... und wieder freigeben
-
-    for actRow in "${BENCH_ALGO_DISABLED_ARR[@]}"; do
-        read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
-        if [ ${gpuIdx#0} -eq ${gpu_idx} ]; then
-            read mining_algo m_name m_version muck <<<"${lfdAlgorithm//#/ }"
-            for ccoin in ${!actMiningAlgos[@]}; do
-                [ "${actMiningAlgos[$ccoin]}" == "${mining_algo}" ] && unset actMiningAlgos[$ccoin]
-            done
-            [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
-            actMissingAlgos=( $(echo ${actMissingAlgos[@]} | sed -e 's/\b'${mining_algo}'\b//g') )
-            [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
-            disd_msg[${#disd_msg[@]}]="---> Algo ${lfdAlgorithm} wegen des Vorhandenseins in der Datei BENCH_ALGO_DISABLED herausgenommen."
-        fi
-    done
-fi
-
-#    Zusätzlich die über GLOBAL_ALGO_DISABLED Algos rausnehmen...
-unset GLOBAL_ALGO_DISABLED_ARR
-if [ -s ../GLOBAL_ALGO_DISABLED ]; then
-    _reserve_and_lock_file ../GLOBAL_ALGO_DISABLED
-    cat ../GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
-    _remove_lock                                     # ... und wieder freigeben
-
-    for ((i=0; $i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
-
-        unset disabled_algos_GPUs
-        read -a disabled_algos_GPUs <<<${GLOBAL_ALGO_DISABLED_ARR[$i]//:/ }
-        DisAlgo=${disabled_algos_GPUs[0]}
-        if [ ${#disabled_algos_GPUs[@]} -gt 1 ]; then
-            # Nur für bestimmte GPUs disabled. Wenn die eigene GPU nicht aufgeführt ist, übergehen
-            [[ ! ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ^.*:${gpu_uuid} ]] && unset DisAlgo
-        fi
-        if [ -n "${DisAlgo}" ]; then
-            for ccoin in ${!actMiningAlgos[@]}; do
-                [ "${actMiningAlgos[$ccoin]}" == "${DisAlgo}" ] && unset actMiningAlgos[$ccoin]
-            done
-            for a in ${!actMissingAlgos[@]}; do
-                if [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ]; then
-                    unset actMissingAlgos[$a]
-                    # Es konnte nur einen Eintrag mit diesem Ccoin geben, deshalb um der Performance willen Abbruch der Schleife
-                    break
-                fi
-            done
-            disd_msg[${#disd_msg[@]}]="---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
-        fi
-    done
-fi
-
-if [ ${#disd_msg[@]} -gt 2 ]; then
-    for (( i=0; i<${#disd_msg[@]}; i++)); do
-        echo "${disd_msg[$i]}"
-    done
-    echo "${disd_msg[0]}"
-fi
-    
-#####################################################################################################
-###
-###          4.1. Auswahl des MiningAlgos durch den Benutzer oder bereits als Parameter übergeben
-###
-#####################################################################################################
-
 if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]]; then
+    # Vorher ausfiltern aller GLOBAL und Dauerhaft disabled Algos, denn sie sollen nicht angeboten werden
+    # und die Automatik soll sie nicht durchführen
+    #    Zunächst die über BENCH_ALGO_DISABLED Algos rausnehmen...
+    disd_msg[${#disd_msg[@]}]="--->-------------------------------------------------------------------------------<---"
+    disd_msg[${#disd_msg[@]}]="--->         Beginn mit der Durchsuchung der DISABLED Algos und/oder Coins         <---"
+    unset BENCH_ALGO_DISABLED_ARR
+    if [ -s ../BENCH_ALGO_DISABLED ]; then
+
+        _reserve_and_lock_file ../BENCH_ALGO_DISABLED
+        cat ../BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR
+        _remove_lock                                     # ... und wieder freigeben
+
+        for actRow in "${BENCH_ALGO_DISABLED_ARR[@]}"; do
+            read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
+            if [ ${gpuIdx#0} -eq ${gpu_idx} ]; then
+                read mining_algo m_name m_version muck <<<"${lfdAlgorithm//#/ }"
+                for ccoin in ${!actMiningAlgos[@]}; do
+                    [ "${actMiningAlgos[$ccoin]}" == "${mining_algo}" ] && unset actMiningAlgos[$ccoin]
+                done
+                [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
+                actMissingAlgos=( $(echo ${actMissingAlgos[@]} | sed -e 's/\b'${mining_algo}'\b//g') )
+                [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
+                disd_msg[${#disd_msg[@]}]="---> Algo ${lfdAlgorithm} wegen des Vorhandenseins in der Datei BENCH_ALGO_DISABLED herausgenommen."
+            fi
+        done
+    fi
+
+    #    Zusätzlich die über GLOBAL_ALGO_DISABLED Algos rausnehmen...
+    unset GLOBAL_ALGO_DISABLED_ARR
+    if [ -s ../GLOBAL_ALGO_DISABLED ]; then
+        _reserve_and_lock_file ../GLOBAL_ALGO_DISABLED
+        cat ../GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+        _remove_lock                                     # ... und wieder freigeben
+
+        for ((i=0; $i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
+
+            unset disabled_algos_GPUs
+            read -a disabled_algos_GPUs <<<${GLOBAL_ALGO_DISABLED_ARR[$i]//:/ }
+            DisAlgo=${disabled_algos_GPUs[0]}
+            if [ ${#disabled_algos_GPUs[@]} -gt 1 ]; then
+                # Nur für bestimmte GPUs disabled. Wenn die eigene GPU nicht aufgeführt ist, übergehen
+                [[ ! ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ^.*:${gpu_uuid} ]] && unset DisAlgo
+            fi
+            if [ -n "${DisAlgo}" ]; then
+                for ccoin in ${!actMiningAlgos[@]}; do
+                    [ "${actMiningAlgos[$ccoin]}" == "${DisAlgo}" ] && unset actMiningAlgos[$ccoin]
+                done
+                for a in ${!actMissingAlgos[@]}; do
+                    if [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ]; then
+                        unset actMissingAlgos[$a]
+                        # Es konnte nur einen Eintrag mit diesem Ccoin geben, deshalb um der Performance willen Abbruch der Schleife
+                        break
+                    fi
+                done
+                disd_msg[${#disd_msg[@]}]="---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
+            fi
+        done
+    fi
+
+    if [ ${#disd_msg[@]} -gt 2 ]; then
+        for (( i=0; i<${#disd_msg[@]}; i++)); do
+            echo "${disd_msg[$i]}"
+        done
+        echo "${disd_msg[0]}"
+    fi
+
     # Im --auto Mode beenden, wenn der miningAlgo nicht mehr unter den "Missing" (?) ist, weil z.B. disabled wurde
     # Um zu ermöglichen, dass vorhandene Algos nach einer längeren Zeit noch einmal benchmarkt werden können,
     # schauen wir doch lieber nach, ob der Algo unter allen noch Möglichen dabei ist.
@@ -1381,7 +1375,15 @@ if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]]; then
         if [ "${actMiningAlgos[$ccoin]}" == "${miningAlgo}" ]; then algo_cnt=1; break; fi
     done
     [ ${algo_cnt} -eq 0 ] && exit 99
-else
+fi
+
+#####################################################################################################
+###
+###          4.1. Auswahl des MiningAlgos durch den Benutzer oder bereits als Parameter übergeben
+###
+#####################################################################################################
+
+if [[ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]]; then
     ###
     ###          4.1.1. Anzeige aller fehlenden MiningAlgos, die möglich wären
     ###

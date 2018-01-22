@@ -126,7 +126,7 @@ fi
 GPU_alive_delay=2
 GPU_ALIVE_FLAG=.willing_to_deliver_data
 GPU_VALID_FLAG=.valid_data_delivered
-MM_validating_delay=5
+MM_validating_delay=10
 RUN_SYNC_delay=5
 
 # Diese Funktion ist bequem, aber langsamer als die Member eines Arrays in einer for-Schleife zu verbinden.
@@ -137,7 +137,7 @@ pos_join () { local IFS="$1"; shift; echo "$*"; }
 _remove_lock () {
     flock -u 999                                     # ... und wieder freigeben
     [[ "$1" != "--do_not_log" ]] && \
-	echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Released the exclusive Lock now" \
+        echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Released the exclusive Lock now" \
              >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.${LockBase}
 }
 
@@ -153,7 +153,7 @@ _reserve_and_lock_file () {
     exec 999>${LockFile}
     flock -x 999
     [[ "$2" != "--do_not_log" ]] && \
-	echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Got the exclusive Lock now" \
+        echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Got the exclusive Lock now" \
              >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.${LockBase}
 }
 
@@ -165,16 +165,16 @@ _get_file_modified_time_ () {
     # Aus diesem Grund prüfen wir die Fraction gleich und lassen führende Nullen hier schon weg
     declare _modified_time_="0" _fraction_="1"
 
-    _reserve_and_lock_file "$1" "--do_not_log"
+    _reserve_and_lock_file "$1" # "--do_not_log"
     if [ -f ${1} ]; then
-	_modified_time_=$(stat -c "%Y" ${1}) #.${_fraction_}
-	_fraction_=$(find ${1} -printf "%TS" )
-	_fraction_=${_fraction_#*\.}
-	REGEXPAT="^0+([[:digit:]]*)"
-	[[ "${_fraction_}" =~ ${REGEXPAT} ]] && _fraction_=${BASH_REMATCH[1]}
-	[[ "${_fraction_}" == ""          ]] && _fraction_="1"
+        _modified_time_=$(stat -c "%Y" ${1}) #.${_fraction_}
+        _fraction_=$(find ${1} -printf "%TS" )
+        _fraction_=${_fraction_#*\.}
+        REGEXPAT="^0+([[:digit:]]*)"
+        [[ "${_fraction_}" =~ ${REGEXPAT} ]] && _fraction_=${BASH_REMATCH[1]}
+        [[ "${_fraction_}" == ""          ]] && _fraction_="1"
     fi
-    _remove_lock "--do_not_log"
+    _remove_lock # "--do_not_log"
     echo "${_modified_time_} ${_fraction_}"
 }
 
