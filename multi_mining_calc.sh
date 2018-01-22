@@ -599,7 +599,7 @@ while : ; do
     unset SwitchOffGPUs
     declare -a SwitchOffGPUs           # GPUs anyway aus, keine gewinnbringenden Algos zur Zeit
     unset SwitchNotGPUs
-    declare -a SwitchNotGPUs           # GPUs anyway aus, keine gewinnbringenden Algos zur Zeit
+    declare -a SwitchNotGPUs           # GPUs, die durchzuschleifen sind, weil sie beim Abliefern von Werten aufgehalten wurden.
     unset PossibleCandidateGPUidx
     declare -a PossibleCandidateGPUidx # GPUs mit mindestens 1 gewinnbringenden Algo.
     # Welcher es werden soll, muss errechnet werden
@@ -615,6 +615,7 @@ while : ; do
         declare -n actAlgoProfit="GPU${gpu_idx}Profit"
         declare -n dstAlgoWatts="GPU${gpu_idx}WATTS"
         declare -n dstAlgoMines="GPU${gpu_idx}MINES"
+        declare -n actSortedProfits="SORTED${gpu_idx}PROFITs"
 
         numAlgos=${#actGPUAlgos[@]}
         # Wenn die GPU seit neuestem generell DISABLED ist, pushen wir sie hier auf den
@@ -716,6 +717,7 @@ while : ; do
                         if [ ! : ]; then
                             for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
                                 dstIdx=$((${profitableAlgoIndexesCnt}-${sortIdx}-1))
+                                actSortedProfits[${dstIdx}]=${SORTED_PROFITS[${sortIdx}]% *}
                                 algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
                                 actCandidatesAlgoIndexes[${dstIdx}]=${algoIdx}
                                 dstAlgoWatts[${dstIdx}]=${actAlgoWatt[${algoIdx}]}
@@ -723,6 +725,7 @@ while : ; do
                             done
                         else
                             for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
+                                actSortedProfits[${sortIdx}]=${SORTED_PROFITS[${sortIdx}]% *}
                                 algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
                                 actCandidatesAlgoIndexes[${sortIdx}]=${algoIdx}
                                 dstAlgoWatts[${sortIdx}]=${actAlgoWatt[${algoIdx}]}
@@ -975,7 +978,7 @@ while : ; do
     ###                                                             ###
     for (( i=0; $i<${SwitchOnCnt}; i++ )); do
         # Split the "String" at ":" into the 2 variables "gpu_idx" and "algoidx"
-        read gpu_idx algoidx <<<"${GPUINDEXES[$i]//:/ }"
+        read gpu_idx bc_algoidx <<<"${GPUINDEXES[$i]//:/ }"
 
         # Ausfiltern der Guten GPUs aus PossibleCandidateGPUidx.
         # PossibleCandidateGPUidx enthält dann zum Schluss nur noch ebenfalls abzuschaltende GPUs
@@ -989,8 +992,15 @@ while : ; do
         declare -n actGPUalgoWatt="GPU${gpu_idx}Watts"
         # Korrektur vom bc-indirekt-AlgoIdx zum tatsächlichen algoIdx
         declare -n actCandidatesAlgoIndexes="PossibleCandidate${gpu_idx}AlgoIndexes"
-        algoidx=${actCandidatesAlgoIndexes[${algoidx}]}
+        algoidx=${actCandidatesAlgoIndexes[${bc_algoidx}]}
         gpu_uuid=${uuid[${gpu_idx}]}
+
+        declare -n actSortedProfits="SORTED${gpu_idx}PROFITs"
+        declare -n actbackedUpProfits="LAST_SORTED${gpu_idx}PROFITs"
+        if [ ${debug} -eq 1 ]; then
+            echo "Gerade noch laufende, nun veraltete Profits: ${actbackedUpProfits[@]}"
+            echo "Neu berechnete, möglicherweise neue Profits: ${actSortedProfits[@]}"
+        fi
 
         if [ ! ${#RunningGPUid[${gpu_uuid}]} -eq 0 ]; then
             #############################   CHAOS BEHADLUNG Anfang  #############################
@@ -1008,7 +1018,8 @@ while : ; do
             # Der Soll-Zustand kommt aus der manuell bearbeiteten Systemdatei ganz am Anfang
             # Wir schalten auf jeden Fall den gewünschten Soll-Zustand.
             # Eventuell müssen wir mit dem letzten Run-Zustand vergleichen, um etwas zu stoppen...
-            printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:" >>${RUNNING_STATE}
+            #printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:" >>${RUNNING_STATE}
+            printf "${gpu_uuid}:${gpu_idx}" >>${RUNNING_STATE}
 
             # Ist die GPU generell Enabled oder momentan nicht zu behandeln?
             if ((${WasItEnabled[${gpu_uuid}]} == 1)); then
@@ -1030,15 +1041,25 @@ while : ; do
                         if [[ -z "${WhatsRunning[${gpu_uuid}]}" ]]; then
                             # MINER- Behandlung
                             echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
+                            cycle_counter[${actGPUalgoName[${algoidx}]}]=1
                         else
                             # MINER- Behandlung
-                            echo "---> SWITCH-CMD: GPU#${gpu_idx} Algo WECHSELN von \"${WhatsRunning[${gpu_uuid}]}\" auf \"${actGPUalgoName[${algoidx}]}\""
+                            if [ ${cycle_counter[${WhatsRunning[${gpu_uuid}]}]} -eq 1 ]; then
+                                cycle_counter[${WhatsRunning[${gpu_uuid}]}]=0
+                                echo "---> SWITCH-NOT: Eigentlich sollte von \"${WhatsRunning[${gpu_uuid}]}\" auf \"${actGPUalgoName[${algoidx}]}\" gewechselt werden."
+                                echo "                 Laufende BTC/MInes: ${actbackedUpProfits[0]}  -  Neu einzustellende BTC/MInes wären: ${actSortedProfits[0]}"
+                                actGPUalgoName[${algoidx}]=${WhatsRunning[${gpu_uuid}]}
+                            else
+                                echo "---> SWITCH-CMD: GPU#${gpu_idx} Algo WECHSELN von \"${WhatsRunning[${gpu_uuid}]}\" auf \"${actGPUalgoName[${algoidx}]}\""
+                                cycle_counter[${actGPUalgoName[${algoidx}]}]=1
+                            fi
                         fi
                     else
                         # Alter und neuer Algo ist gleich, kann weiterlaufen
                         echo "---> SWITCH-NOT: GPU#${gpu_idx} BLEIBT weiterhin auf \"${actGPUalgoName[${algoidx}]}\""
+                        cycle_counter[${WhatsRunning[${gpu_uuid}]}]=0
                     fi
-                    printf "${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+                    printf ":${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
                     if [ $NoCards ]; then
                         [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
                     fi
@@ -1054,7 +1075,14 @@ while : ; do
                     # MINER- Behandlung
                     echo "---> SWITCH-OFF: GPU#${gpu_idx} wurde generell DISABLED und ist abzustellen!"
                     echo "---> SWITCH-OFF: Sie läuft noch mit \"${WhatsRunning[${gpu_uuid}]}\""
-                    printf "0:\n" >>${RUNNING_STATE}
+                    if [ ${cycle_counter[${WhatsRunning[${gpu_uuid}]}]} -eq 1 ]; then
+                        cycle_counter[${WhatsRunning[${gpu_uuid}]}]=0
+                        echo "---> SWITCH-NOT: Da die GPU aber erst einen Zyklus gelaufen ist, lassen wir sie noch einen weiteren laufen. Sie bleibt im RUN_STATE Enabled"
+                        actGPUalgoName[${algoidx}]=${WhatsRunning[${gpu_uuid}]}
+                        printf ":1:${RunningWatts[${gpu_uuid}]}:${WhatsRunning[${gpu_uuid}]}\n" >>${RUNNING_STATE}
+                    else
+                        printf ":${uuidEnabledSOLL[${gpu_uuid}]}:0:\n" >>${RUNNING_STATE}
+                    fi
                 fi
             else
                 #
@@ -1070,7 +1098,8 @@ while : ; do
                     ########################################################
                     # MINER- Behandlung
                     echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
-                    printf "${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+                    printf ":${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+                    cycle_counter[${actGPUalgoName[${algoidx}]}]=1
                     if [ $NoCards ]; then
                         [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
                     fi
@@ -1102,6 +1131,7 @@ while : ; do
                 # MINER- Behandlung
                 echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
                 printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
+                cycle_counter[${actGPUalgoName[${algoidx}]}]=1
                 if [ $NoCards ]; then
                     [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
                 fi

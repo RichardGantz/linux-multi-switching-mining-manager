@@ -1961,7 +1961,8 @@ done
 # "LOCATION eu, usa, hk, jp, in, br"  <--- von der Webseite https://www.nicehash.com/algorithm
 continent="SelbstWahl"   # Noch nicht vollständig implementiert!      <--------------------------------------
 [[ "${miner_name}" == "zm" ]] && continent="br"
-worker="1060"            # Noch nicht vollständig implementiert!      <--------------------------------------
+
+printf -v worker "%02i${gpu_uuid:4:6}" ${gpu_idx}
 
 _init_NH_continent_handling
 

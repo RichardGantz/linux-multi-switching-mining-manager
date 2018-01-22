@@ -469,8 +469,9 @@ print \"MAX_FP_MINES: \", max_mines,  \" ${gpu_algo_mines_str%\"\,} \" MAX_FP_WA
 
     # Und der Start des bc...
     # vielleicht im Hintergrund, um gleich die nächste GPU-Kombination parallel in Auftrag geben zu können?
+    # Für Diagnose-Zwecke diesen tee vor | bc einfügen
+    #   | tee .bc_prog_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
     echo "$bc_prog" \
-        | tee .bc_prog_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
         | bc >.bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
     &
     bc_THREAD_PIDS[$!]=".bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi}"
@@ -532,11 +533,11 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
         # Das ist der letzte "Pointer", der keinen Weiteren mehr initialisiert.
         # Hier rufen wir jetzt die eigentliche Kalkulation auf und kehren dann zurück.
         #echo "Innerste Ebene und Ausführungsebene erreicht. Alle zu testenden GPUs sind bekannt und werden nun berechnet."
-        if [[ ${debug} -eq 1 ]]; then
-            echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
-            echo "_CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES maxTiefe ${maxTiefe} erreicht."
-            echo "Starte mit den Testkombinationen von iii=${myStart} bis iii < ${myDepth}."
-        fi
+        #if [[ ${debug} -eq 1 ]]; then
+        #    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
+        #    echo "_CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES maxTiefe ${maxTiefe} erreicht."
+        #    echo "Starte mit den Testkombinationen von iii=${myStart} bis iii < ${myDepth}."
+        #fi
         
         for (( iii=${myStart}; $iii<${myDepth}; iii++ )); do
             unset TestCombinationGPUs
@@ -545,7 +546,7 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
             # Das Array TestCombinationGPUs, das die zu untersuchenden GPU-Indexe enthält,
             # wird jetzt komplett für die Berechnungsroutine aufgebaut.
             TestCombinationGPUs=($* ${PossibleCandidateGPUidx[${iii}]})
-            #if [[ ${debug} -eq 1 ]]; then
+            #if [[ ${debug} -eq 999 ]]; then
             #    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
             #    echo "Testkombinationsarray $iii hat ${#TestCombinationGPUs[@]} Member:" ${TestCombinationGPUs[@]}
             #fi

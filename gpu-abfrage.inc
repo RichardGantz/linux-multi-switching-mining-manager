@@ -90,18 +90,24 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
         GPU_idx[${UUID}]=${act_gpu_idx}
         # EXTREM WICHTIGE Deklarationen!
         # Seitdem dieser Teil am Anfang einer Endlosschleife enthalten ist, müssen wir die Arrays erst mal löschen!
-        declare -n deleteIt="GPU${act_gpu_idx}Algos";     unset deleteIt
-        declare -n deleteIt="GPU${act_gpu_idx}Watts";     unset deleteIt
-        declare -n deleteIt="GPU${act_gpu_idx}Mines";     unset deleteIt
-        declare -n deleteIt="GPU${act_gpu_idx}Profit";    unset deleteIt
-        declare -n deleteIt="GPU${act_gpu_idx}WATTS";     unset deleteIt
-        declare -n deleteIt="GPU${act_gpu_idx}MINES";     unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}Algos";           unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}Watts";           unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}Mines";           unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}Profit";          unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}WATTS";           unset deleteIt
+        declare -n deleteIt="GPU${act_gpu_idx}MINES";           unset deleteIt
+        declare -n backItUp="LAST_SORTED${act_gpu_idx}PROFITs"; unset deleteIt
+        declare -ag "LAST_SORTED${act_gpu_idx}PROFITs"
+        declare -n deleteIt="SORTED${act_gpu_idx}PROFITs";
+        backItUp=( ${deleteIt[@]} )
+        unset deleteIt
         declare -ag "GPU${act_gpu_idx}Algos"
         declare -ag "GPU${act_gpu_idx}Watts"
         declare -ag "GPU${act_gpu_idx}Mines"
         declare -ag "GPU${act_gpu_idx}Profit"
         declare -ag "GPU${act_gpu_idx}WATTS"
         declare -ag "GPU${act_gpu_idx}MINES"
+        declare -ag "SORTED${act_gpu_idx}PROFITs"
     done
 
     # Die folgende Datei GLOBAL_GPU_SYSTEM_STATE.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.

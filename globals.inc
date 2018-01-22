@@ -17,6 +17,7 @@ shopt -s lastpipe
 
 # Die Anzahl der besten Algos, die bei der globalen Berechnung pro GPU berücksichtigt werden sollen
 BEST_ALGO_CNT=5
+declare -Ag cycle_counter
 
 # Die SLEEP Zeit nach dem Abbruch eines Miners in Sekunden. Experimentell, .5 bis 3 ???
 Erholung=.9

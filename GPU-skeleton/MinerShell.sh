@@ -104,7 +104,7 @@ _build_minerstart_commandline () {
     # "LOCATION eu, usa, hk, jp, in, br"  <--- von der Webseite https://www.nicehash.com/algorithm
     # Wird übergeben, aber:# Noch nicht vollständig implementiert!      <--------------------------------------
     #continent="eu"        # Noch nicht vollständig implementiert!      <------- NiceHash ONLY ----------------
-    #worker="1060"         # Noch nicht vollständig implementiert!      <--------------------------------------
+    #worker="%02i${gpu_uuid:4:6}" ${gpu_idx}
 
     # Diese Funktion musste leider erfunden werden wegen der internen anderen Algonamen,
     # die NiceHash willkürlich anders benannt hat.

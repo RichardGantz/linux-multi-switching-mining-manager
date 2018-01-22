@@ -1213,6 +1213,8 @@ while :; do
                     continent="SelbstWahl"
                     [[ "${miner_name}" == "zm" ]] && continent="br"
 
+                    printf -v worker "%02i${gpu_uuid:4:6}" ${gpu_idx}
+
                     _setup_Nvidia_Default_Tuning_CmdStack
                     cmdParameterString=""
                     for cmd in "${CmdStack[@]}"; do
@@ -1226,7 +1228,7 @@ while :; do
                       ${gpu_idx}          \
                       ${continent}        \
                       ${algo_port}        \
-                      "1060"              \
+                      ${worker}           \
                       ${gpu_uuid}         \
                       ${domain}           \
                       ${server_name}      \
