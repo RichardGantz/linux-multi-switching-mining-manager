@@ -85,20 +85,32 @@ function _func_gpu_abfrage_sh () {
 print $1; print $2; print $3; print $4
 if ($5 !~ /^[[:digit:]]+ %$/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
 if ($6 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $6, 1, index($6,".")-1 ) }
+if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index($7,".")-1 ) }
 }' \
                    | tee ${SYSTEM_FILE} \
                    | wc -l)
     else
-        GPU_COUNT=$(nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit --format=csv,noheader \
+        GPU_COUNT=$(nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit,enforced.power.limit --format=csv,noheader \
                    | gawk -e 'BEGIN {FS=", "} { \
 print $1; print $2; print $3; print $4
 if ($5 !~ /^[[:digit:]]+ %$/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
 if ($6 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $6, 1, index($6,".")-1 ) }
+if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index($7,".")-1 ) }
 }' \
                   | tee ${SYSTEM_FILE} \
                   | wc -l )
     fi
     GPU_COUNT=$(( ${GPU_COUNT} / ${num_gpu_rows} ))
+
+    # zm --list-devices Abfrage auswerten
+    ZM_GPU_COUNT=$(${zm_list_devices_cmd} \
+                  | gawk -e '{ print substr( $NF, 1, length($NF)-1 ) $2 }' \
+                  | tee ${ZM_FILE} \
+                  | wc -l)
+    if [[ ${GPU_COUNT} -ne ${ZM_GPU_COUNT} ]]; then
+        echo "Das geht gar nicht: NVIDIA listet ${GPU_COUNT} Devices, ZM listet ${ZM_GPU_COUNT} devices. Bitte prüfen. Es erfolgt ein Abbruch"
+        exit 2
+    fi
 
     # Beim allerersten Start gibt es noch keine System.in und die System.in wird erst beim _update geschrieben
     #      wobei alle GPUs in der Datei auf Enabled gesetzt werden.

@@ -71,6 +71,7 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
     unset uuid;       declare -ag uuid        # gpu_row 3 or 4
     unset auslastung; declare -ag auslastung  # gpu_row 4 or 5
     unset defPowLim;  declare -ag defPowLim   # gpu_row 5 or 6
+    unset enforcedPL; declare -ag enforcedPL  # gpu_row 6 or 7
 
     unset GPU_idx;    declare -Ag GPU_idx
     # Diese Felder sind ziemlich wichtig, so dass wir deren Anzahl in globals.inc hinterlegen
@@ -78,14 +79,18 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
 
     for ((i=0; $i<${#READARR[@]}; i+=num_gpu_rows)) ; do
         j=$(expr $i / ${num_gpu_rows})
-        index[$j]=${READARR[$i]}        # index[] = Grafikkarten-Index für miner
+        index[$j]=${READARR[$i]}        # index[] = nvidia GPU-Indexes
         act_gpu_idx=${index[$j]}
         name[${act_gpu_idx}]=${READARR[$i+1]}
-        bus[${act_gpu_idx}]=${READARR[$i+2]}
+        # 00000000:0C:00.0
+        bus[${act_gpu_idx}]=${READARR[$i+2]#*:}
+        bus[${act_gpu_idx}]=${bus[${act_gpu_idx}]%:*}
+        bus[${act_gpu_idx}]=$((0x${bus[${act_gpu_idx}]}))
         UUID=${READARR[$i+3]}
         uuid[${act_gpu_idx}]=${UUID}
         auslastung[${act_gpu_idx}]=${READARR[$i+4]}
         defPowLim[${act_gpu_idx}]=${READARR[$i+5]}
+        enforcedPL[${act_gpu_idx}]=${READARR[$i+6]}   # <--- Nur mal aufgenommen, bisher NICHT WEITER AUSGEWERTET!
 
         GPU_idx[${UUID}]=${act_gpu_idx}
         # EXTREM WICHTIGE Deklarationen!
@@ -110,6 +115,13 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
         declare -ag "SORTED${act_gpu_idx}PROFITs"
     done
 
+    unset zm_device_on_pci_bus
+    unset READARR
+    readarray -n 0 -O 0 -t READARR <${ZM_FILE}
+    for ((i=0; $i<${#READARR[@]}; i++)) ; do
+        zm_device_on_pci_bus[${READARR[$i]%:*}]=${READARR[$i]#*:}
+    done
+    
     # Die folgende Datei GLOBAL_GPU_SYSTEM_STATE.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
     # Sie wird, wenn nicht vorhanden vom Skript erstellt, damit wir die UUID's und Namen haben.
     # Und wenn sie vorhanden ist, merken wir uns die manuell gesetzten Enabled-Zustände,

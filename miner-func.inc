@@ -232,8 +232,10 @@ function _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array ()
     ls -l all.* >.act_all_pool_infos
     [[ ! -f .all_all_pool_infos ]] && touch .all_all_pool_infos
     diff -q .act_all_pool_infos .all_all_pool_infos &>/dev/null
-    [[ $? -gt 0 ]] && touch .any_all_pool_infos_changed
-    cp -f .act_all_pool_infos .all_all_pool_infos
+    if [[ $? -gt 0 ]]; then
+        touch .any_all_pool_infos_changed
+        cp -f .act_all_pool_infos .all_all_pool_infos
+    fi
     declare -i act_all_pool_infos_epoch=$(date --reference=.any_all_pool_infos_changed +%s)
 
     [[ -z "${old_all_pool_infos_epoch}" ]] && declare -ig old_all_pool_infos_epoch=0
@@ -244,36 +246,38 @@ function _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array ()
         declare -Ag UniqueMiningAlgoArray
 
         for pool in ${!OfflineInfo[@]}; do
-            declare -n                   deleteIt="CoinsOfPool_${pool}";            unset deleteIt
-            declare -ag                           "CoinsOfPool_${pool}"
-            declare -n             actCoinsOfPool="CoinsOfPool_${pool}"
+            if [ ${PoolActive[${pool}]} -eq 1 ]; then
+                declare -n                   deleteIt="CoinsOfPool_${pool}";            unset deleteIt
+                declare -ag                           "CoinsOfPool_${pool}"
+                declare -n             actCoinsOfPool="CoinsOfPool_${pool}"
 
-            declare -n                   deleteIt="MiningAlgosOfPool_${pool}";      unset deleteIt
-            declare -ag                           "MiningAlgosOfPool_${pool}"
-            declare -n             actMiningAlgosOfPool="MiningAlgosOfPool_${pool}"
+                declare -n                   deleteIt="MiningAlgosOfPool_${pool}";      unset deleteIt
+                declare -ag                           "MiningAlgosOfPool_${pool}"
+                declare -n             actMiningAlgosOfPool="MiningAlgosOfPool_${pool}"
 
-            #declare -n                   deleteIt="ServerNameOfPool_${pool}";       unset deleteIt
-            #declare -Ag                           "ServerNameOfPool_${pool}"
-            #declare -n        actServerNameOfPool="ServerNameOfPool_${pool}"
+                #declare -n                   deleteIt="ServerNameOfPool_${pool}";       unset deleteIt
+                #declare -Ag                           "ServerNameOfPool_${pool}"
+                #declare -n        actServerNameOfPool="ServerNameOfPool_${pool}"
 
-            #declare -n                   deleteIt="PortsOfPool_${pool}";            unset deleteIt
-            #declare -Ag                           "PortsOfPool_${pool}"
-            #declare -n             actPortsOfPool="PortsOfPool_${pool}"
+                #declare -n                   deleteIt="PortsOfPool_${pool}";            unset deleteIt
+                #declare -Ag                           "PortsOfPool_${pool}"
+                #declare -n             actPortsOfPool="PortsOfPool_${pool}"
 
-            unset Coin_MiningAlgo_ServerName_Port
-            declare -ag Coin_MiningAlgo_ServerName_Port
-            cat ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[${pool}]} \
-                | grep -E -v -e "^#|^$" \
-                | readarray -n 0 -O 0 -t Coin_MiningAlgo_ServerName_Port
-            for ((i=0; $i<${#Coin_MiningAlgo_ServerName_Port[@]}; i++)) ; do
-                read coin miningAlgo server_name algo_port <<<${Coin_MiningAlgo_ServerName_Port[$i]//:/ }
-                actCoinsOfPool[$i]=${coin}
-                actMiningAlgosOfPool[$i]=${miningAlgo}
-                #actServerNameOfPool[${coin}]=${server_name}
-                #actPortsOfPool[${coin}]=${algo_port}
+                unset Coin_MiningAlgo_ServerName_Port
+                declare -ag Coin_MiningAlgo_ServerName_Port
+                cat ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[${pool}]} \
+                    | grep -E -v -e "^#|^$" \
+                    | readarray -n 0 -O 0 -t Coin_MiningAlgo_ServerName_Port
+                for ((i=0; $i<${#Coin_MiningAlgo_ServerName_Port[@]}; i++)) ; do
+                    read coin miningAlgo server_name algo_port <<<${Coin_MiningAlgo_ServerName_Port[$i]//:/ }
+                    actCoinsOfPool[$i]=${coin}
+                    actMiningAlgosOfPool[$i]=${miningAlgo}
+                    #actServerNameOfPool[${coin}]=${server_name}
+                    #actPortsOfPool[${coin}]=${algo_port}
 
-                UniqueMiningAlgoArray[${miningAlgo}]+="${coin}#${pool}#${server_name}#${algo_port} "
-            done
+                    UniqueMiningAlgoArray[${miningAlgo}]+="${coin}#${pool}#${server_name}#${algo_port} "
+                done
+            fi
         done
         #declare -p UniqueMiningAlgoArray
 
@@ -324,13 +328,13 @@ function _set_Miner_Device_to_Nvidia_GpuIdx_maps () {
 
                 *)
                     # miner_gpu_idx[  ${MINER}#${gpu_idx}  ] = miner_dev
-                    miner_gpu_idx["${MinerFullName}#0"]=1          # Bisher sind nur die ersten beiden vertauscht.
-                    miner_gpu_idx["${MinerFullName}#1"]=0
-                    miner_gpu_idx["${MinerFullName}#2"]=2
-                    miner_gpu_idx["${MinerFullName}#3"]=3
-                    miner_gpu_idx["${MinerFullName}#4"]=4
-                    miner_gpu_idx["${MinerFullName}#5"]=5
-                    miner_gpu_idx["${MinerFullName}#6"]=6
+                    #miner_gpu_idx["${MinerFullName}#0"]=1          # Bisher sind nur die ersten beiden vertauscht.
+                    #miner_gpu_idx["${MinerFullName}#1"]=0
+                    # 2018-01-25 ${bus[${gidx}]} enthält die "PCI-Bus ID" dezimal
+                    #            Das Array ${zm_device_on_pci_bus[ "PCI-Bus ID" ]} hält die Miner Device ID
+                    for gidx in ${index[@]}; do
+                        miner_gpu_idx["${MinerFullName}#${gidx}"]=${zm_device_on_pci_bus[${bus[${gidx}]}]}
+                    done
                     ;;
             esac
         done

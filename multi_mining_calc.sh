@@ -717,7 +717,7 @@ while : ; do
                         if [ ! : ]; then
                             for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
                                 dstIdx=$((${profitableAlgoIndexesCnt}-${sortIdx}-1))
-                                actSortedProfits[${dstIdx}]=${SORTED_PROFITS[${sortIdx}]% *}
+                                actSortedProfits[${dstIdx}]=${SORTED_PROFITS[${sortIdx}]}
                                 algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
                                 actCandidatesAlgoIndexes[${dstIdx}]=${algoIdx}
                                 dstAlgoWatts[${dstIdx}]=${actAlgoWatt[${algoIdx}]}
@@ -725,7 +725,7 @@ while : ; do
                             done
                         else
                             for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
-                                actSortedProfits[${sortIdx}]=${SORTED_PROFITS[${sortIdx}]% *}
+                                actSortedProfits[${sortIdx}]=${SORTED_PROFITS[${sortIdx}]}
                                 algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
                                 actCandidatesAlgoIndexes[${sortIdx}]=${algoIdx}
                                 dstAlgoWatts[${sortIdx}]=${actAlgoWatt[${algoIdx}]}
@@ -943,6 +943,8 @@ while : ; do
     echo "\$GLOBAL_GPU_COMBINATION_LOOP_COUNTER: $GLOBAL_GPU_COMBINATION_LOOP_COUNTER"
     echo "\$GLOBAL_MAX_PROFIT_CALL_COUNTER     : $GLOBAL_MAX_PROFIT_CALL_COUNTER"
 
+    printf "############################################\n"
+
     # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
     _reserve_and_lock_file ${RUNNING_STATE}          # Zum Schreiben reservieren...
 
@@ -1158,6 +1160,7 @@ while : ; do
                 ${SolarWattAvailable} ${algoWatts} ${algoMines}
             echo "RealGewinnSelbst ${ACTUAL_REAL_PROFIT} (wenn alleine laufen würde)"
         fi
+        [ ${debug} -eq 1 ] && echo "==============="
     done
 
     # Die Guten GPUs sind raus aus PossibleCandidateGPUidx.
@@ -1261,6 +1264,7 @@ while : ; do
     # Zugriff auf die Globale Steuer- und Statusdatei wieder zulassen
     _remove_lock                                     # ... und wieder freigeben
 
+    printf "############################################\n"
     echo "Zugriff auf neues globales Switching Sollzustand Kommandofile ${RUNNING_STATE} freigegeben:"
     cat ${RUNNING_STATE}
 

@@ -371,10 +371,11 @@ while :; do
     rm -f .now_$$ ..now_$$.lock
     if [[ ${NOWSECS} -le ${SynSecs} || (${NOWSECS} -eq ${SynSecs} && ${nowFrac} -le ${SynFrac}) ]]; then
 
-        _reserve_and_lock_file ${_WORKDIR_}/${GPU_ALIVE_FLAG}
-        echo "GPU #${gpu_idx}: ${NOWSECS}.${nowFrac} I recognized a newly written SYNCFILE and am willing to deliver data." \
-            | tee ${_WORKDIR_}/${GPU_ALIVE_FLAG}
-        _remove_lock
+        # (2018-01-23) Bisher konnten wir darauf verzichten.
+        #_reserve_and_lock_file ${_WORKDIR_}/${GPU_ALIVE_FLAG}
+        #echo "GPU #${gpu_idx}: ${NOWSECS}.${nowFrac} I recognized a newly written SYNCFILE and am willing to deliver data." \
+        #    | tee ${_WORKDIR_}/${GPU_ALIVE_FLAG}
+        #_remove_lock
 
         # Ist die Benchmarkdatei mit einer aktuellen Version überschrieben worden?
         #  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
@@ -825,9 +826,9 @@ while :; do
 
         unset Ja_der_Miner_laeuft_und_soll_auch_weiterlaufen
         StartMiner=0
-        echo "\${RunningGPUid[${gpu_uuid}]}: --->${RunningGPUid[${gpu_uuid}]}<---"
+        [ $debug -eq 1 ] && echo "\${RunningGPUid[${gpu_uuid}]}: --->${RunningGPUid[${gpu_uuid}]}<---"
         [[ "${RunningGPUid[${gpu_uuid}]}" != "${gpu_idx}" ]] \
-            && echo "Konsistenzcheck FEHLGESCHLAGEN!!! GPU-Idx aus RUNNING_STATE anders als er sein soll !!!"
+            && exit $(echo "---> RUNTIME-PANIC: Konsistenzcheck FEHLGESCHLAGEN!!! GPU-Idx aus RUNNING_STATE anders als er sein soll !!!")
         if [ -n "${IamEnabled}" ]; then
             echo "GPU #${gpu_idx}: Have to look whether to stop a miner and start another or let him run..."
             if [ ${IamEnabled} -eq 1 ]; then
@@ -944,7 +945,7 @@ while :; do
                         fi
                     fi
                 else
-                    # GPU Vorher ENABLED, Jetzt DISABLED
+                    # GPU Vorher ENABLED, JETZT DISABLED - NEUER ZUSTAND: DISABLED!
                     if [ -n "${RuningAlgo}" ]; then
                         read coin pool miningAlgo miner_name miner_version muck888 <<<${RuningAlgo//#/ }
                         MINER=${miner_name}#${miner_version}
@@ -954,8 +955,19 @@ while :; do
                         StopShell=${miner_name}_${miner_version}_${coin}_${pool}_${miningAlgo}$( [[ ${#muck888} -gt 0 ]] && echo _${muck888} )
                         printf "GPU #${gpu_idx}: STOPPING MinerShell ${StopShell}.sh with Coin/Algo ${RuningAlgo}, then GPU DISABLED... "
                         if [ -f ${StopShell}.ppid ]; then
-                            kill $(< ${StopShell}.ppid)
-                            # sleep $Erholung wegen Erholung ist hier nicht nötig, weil nichts neues unmittelbar gestartet wird
+                            StopShell_pid=$(< ${StopShell}.ppid)
+                            kill ${StopShell_pid}
+                            # 1. sleep $Erholung wegen Erholung ist hier nicht nötig, weil nichts neues unmittelbar gestartet wird ???
+                            # 2. Wir könnten hier auf das Ende des Prozesses warten und seinen Exit-Status auswerten. Wir könnten uns zurückgeben lasen,
+                            #    ob es Probleme beim Beenden des Binär-Miners gab. Die GPU ist sehr eng mit dem Miner verbunden.
+                            #    Sie sollte keinesfalls zulassen, dass ein 2ter Miner gestartet wird, solange ein 1ster noch läuft!
+                            #    Das gibt hier natürlich eine gewisse Verzögerung, weil die beendende MinerShell die $Erholung abwartet,
+                            #    aber es ist sicherer
+                            
+                            # Wir probieren das also hier mal.
+                            # wait ${StopShell_pid}
+                            # RC=$?
+
                             printf "done.\n"
                         elif [ -f ${StopShell}.pid ]; then
                             kill $(< ${StopShell}.pid)
@@ -972,21 +984,39 @@ while :; do
                         rm -f ${StopShell}.ppid ${StopShell}.sh
 
                     else
+                        # Das ist ein guter Zustand, um Autozubenchmarken, aber der könnte zusätzlich genutzt werden.
+                        # Das ist nicht selbst provoziert, denn wenn sich die GPU nachher selbst aktiv herausnehmen sollte, geschieht folgendes:
+                        # Ein eventuell vorhandener Auftrag wird aus der Running_State gelöscht.
+                        # Die GPU disabled sich global, was auch auf die kommenden Running_States Einfluss hat.
+                        #     Aber sie bekommt davon gar nichts mit, denn:
+                        #     Wenn sie sich selbst herausnimmt, dann arbeitet sie alle Benchmarks ab, bis es keine mehr gibt
+                        #     und ENABLED sich dann wieder, ebenfalls global.
+                        # Das heisst, sie bekommt diesen Zustand des DISABLED, den sie selbst ausgelöst hat, niemals mit, weil sie danach immer
+                        # wieder enabled ist und nicht hier rein kommt.
+                        # Noch anders ausgedrückt: Dieser Disabled Zustand hier, weswegen wir in diesem Codeabschnitt sind, kam ganz sicher von aussen.
+                        # Verursacht durch einen manuellen Eintrag in der Datei GLOBAL_GPU_SYSTEM_STATE.in und ist daher unbedingt zu bevolgen.
                         echo "GPU #${gpu_idx}: Nothing ran, so nothing to stop AND nothing to start because now GPU DISABLED."
                     fi
                 fi
             else
                 # GPU war im letzten Zyklus DISABLED
                 if [ "${WasItEnabled[${gpu_uuid}]}" == "1" ]; then
-                    printf "GPU #${gpu_idx}: Was DISABLED, so nothing to stop, "
+                    printf "GPU #${gpu_idx}: Was DISABLED, so nothing to stop, but now ENABLED "
                     if [ ${#WhatsRunning[${gpu_uuid}]} -gt 0 ]; then
-                        printf "but now ENABLED and there is something to start..."
+                        printf "and there is ${WhatsRunning[${gpu_uuid}]} to start..."
                         StartMiner=1
+                    else
+                        printf "and there is still nothing to start."
                     fi
                     printf "\n"
                 else
                     # Hier gehört eigentlich der #EXIT# rein, es sei denn. der Disable ist die Folge von
                     # I_want_to_Disable_myself_for_AutoBenchmarking=1
+                    # Aber wie lange wäre der Prozess weg?
+                    # Nach dem nächsten Sync würde er automatisch vom MM neu gestartet werden.
+                    # Wir können das in Erwägung ziehen, wenn wir merken, dass die GPUs bei zu langer Laufzeit wieder langsamer werden.
+                    # Aber wir müssen dann auch das Problem lösen, dass der MM die zu beendende GPU-Prouess-ID aus seiner Liste laufender PIDs entfernen kann,
+                    #      bevor er den neuen Prozess aufnimmt.
                     echo "GPU #${gpu_idx}: Was DISABLED, so nothing to stop AND nothing to start because STILL DISABLED."
                 fi
             fi

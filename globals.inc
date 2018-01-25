@@ -59,7 +59,9 @@ SYSTEM_FILE="${LINUX_MULTI_MINING_ROOT}/gpu_system.out"
 SYSTEM_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_SYSTEM_STATE"
 FATAL_ERRORS="${LINUX_MULTI_MINING_ROOT}/FATAL_ERRORS.log"
 # Wieviele Zeilen der gpu_system.out gehören zu jeweils einer GPU
-declare -ig num_gpu_rows=6
+declare -ig num_gpu_rows=7
+zm_list_devices_cmd="/home/miner/mining/miner/zm_0.5.7/zm --list-devices"
+ZM_FILE="${LINUX_MULTI_MINING_ROOT}/zm_system.out"
 
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
 RUNNING_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_ALGO_RUNNING_STATE"
@@ -166,7 +168,7 @@ _get_file_modified_time_ () {
     # Aus diesem Grund prüfen wir die Fraction gleich und lassen führende Nullen hier schon weg
     declare _modified_time_="0" _fraction_="1"
 
-    _reserve_and_lock_file "$1" # "--do_not_log"
+    _reserve_and_lock_file "$1" "--do_not_log"
     if [ -f ${1} ]; then
         _modified_time_=$(stat -c "%Y" ${1}) #.${_fraction_}
         _fraction_=$(find ${1} -printf "%TS" )
@@ -175,7 +177,7 @@ _get_file_modified_time_ () {
         [[ "${_fraction_}" =~ ${REGEXPAT} ]] && _fraction_=${BASH_REMATCH[1]}
         [[ "${_fraction_}" == ""          ]] && _fraction_="1"
     fi
-    _remove_lock # "--do_not_log"
+    _remove_lock "--do_not_log"
     echo "${_modified_time_} ${_fraction_}"
 }
 
