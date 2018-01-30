@@ -58,6 +58,11 @@ function _declare_and_fill_nvidiPara_Array () {
 }
 
 function _setup_Nvidia_Default_Tuning_CmdStack () {
+    local push_it
+    if [ ${#nvidiaPara[@]} -gt 0 ];then
+        unset lastNvPara
+        declare -ag lastNvPara=( ${nvidiaPara[@]} )
+    fi
     _declare_and_fill_nvidiPara_Array
 
     # Die Clocks nach den Werten in der JSON setzen
@@ -65,22 +70,41 @@ function _setup_Nvidia_Default_Tuning_CmdStack () {
     declare -ag CmdStack
     local i
     for (( i=0; $i<2; i++ )); do
-        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[$i]}" ${gpu_idx} ${nvidiaPara[$i]}
+        push_it=1
+        if [ ${#lastNvPara[$i]} -gt 0 ]; then [ ${lastNvPara[$i]} -eq ${nvidiaPara[$i]} ] && push_it=0; fi
+        [ ${push_it} -eq 1 ] && printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[$i]}" ${gpu_idx} ${nvidiaPara[$i]}
     done
 
     # Fan-Kontrolle nach den Werten in der JSON setzen
-    if [ ${nvidiaPara[2]} -eq 0 ]; then
-        # Automatik einschalten. Entsprechendes Kommando ist das LETZTE auf dem nvidiaCmd-Array
-        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
-    else
-        # Fan Speed Kontrolle von AUTOMATIK auf MANUELL stellen
-        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 1
-        # Fan Speed auf eingelesenen Wert setzen
-        printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[2]}" ${gpu_idx} ${nvidiaPara[2]}
+    # Ist der Modus von "Manuelle Steuerung" auf "Automatische Steuerung" (oder umgekehrt) ZU WECHSELN?
+    push_it=1
+    if [ ${#lastNvPara[2]} -gt 0 ]; then [ ${lastNvPara[2]} -eq ${nvidiaPara[2]} ] && push_it=0; fi
+    # Automatik/Manuell wechsel. Entsprechendes Kommando ist das LETZTE auf dem nvidiaCmd-Array
+    # ODER nur Wechsel der Lüftergeschwindigkeit
+    if [ ${push_it} -eq 1 ]; then
+        if [ ${nvidiaPara[2]} -eq 0 ]; then
+            # Einstellung auf "Automatische Geschwindikeitskontrolle"
+            printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
+        else
+            # Wenn es einen vorherigen Wert gab, dann stand ganz sicher eine Fan-Geschwindigkeit drin,
+            #      weil der neue Wert !=0 ist (s. letzter Vergleich),
+            #      UND die beiden Werte UNTERSCHIEDLICH sind, sonst wären wir hier nicht drin.
+            # Wenn es also einen vorherigen Wert gab, wurde die Manuele Steuerung bereits eingestellt und der Befehl
+            #      zur Manuellen Steuerung muss nicht nocheinmal eingegeben werden,
+            #      ES SEI DENN, der alte Wert war ==0
+            # es gab keinen Wert      -oder     der vorherige Wert war 0
+            if [[ ${#lastNvPara[2]} -eq 0 || ${lastNvPara[2]} -eq 0 ]]; then
+                printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 1
+            fi
+            # Fan Speed auf eingelesenen Wert setzen
+            printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[2]}" ${gpu_idx} ${nvidiaPara[2]}
+        fi
     fi
 
     # Power Limit nach den Werten in der JSON setzen
-    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
+    push_it=1
+    if [ ${#lastNvPara[3]} -gt 0 ]; then [ ${lastNvPara[3]} -eq ${nvidiaPara[3]} ] && push_it=0; fi
+    [ ${push_it} -eq 1 ] && printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
 }
 
 

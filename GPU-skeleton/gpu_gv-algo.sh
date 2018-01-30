@@ -1006,7 +1006,7 @@ while :; do
                         printf "and there is ${WhatsRunning[${gpu_uuid}]} to start..."
                         StartMiner=1
                     else
-                        printf "and there is still nothing to start."
+                        printf "and there is still NOTHING to start."
                     fi
                     printf "\n"
                 else
@@ -1247,8 +1247,8 @@ while :; do
 
                     _setup_Nvidia_Default_Tuning_CmdStack
                     cmdParameterString=""
-                    for cmd in "${CmdStack[@]}"; do
-                        cmdParameterString+="${cmd// /;} "
+                    for ((cmd=0; cmd<${#CmdStack[@]}; cmd++)); do
+                        cmdParameterString+="${CmdStack[${cmd}]// /;} "
                     done
                     
                     echo "GPU #${gpu_idx}: STARTE Miner Shell ${MinerShell}.sh und übergebe Algorithm ${coin_algorithm} und mehr..."

@@ -264,8 +264,15 @@ for (( i=0; $i<${#CmdStack[@]}; i++ )); do
 done
 
 # GPU-Kommandos absetzen...
+touch .now_$$
+read NOWSECS nowFrac <<<$(_get_file_modified_time_ .now_$$)
+#rm -f .now_$$ ..now_$$.lock
+printFrac="0000000000"${nowFrac}
+zeitstempel_t0=${NOWSECS}.${printFrac:$((${#printFrac}-10))}
+echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t0} \
+     "GPU #${gpu_idx}: ZEITMARKE t0: Absetzen der NVIDIA-Commands" | tee -a ${ERRLOG} ${BENCHLOGFILE}
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
-    ${CmdStack[$i]}
+    ${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
 done
 
 #if [ $NoCards ]; then
@@ -289,9 +296,8 @@ declare -i inetLost_detected=0
 while :; do
     if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
         echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) \
-             "GPU #${gpu_idx}: ${This}.sh: Abbruch des Miners alias ${coin_algorithm} wegen NO INTERNET..." \
-            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
-                  >>${BENCHLOGFILE}
+             "GPU #${gpu_idx}: ${This}.sh: Abbruch des Miners PID ${MINER_pid} alias ${coin_algorithm} wegen NO INTERNET..." \
+            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} ${BENCHLOGFILE}
         break
     fi
 
@@ -304,10 +310,20 @@ while :; do
 
     if [ ! -f ${MINER}.pid ]; then
         _build_minerstart_commandline
-        echo "GPU #${gpu_idx}: Starting Miner alias ${coin_algorithm} with the following command line:"
+
+        touch .now_$$
+        read NOWSECS nowFrac <<<$(_get_file_modified_time_ .now_$$)
+        rm -f .now_$$ ..now_$$.lock
+        printFrac="0000000000"${nowFrac}
+        zeitstempel_t1=${NOWSECS}.${printFrac:$((${#printFrac}-10))}
+        echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t1} \
+             "GPU #${gpu_idx}: ZEITMARKE t1: Starting Miner alias ${coin_algorithm} with the following command line:" \
+            | tee -a ${ERRLOG} ${BENCHLOGFILE}
         echo ${minerstart}
-        ${minerstart}  >>${BENCHLOGFILE} 2>>${BENCHLOGFILE} &
+
+        ${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2) &
         echo $! | tee ${MINER}.pid
+        MINER_pid=$(< ${MINER}.pid)
         Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
         gnome-terminal --hide-menubar \
                        --title="GPU #${gpu_idx}  -  Mining ${coin_algorithm}" \
@@ -441,8 +457,7 @@ while :; do
                         # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
                         echo ${nowDate} ${nowSecs} \
                              "GPU #${gpu_idx}: BEENDEN des Miners alias ${coin_algorithm} wegen NiceHash Servers WORLDWIDE unavailable." \
-                            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
-                                  >>${BENCHLOGFILE}
+                            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} ${BENCHLOGFILE}
                         break
 
                     else
@@ -451,9 +466,8 @@ while :; do
                         ###          Abbruch des nicht mehr funktioierenden "continent"
                         ###
                         ################################################################################
-                        echo ${nowDate} ${nowSecs} "GPU #${gpu_idx}: Abbruch des Miners alias ${coin_algorithm}..." \
-                            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
-                                  >>${BENCHLOGFILE}
+                        echo ${nowDate} ${nowSecs} "GPU #${gpu_idx}: Abbruch des Miners PID ${MINER_pid} alias ${coin_algorithm}..." \
+                            | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} ${BENCHLOGFILE}
                         _terminate_Logger_Terminal
                         _terminate_Miner
                         # Vielleicht noch das ${BENCHLOGFILE} sichern vor dem Überschreiben zur "Beweissicherung"
@@ -492,8 +506,7 @@ while :; do
                     # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
                     echo ${nowDate} ${nowSecs} \
                          "GPU #${gpu_idx}: BEENDEN des Miners alias ${coin_algorithm} wegen dem Verlust der Server-Connection." \
-                        | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
-                              >>${BENCHLOGFILE}
+                        | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} ${BENCHLOGFILE}
                     break
                     ;;
             esac
@@ -517,9 +530,8 @@ while :; do
 
         # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
         echo ${nowDate} ${nowSecs} \
-             "GPU #${gpu_idx}: Abbruch des Miners alias ${coin_algorithm} wegen zu vieler 'booooos'..." \
-            | tee -a ${LOG_BOOOOOS} ${LOG_BOOOOOS_ALL} ${ERRLOG} \
-                  >>${BENCHLOGFILE}
+             "GPU #${gpu_idx}: Abbruch des Miners PID ${MINER_pid} alias ${coin_algorithm} wegen zu vieler 'booooos'..." \
+            | tee -a ${LOG_BOOOOOS} ${LOG_BOOOOOS_ALL} ${ERRLOG} ${BENCHLOGFILE}
         break
     elif [[ ${booos} -ge 5 ]]; then
         echo "GPU #${gpu_idx}: Miner alias ${coin_algorithm} gibt bereits ${booos} 'booooos' hintereinander von sich..."
@@ -551,9 +563,8 @@ while :; do
 
         # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
         echo ${nowDate} ${nowSecs} \
-             "GPU #${gpu_idx}: Abbruch des Miners alias ${coin_algorithm} wegen 320s ohne Hashwerte." \
-            | tee -a ../log_No_Hash log_No_Hash_${coin_algorithm} ${ERRLOG} \
-                  >>${BENCHLOGFILE}
+             "GPU #${gpu_idx}: Abbruch des Miners PID ${MINER_pid} alias ${coin_algorithm} wegen 320s ohne Hashwerte." \
+            | tee -a ../log_No_Hash log_No_Hash_${coin_algorithm} ${ERRLOG} ${BENCHLOGFILE}
         break
     fi
 

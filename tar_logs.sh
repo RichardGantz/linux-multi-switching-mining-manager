@@ -24,10 +24,13 @@ tar -cvf ${arch_name} \
     .GLOBAL_GPU_COMBINATION_LOOP_COUNTER \
     .MAX_PROFIT.in \
     .MAX_FP_MINES.in \
+    .MM_STOPPED_INTERALLY \
     .broken_pipe_text \
-    nvidia_loop.log
+    nvidia_loop.log*
     
 find . -name gpu_gv-algo_\*.log   -exec tar -rvf ${arch_name} {} +
+find . -name \*.log.BAK           -exec tar -rvf ${arch_name} {} +
+find . -name \*.err.BAK           -exec tar -rvf ${arch_name} {} +
 find . -name \*_benchmark.log     -exec tar -rvf ${arch_name} {} +
 find . -name ALGO_WATTS_MINES.BAK -exec tar -rvf ${arch_name} {} +
 find . -name gpu_index.in         -exec tar -rvf ${arch_name} {} +
