@@ -359,7 +359,7 @@ _init_NH_continent_handling () {
         done
         # Das brauchen wir, um bei einem Verbindungsabbruch einen Anhaltspunkt zu haben um zu wissen,
         # wann wir alle "continent"e durch sind und weitere Verbindungsversuche bleiben lassen können.
-        declare -i initial_location_ptr=$location_ptr
+        declare -ig initial_location_ptr=$location_ptr
     fi
 }
 

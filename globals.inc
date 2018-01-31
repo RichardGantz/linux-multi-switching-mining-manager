@@ -52,7 +52,7 @@ POOLS["sn"]="suprnova.cc";              PoolFee["sn"]=0.25     PoolActive["sn"]=
 POOLS["mh"]="hub.miningpoolhub.com";    PoolFee["mh"]=1.15     PoolActive["mh"]=0
 
 declare pool="sn"
-declare domain=${POOLS["sn"]}
+declare domain=${POOLS[${pool}]}
 
 ### gpu-abfrage.sh spezifische Variablen
 SYSTEM_FILE="${LINUX_MULTI_MINING_ROOT}/gpu_system.out"
@@ -86,6 +86,7 @@ SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
 # Mit 1000 oder mit 1024 als Basis?
 declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu rechnen
 
+# Welche Strompreis... -Kategorien/-Arten mag es geben?
 GRID[0]="netz"
 GRID[1]="solar"
 GRID[2]="solar_akku"
@@ -104,6 +105,7 @@ TWEAK_CMD_START_PARAMS="${LINUX_MULTI_MINING_ROOT}/benchmarking/.start_params_fo
 #$1         $2          $3    $4   $5     $6     $7     $8    $9   $10    $11  $12    $13 $14    $15  $16 $NF
 #
 # Und dieser Filter macht aus den o.g. Zeilen die folgenden:
+# Das Feld Nr. 10 (hash) ist der "Avg:"-Wert
 #493.9 Sol/s
 #494.1 Sol/s
 #495.0 Sol/s

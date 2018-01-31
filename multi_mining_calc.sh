@@ -59,6 +59,25 @@ echo $$ >$(basename $0 .sh).pid
 # 9462  9462  1903 pts/0    00:00:00 multi_mining_ca
 # ps -j --pid $$ | grep $$
 
+# Die folgenden Kommandos sind als root in der MM-Root auszuführen, damit der MM sich auf RealTime Priority setzen kann:
+_RTPRIO_=$(ls -la .#rtprio#)
+echo ${_RTPRIO_}
+REGEXPAT="^-rwsr-xr-x"
+if [[ ! "${_RTPRIO_}" =~ ${REGEXPAT} ]]; then
+    echo "
+Damit der MultiMiner überhaupt vernünftig arbeiten kann, bitte als Kenner des root-Passworts die folgenden Kommandos in der MM-Root ausführen:
+$ su
+# cp /usr/bin/chrt .#rtprio#
+# chmod 4755 .#rtprio#
+# exit
+
+Danach den MultiMiner neu starten.
+"
+    exit 2 # No Real-Time Priority
+fi
+
+./.#rtprio# -f -p 95 $$
+
 export MULTI_MINERS_PID=$$
 export ERRLOG=${LINUX_MULTI_MINING_ROOT}/$(basename $0 .sh).err
 mv -f ${ERRLOG} ${ERRLOG}.BAK
@@ -178,7 +197,7 @@ ATTENTION_FOR_USER_INPUT=1
 while : ; do
     printf "\n=========         Beginn neuer Zyklus um:     $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
 
-    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >1.< While Loop ENTRY" >>perfmon.log
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >1.< While Loop ENTRY" >>perfmon.log
 
     # Diese Abfrage erzeugt die beiden Dateien "gpu_system.out" und "GLOBAL_GPU_SYSTEM_STATE.in"
     # Daten von "GLOBAL_GPU_SYSTEM_STATE.in", WELCHES MANUELL BEARBEITET WERDEN KANN,
@@ -308,7 +327,7 @@ while : ; do
     read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
     SynSecs=$((${new_Data_available} + ${MM_validating_delay}))
 
-    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >2.< Startschuss: Neue Daten sind verfügbar" >>perfmon.log
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >2.< Startschuss: Neue Daten sind verfügbar" >>perfmon.log
 
     ###############################################################################################
     # (26.10.2017)
@@ -374,7 +393,7 @@ while : ; do
 
     [ ${debug} -eq 1 ] && echo "Last read nowSecs: \${nowSecs}.\${nowFrac} ${nowSecs}.${nowFrac}"
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
-    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >3.< GPUs haben alle Daten geschrieben" >>perfmon.log
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >3.< GPUs haben alle Daten geschrieben" >>perfmon.log
 
     ###############################################################################################
     #
@@ -406,7 +425,7 @@ while : ; do
     # Neu:
     _read_in_Validated_ALGO_WATTS_MINESin
 
-    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >4.< Alle Algos aller GPUs sind eigelesen." >>perfmon.log
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >4.< Alle Algos aller GPUs sind eigelesen." >>perfmon.log
 
     ###############################################################################################
     #
@@ -496,7 +515,7 @@ while : ; do
     #     unter Berücksichtigung eines entsprechenden "solar" Anteils, wodurch die Kosten sinken.
     # Die Kombination mit dem besten GV-Verhältnis merken wir uns jeweils in MAX_PROFIT und MAX_PROFIT_GPU_Algo_Combination:
     
-    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >5.< Berechnungen beginnen mit Einzelberechnungen" >>perfmon.log
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >5.< Berechnungen beginnen mit Einzelberechnungen" >>perfmon.log
 
     #####################################################################################################
     #
@@ -752,7 +771,7 @@ while : ; do
         echo "Anzahl System-GPUs                                            = ${#index[@]}"
     fi
 
-    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >6.< Beginn mit der Gesamtsystemberechnung" >>perfmon.log
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >6.< Beginn mit der Gesamtsystemberechnung" >>perfmon.log
     
     # Sind überhaupt irgendwelche Date eingelesen worden und prüfbare GPU's ermittelt worden?
     # Wenn nicht, gabe es keine Einzelberechnung und dann ist auch keine Gesamtberechnung nötig.
@@ -910,7 +929,7 @@ while : ; do
     #
     ################################################################################
 
-    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >7.< Auswertung und Miner-Steuerungen" >>perfmon.log
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >7.< Auswertung und Miner-Steuerungen" >>perfmon.log
 
     printf "=========       Endergebnis        =========\n"
     echo "\$GLOBAL_GPU_COMBINATION_LOOP_COUNTER: $GLOBAL_GPU_COMBINATION_LOOP_COUNTER"
@@ -1248,7 +1267,7 @@ while : ; do
         fi
     fi
 
-    [[ ${performanceTest} -ge 1 ]] && echo "$(date --utc +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
+    [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 
     printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
     while [ "${new_Data_available}" == "$(date --reference=${SYNCFILE} +%s)" ] ; do
