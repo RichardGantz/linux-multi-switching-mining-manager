@@ -182,5 +182,5 @@ END{ avgs[old_loc]=sum/cnt
      locs[i]=old_loc
      print "Gesamtdurchschnitt pro Continent"
 for (;i>=0;i--) {print locs[i] ": " avgs[locs[i]] "ms"} }'
-fi
 
+fi
