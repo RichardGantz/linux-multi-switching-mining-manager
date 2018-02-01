@@ -76,7 +76,7 @@ Danach den MultiMiner neu starten.
     exit 2 # No Real-Time Priority
 fi
 
-./.#rtprio# -f -p 95 $$
+#./.#rtprio# -f -p 95 $$
 
 export MULTI_MINERS_PID=$$
 export ERRLOG=${LINUX_MULTI_MINING_ROOT}/$(basename $0 .sh).err
@@ -273,6 +273,11 @@ while : ; do
     ###############################################################################################
     [ -s BEST_ALGO_CNT ] && BEST_ALGO_CNT=$(< BEST_ALGO_CNT)
     
+    if [ ${#rtprio_set} -eq 0 ]; then
+        ./.#rtprio# -f -p 49 $$
+        rtprio_set=1
+    fi
+
     ###############################################################################################
     #
     # Einlesen des bisherigen RUNNING Status
