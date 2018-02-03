@@ -50,7 +50,8 @@ find . -name .sort_profit_algoIdx_\* -delete
 rm -f benchmarking/bench_*.log
 
 # Aktuelle PID der 'multi_mining_calc.sh' ENDLOSSCHLEIFE
-echo $$ >$(basename $0 .sh).pid
+This=$(basename $0 .sh)
+echo $$ >${This}.pid
 # Ermittlung der Process Group ID, die beim multi_mining_calc.sh seiner eigenen PID gleicht.
 # Alles, was er aufruft, sollte die selbe Group-ID haben, also auch die gpu_gv-algos und algo_multi_abfrage.sh
 # Interessant wird es bei den gpu_gv-algo.sh's, wenn die wiederum etwas rufen.
@@ -59,9 +60,9 @@ echo $$ >$(basename $0 .sh).pid
 # 9462  9462  1903 pts/0    00:00:00 multi_mining_ca
 # ps -j --pid $$ | grep $$
 
+
 # Die folgenden Kommandos sind als root in der MM-Root auszuführen, damit der MM sich auf RealTime Priority setzen kann:
 _RTPRIO_=$(ls -la .#rtprio#)
-echo ${_RTPRIO_}
 REGEXPAT="^-rwsr-xr-x"
 if [[ ! "${_RTPRIO_}" =~ ${REGEXPAT} ]]; then
     echo "
@@ -78,8 +79,9 @@ fi
 
 #./.#rtprio# -f -p 95 $$
 
+
 export MULTI_MINERS_PID=$$
-export ERRLOG=${LINUX_MULTI_MINING_ROOT}/$(basename $0 .sh).err
+export ERRLOG=${LINUX_MULTI_MINING_ROOT}/${This}.err
 mv -f ${ERRLOG} ${ERRLOG}.BAK
 
 function _delete_temporary_files () {
@@ -136,7 +138,7 @@ function _On_Exit () {
     # Aber wir wollen lieber kein gleichzeitiges kill -15 an alle, sondern versuchen es vorher geregelt, damit alles sauber bereinigt wird.
     # Dieser kill soll die restlichen Prozesse noch wegmachen, die übrig geblieben sind...
     kill -- -$$
-    rm -f $(basename $0 .sh).pid
+    rm -f ${This}.pid
 }
 trap _On_Exit EXIT
 
@@ -170,6 +172,11 @@ rm -f ${RUNNING_STATE}
 # Danach ist alles saubergeputzt, soweit wir das im Moment überblicken und es kann losgehen, die
 # gpu_gv-algos's zu starten, die erst mal auf SYNCFILE warten
 # und dann algo_multi_abfrage.sh
+
+exec 9>&1
+#mv -f ${This}.log ${This}.log.BAK
+exec 1>>${This}.log
+tail -f ${This}.log >&9 &
 
 exec 2>>${ERRLOG}
 # Error-Kanal in eigenes Terminal ausgeben
@@ -220,8 +227,10 @@ while : ; do
                 GPU_GV_LOG="gpu_gv-algo_${lfdUuid}.log"
                 mv -f ${GPU_GV_LOG} ${GPU_GV_LOG}.BAK
                 echo "GPU #${lfd_gpu_idx}: Starting process in the background..."
+                exec 1>&9
                 ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
                 BG_PIDs+=( $! )
+                exec 1>>${This}.log
                 # gnome-terminal -x ./abc.sh
                 #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
                 ofsX=$((ii*60+50))
@@ -249,8 +258,10 @@ while : ; do
         ofsY=$((ii*30+50))
         mv -f algo_multi_abfrage.log algo_multi_abfrage.log.BAK
         echo "Starting algo_multi_abfrage.sh in the background..."
+        exec 1>&9
         ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.sh &>>algo_multi_abfrage.log &
         BG_PIDs+=( $! )
+        exec 1>>${This}.log
         LOG_PTY_CMD[998]="tail -f ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.log"
         gnome-terminal --hide-menubar \
                        --title="\"RealTime\" Algos und Kurse aus dem Web" \

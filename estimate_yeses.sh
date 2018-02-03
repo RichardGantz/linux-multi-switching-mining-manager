@@ -7,18 +7,6 @@
 
 This=$(basename $0 .sh)
 
-_reserve_and_lock_file ${SYSTEM_STATE}         # Zum Lesen und Bearbeiten reservieren...
-_read_in_SYSTEM_FILE_and_SYSTEM_STATEin
-_remove_lock                                   # ... und wieder freigeben
-
-LOGFILES_ROOT=${LINUX_MULTI_MINING_ROOT}
-if [ $NoCards ]; then
-    LOGFILES_ROOT=${LINUX_MULTI_MINING_ROOT}/.logs/long
-fi
-
-# Datenstrukturen bzgl. des Output der Miner
-source ${This}.inc
-
 PHASE=1
 [[ $# -eq 0 ]] && set -- "-h"
 while [[ $# -gt 0 ]]; do
@@ -27,7 +15,7 @@ while [[ $# -gt 0 ]]; do
     case $parameter in
         -p|--phase)
             PHASE=$2
-	    [ ! "${PHASE}" == "1" ] && PHASE=2
+            [ ! "${PHASE}" == "1" ] && PHASE=2
             shift 2
             ;;
         -h|--help)
@@ -47,6 +35,18 @@ EOF
             ;;
     esac
 done
+
+_reserve_and_lock_file ${SYSTEM_STATE}         # Zum Lesen und Bearbeiten reservieren...
+_read_in_SYSTEM_FILE_and_SYSTEM_STATEin
+_remove_lock                                   # ... und wieder freigeben
+
+LOGFILES_ROOT=${LINUX_MULTI_MINING_ROOT}
+if [ $NoCards ]; then
+    LOGFILES_ROOT=${LINUX_MULTI_MINING_ROOT}/.logs/long
+fi
+
+# Datenstrukturen bzgl. des Output der Miner
+source ${This}.inc
 
 
 if [ ${PHASE} -eq 1 ]; then
@@ -73,8 +73,9 @@ if [ ${PHASE} -eq 1 ]; then
 
                         start_time=$(grep -E -n -m1 -e "${start_msg[${MINER}]}" ${LOGFILE})
                         if [ ${#start_time} -gt 0 ]; then
+                            echo "# ${LOGFILES_ROOT}/${UUID}/live/${MINER}/${miningAlgo}/${LOGFILE}" >>${LINUX_MULTI_MINING_ROOT}/${This}.log
                             start_line=$(( ${start_time%%:*} + 1 ))
-                            #echo ${start_line}; pwd
+                            #echo ${start_line}
                             start_time=${start_time%\]*}
                             #echo ${start_time}
                             start_time=${start_time%\|*}
@@ -126,26 +127,30 @@ fi
 
 # Auswertung einer vorhandenen Logdatei
 cd ${_WORKDIR_}
-gawk -e 'BEGIN { Switch=0 }
-/^GPU/ { if (Switch == 2) {
-             # Gesammelte Werte ausgeben
-             print Index " " Miner " " Algo;
-             printf "%8s Sekunden, %8s Yeses, Gesamtdurchschnitt pro 31 Sekunden: %12s\n", \
-Runtime[ Index Miner Algo ], Yeses[ Index Miner Algo ], (31 * Yeses[ Index Miner Algo ] / Runtime[ Index Miner Algo ] )
-         }
-         Index=$1; Miner=$2; Algo=$3
-         Switch=1
-         next
+grep -E -v -e '^#|^$' ${This}.log | gawk -e 'BEGIN { Switch=0 }
+/^GPU/ {
+        if (Switch == 2) {
+            print Index " " Miner " " Algo;
+            printf "%8s Sekunden, %8s Yeses, Gesamtdurchschnitt pro 31 Sekunden: %12s\n", \
+                        Runtime[ Index Miner Algo ],\
+                        Yeses[ Index Miner Algo ],  \
+                        (31 * Yeses[ Index Miner Algo ] / Runtime[ Index Miner Algo ] );
+        }
+        Index=$1; Miner=$2; Algo=$3
+        Switch=1
+        next
        }
 { Runtime[ Index Miner Algo ]+=$3
   Yeses[ Index Miner Algo ]+=$5
-  if (Switch == 1) Switch=2
+  Switch=2
 }
-END {# Gesammelte Werte ausgeben
-    if (Switch == 2) {
-        print Index " " Miner " " Algo;
-             printf "%8s Sekunden, %8s Yeses, Gesamtdurchschnitt pro 31 Sekunden: %12s\n", \
-Runtime[ Index Miner Algo ], Yeses[ Index Miner Algo ], (31 * Yeses[ Index Miner Algo ] / Runtime[ Index Miner Algo ] )
-    }
-}' ${This}.log
+END {
+        if (Switch == 2) {
+            print Index " " Miner " " Algo;
+            printf "%8s Sekunden, %8s Yeses, Gesamtdurchschnitt pro 31 Sekunden: %12s\n", \
+                        Runtime[ Index Miner Algo ],\
+                        Yeses[ Index Miner Algo ],  \
+                        (31 * Yeses[ Index Miner Algo ] / Runtime[ Index Miner Algo ] );
+        }
+}'
 
