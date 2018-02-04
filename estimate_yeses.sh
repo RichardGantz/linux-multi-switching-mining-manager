@@ -173,7 +173,16 @@ fi
 
 # Auswertung einer vorhandenen Logdatei
 cd ${_WORKDIR_}
+
+File_or_null="/dev/null"
+if [ ${PHASE} -eq 1 ]; then
+    File_or_null=${LINUX_MULTI_MINING_ROOT}/${This}.log
+    outstr="\n------------   Gesamtzeiten pro GPU, Miner, miningAlgo und Difficulty   --------------\n\n"
+    printf "${outstr}" >>${File_or_null}
+fi
+    
 grep -E -v -e '^#|^$' ${This}.log | gawk -e 'BEGIN { Switch=0 }
+/^------------/ { exit }
 /^GPU/ {
         if (Switch == 2) {
             print Index " " Miner " " Algo
@@ -207,5 +216,5 @@ END {
                         DIFF
             }
         }
-}'
+}' | tee -a "${File_or_null}"
 
