@@ -41,4 +41,4 @@ find . -name bench_\*.log         -exec tar -rvf ${arch_name} {} +
 find . -name benchmark_GPU-*.json -exec tar -rvf ${arch_name} {} +
 find GPU-*/live -name \*.log      -exec tar -rvf ${arch_name} {} +
 
-tar -cvzf ${arch_name}.gz --remove-files ${arch_name}
+tar -cvjf ${arch_name}.bz2 --remove-files ${arch_name}
