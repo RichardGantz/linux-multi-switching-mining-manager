@@ -173,10 +173,11 @@ rm -f ${RUNNING_STATE}
 # gpu_gv-algos's zu starten, die erst mal auf SYNCFILE warten
 # und dann algo_multi_abfrage.sh
 
+MultiMining_log=${LINUX_MULTI_MINING_ROOT}/${This}.log
 exec 9>&1
-#mv -f ${This}.log ${This}.log.BAK
-exec 1>>${This}.log
-tail -f ${This}.log >&9 &
+#mv -f ${MultiMining_log} ${MultiMining_log}.BAK
+exec 1>>${MultiMining_log}
+tail -f ${MultiMining_log} >&9 &
 
 exec 2>>${ERRLOG}
 # Error-Kanal in eigenes Terminal ausgeben
@@ -230,7 +231,7 @@ while : ; do
                 exec 1>&9
                 ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
                 BG_PIDs+=( $! )
-                exec 1>>${This}.log
+                exec 1>>${MultiMining_log}
                 # gnome-terminal -x ./abc.sh
                 #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
                 ofsX=$((ii*60+50))
@@ -261,7 +262,7 @@ while : ; do
         exec 1>&9
         ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.sh &>>algo_multi_abfrage.log &
         BG_PIDs+=( $! )
-        exec 1>>${This}.log
+        exec 1>>${MultiMining_log}
         LOG_PTY_CMD[998]="tail -f ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.log"
         gnome-terminal --hide-menubar \
                        --title="\"RealTime\" Algos und Kurse aus dem Web" \
