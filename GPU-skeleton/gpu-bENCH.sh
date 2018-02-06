@@ -61,6 +61,7 @@ elif [ "${act_pwd:0:4}" == "GPU-" ]; then
     #
     # ABER: damit wir das Folgende, die STRUKTURANPASSUNG nicht immer wieder und wieder tun, schauen wir, ob wir die
     #       momentane gpu-bENCH.inc nicht schon geholt haben:
+    local _structure_change=0
     if [ !     $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc) \
            -eq $(stat -c %Y gpu-bENCH.inc) ]; then
         #
@@ -79,25 +80,15 @@ elif [ "${act_pwd:0:4}" == "GPU-" ]; then
             # Diese Bedingung sagt aus, dass ein konsistenter gpu-bENCH.inc Zustand hergestellt wurde und
             # die benchmark_skeleton.json im Verteilungsverzeichnis GPU-skeleton damit bearbeitet wurde.
             # Das heisst, dass der Zustand aller Dateien auf die neue Datenstruktur vorbereitet ist
-            # UND dass die neue gpu-bENCH.inc nun ins eigene Verzeichnis geholt werden kann
-            # UND dass die eigene benchmark_${gpu_uuid}.json nun angepasst werden kann.
+            # UND dass die Funktion _expand_IMPORTANT_BENCHMARK_JSON gerufen werden kann/muss,
+            # dass die eigene benchmark_${gpu_uuid}.json nun angepasst wird.
             #
-            cp -f -p ../GPU-skeleton/gpu-bENCH.inc .   # Option -p ist WICHTIG, damit die Dateien die selbe Zeit haben.
-            source gpu-bENCH.inc
-            _expand_IMPORTANT_BENCHMARK_JSON
-        else
-            #
-            # Quell-bENCH ist seit dem Runterkopieren verändert worden und eher INKONSISTENT.
-            # Deshalb verwenden wir nach wie vor die alte, die auch zu der alten benchmark_*.json passt
-            #
-            source gpu-bENCH.inc
+            _structure_change=1
         fi
-    else
-        #
-        # Quell-bENCH ist seit dem Runterkopieren NICHT verändert worden und nach wie vor gültig
-        #
-        source gpu-bENCH.inc
+        cp -f -p ../GPU-skeleton/gpu-bENCH.inc .   # Option -p ist WICHTIG, damit die Dateien die selbe Zeit haben.
     fi
+    source gpu-bENCH.inc
+    [ ${_structure_change} -eq 1 ] && _expand_IMPORTANT_BENCHMARK_JSON
 else
     echo "Weiss nicht genau... müsste weiter untersuchen... " >/dev/null
 fi
