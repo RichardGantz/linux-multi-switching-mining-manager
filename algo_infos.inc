@@ -250,3 +250,37 @@ function _read_in_COIN_TO_BTC_EXCHANGE_FACTOR () {
     done
 }
 
+# https://api.nicehash.com/api?method=stats.provider&addr=12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg
+# ergibt folgendes Ergebnis. Hat angeblich etwas mit der unpayed balance zu tun
+#{"result":
+# {"stats":[
+#	 {"balance":"0.00054475","rejected_speed":"0","algo":5,"accepted_speed":"0"},
+#	 {"balance":"0.00034844","rejected_speed":"0","algo":7,"accepted_speed":"0.156972"},
+#	 {"balance":"0.00047089","rejected_speed":"0","algo":8,"accepted_speed":"0"},
+#	 {"balance":"0.00008712","rejected_speed":"0","algo":9,"accepted_speed":"0"},
+#	 {"balance":"0.00063464","rejected_speed":"0","algo":14,"accepted_speed":"0"},
+#	 {"balance":"0","rejected_speed":"0","algo":16,"accepted_speed":"0"},
+#	 {"balance":"0","rejected_speed":"0","algo":17,"accepted_speed":"0"},
+#	 {"balance":"0","rejected_speed":"0","algo":21,"accepted_speed":"0"},
+#	 {"balance":"0.00550798","rejected_speed":"0","algo":22,"accepted_speed":"0.00000467"},
+#	 {"balance":"0.01577869","rejected_speed":"0.00000009","algo":24,"accepted_speed":"0.00000187"},
+#	 {"balance":"0.00032534","rejected_speed":"0","algo":26,"accepted_speed":"0"},
+#	 {"balance":"0.00033687","rejected_speed":"0","algo":28,"accepted_speed":"0"},
+#	 {"balance":"0.0001911","rejected_speed":"0","algo":29,"accepted_speed":"0"}
+#     ],
+#  "payments":[
+#      {
+#	  "amount":"0.02140867",
+#	  "fee":"0.00112677",
+#	  "TXID":"4554541919c2f19b052ee376de488f1604a89e8cfc817e75fc65ce3ff781c457",
+#	  "time":"2018-01-28 09:28:59"
+#      }
+#  ],
+#  "addr":"12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
+# },
+# "method":"stats.provider"
+#}
+
+
+
+# https://api.nicehash.com/api?method=stats.provider.ex&addr=12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg

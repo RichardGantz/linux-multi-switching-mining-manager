@@ -460,8 +460,8 @@ ${for_header}
         max_watts=watts_sum;
     }
 ${for_footer}
-print \"MAX_PROFIT:   \", max_profit, \" ${gpu_algo_profit_str%\"\,} \"\n\";
-print \"MAX_FP_MINES: \", max_mines,  \" ${gpu_algo_mines_str%\"\,} \" MAX_FP_WATTS: \", max_watts,  \"\n\";
+print \"MAX_PROFIT: \", max_profit, \" ${gpu_algo_profit_str%\"\,} \"\n\";
+print \"FP_M: \",   max_mines,  \" ${gpu_algo_mines_str%\"\,} \" FP_W: \", max_watts,  \"\n\";
 #quit
 "
     # Eventuelle Zeitmessung. Müssen noch überlegen, ob das hioer sionnvoll ist.

@@ -870,8 +870,8 @@ while : ; do
             #MAX_PROFIT_GPU_Algo_Combination: 0:21,1:17,2:17
             #MAX_PROFIT:                      15580.31473048
             #MAX_FP_GPU_Algo_Combination:     0:21,1:17,2:17
-            #MAX_FP_MINES:                    15580.31499102
-            #MAX_FP_WATTS:                    675
+            #FP_M:                            15580.31499102
+            #FP_W:                            675
 
             wait ${!bc_THREAD_PIDS[@]}
             RC=$?
@@ -886,7 +886,7 @@ while : ; do
                 | grep -E -v -e '^#|^$' \
                 | tee >(grep -e '^MAX_PROFIT:'   | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_PROFIT.in; \
                         rm -f .MAX_PROFIT.in.lock) \
-                      >(grep -e '^MAX_FP_MINES:' | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_FP_MINES.in; \
+                      >(grep -e '^FP_M:' | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_FP_MINES.in; \
                         rm -f .MAX_FP_MINES.in.lock) \
                       >/dev/null
             while [[ -f .MAX_PROFIT.in.lock || -f .MAX_FP_MINES.in.lock || -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock ]]; do sleep .01; done
@@ -900,7 +900,7 @@ while : ; do
                 exit 77
             fi
             # Das steht in .MAX_FP_MINES.in:
-            # MAX_FP_MINES: .00295375 1:0,2:0,3:0,4:0,5:0,6:1 MAX_FP_WATTS: 1199
+            # FP_M: .00295375 1:0,2:0,3:0,4:0,5:0,6:1 FP_W: 1199
             read muck MAX_FP_MINES MAX_FP_GPU_Algo_Combination     muck2 MAX_FP_WATTS <<<$(< .MAX_FP_MINES.in) #${_MAX_FP_MINES_in}
 
             GLOBAL_GPU_COMBINATION_LOOP_COUNTER=$(< .GLOBAL_GPU_COMBINATION_LOOP_COUNTER)

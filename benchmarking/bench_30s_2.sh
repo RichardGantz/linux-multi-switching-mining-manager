@@ -39,6 +39,7 @@ BENCHMARKING_WAS_STARTED=0
 # tweak_commands.sh setzt den kill -15 Befehl dann nur ab, wenn diese Datei existiert.
 # Sobald der Prozess aus dem Sleep kommt, verarbeitet er das Signal und schließt die Berechnungen ab.
 READY_FOR_SIGNALS=.$$_benchmarker_ready_for_kill_signal
+rm -f *_benchmarker_ready_for_kill_signal
 
 declare -i t_base=3             # Messintervall in Sekunden für Temperatur, Clocks und Power in Sekunden
 
@@ -261,7 +262,7 @@ _measure_one_whole_WattsHashes_Cycle () {
         countWatts=0
         if [ $hashCount -eq 0 ]; then
             # Abbruch wegen 30s kein Hashwert
-            countHashes=0
+            #countHashes=0
             _disable_algorithm "${algorithm}" "Abbruch wegen 30s nach dem Start noch kein Hashwert erhalten." "${gpu_idx}"
             BENCHMARKING_WAS_STARTED=0
             exit 95
@@ -274,8 +275,8 @@ _measure_one_whole_WattsHashes_Cycle () {
         echo "GPU #${gpu_idx}: Connection loss detected..."
 
         # Die Minimum-Zähler auf "Minimum erreicht" einstellen
-        countWatts=0
-        countHashes=0
+        #countWatts=0
+        #countHashes=0
         BENCHMARKING_WAS_STARTED=0
 
         if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
@@ -311,8 +312,8 @@ _measure_one_whole_WattsHashes_Cycle () {
                   >>${BENCHLOGFILE}
 
         # Die Minimum-Zähler auf "Minimum erreicht" einstellen
-        countWatts=0
-        countHashes=0
+        #countWatts=0
+        #countHashes=0
         BENCHMARKING_WAS_STARTED=0
 
         exit 92
@@ -669,6 +670,21 @@ _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
     fi
 }
 
+_disable_algorithm () {
+    # $1 - $algorithm
+    # $2 - $reason
+    # $3 - $gpu_idx
+    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+    nowSecs=$(date +%s)
+    # Wenn es Probleme beim Benchmarking gibt, wegen zu weniger Werte oder wegen zu vieler boooos,
+    # dann soll der $algorithm (ein miningAlgo eines ganz bestimmten Minerversion) disabled werden,
+    # bis sich ein Mensch darum kümmert.
+    _reserve_and_lock_file ../BENCH_ALGO_DISABLED
+    printf "%s %s %02i %30s %s\n" "${nowDate}" "${nowSecs}" "$3" "$1" "$2" >>../BENCH_ALGO_DISABLED
+    _remove_lock                                     # ... und wieder freigeben
+    echo "Der Algorithm ${algorithm} wurde in die Datei BENCH_ALGO_DISABLED eingetragen."
+}
+
 _delete_temporary_files () {
     rm -f ${temp_hash_bc} ${temp_hash_sum} ${temp_watt_sum} ${temp_avgs_bc} ${TEMPAZB_FILE} \
        ${TEMPSED_FILE} ${WATTSMAXFILE} ${WATTSLOGFILE}
@@ -676,18 +692,9 @@ _delete_temporary_files () {
 }
 #_delete_temporary_files
 
-_terminate_Miner () {
-    if [ -s "${CCMINER_PID}" ]; then
-        printf "Beenden des Miners... "
-        kill $(< "${CCMINER_PID}")
-        if [ ! $NoCards ]; then
-            sleep $Erholung
-        fi
-        printf "done.\n"
-        rm  ${CCMINER_PID}
-    fi
-}
-
+# Diese Routine wird im Moment (2018-02-06) nicht mehr gerufen und kann bald rausgenommen werden.
+# Stat dessen wird ab sofort die ausgereiftere Funktion _terminate_Logger_Terminal gerufen,
+# die aus MinerShell.sh in gpu-bENCH.inc verlagert wurde, um sie auch hier nutzen zu können.
 _terminate_Logging_Terminal () {
     if [ -n "${Bench_Log_PTY_Cmd}" ]; then
         echo "Beenden des Logger-Terminals..."
@@ -733,7 +740,7 @@ _On_Exit () {
         done
 
         _terminate_Miner
-        _terminate_Logging_Terminal
+        _terminate_Logger_Terminal
 
         # Bis jetzt könnten Werte in das $BENCHLOGFILE hineingekommen sein.
         # Das ist vor allem für den Tweak-Fall interessant, weil der das $BENCHLOGFILE nochmal
@@ -746,7 +753,7 @@ _On_Exit () {
         # Der Zeitstempel dieser Messung,
         # ... nach dem Herausfallen aus dem Sleep am Ende der Endlosschleife,
         # ... dem Eintritt in die On_Exit() Routine,
-        # ... dem kill <${CCMINER_PID}
+        # ... dem kill <${MINER}.pid
         # ... und $Erholung Sekunde sleep.
         BENCH_OR_TWEAK_END=$(date +%s);
         LOGFILE_DATE=$(date "+%Y%m%d_%H%M%S")
@@ -819,7 +826,7 @@ _On_Exit () {
 
     else
         _terminate_Miner
-        _terminate_Logging_Terminal
+        _terminate_Logger_Terminal
     fi  ## if [ ${BENCHMARKING_WAS_STARTED} -eq 1 ]
 
     if [ -f ${BENCHLOGFILE} ]; then
@@ -845,7 +852,7 @@ Aus welchem Grund ist er dann bei der Prüfung auf -f ${BENCHLOGFILE} hier rein 
     [ $debug -eq 0 ] && _delete_temporary_files
     rm -f ${READY_FOR_SIGNALS} ${This}.pid
 }
-trap _On_Exit EXIT
+#trap _On_Exit EXIT
 
 # Aktuelle eigene PID merken
 This=.$(basename $0 .sh)_$$
@@ -1282,21 +1289,6 @@ source ${LINUX_MULTI_MINING_ROOT}/miners/${miner_name}#${miner_version}.starts
 ###          4.0. Die MiningAlgos, die DISABLED sind aus der Menge der zu betrachtenden Algos herausnehmen
 ###
 ################################################################################
-
-_disable_algorithm () {
-    # $1 - $algorithm
-    # $2 - $reason
-    # $3 - $gpu_idx
-    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-    nowSecs=$(date +%s)
-    # Wenn es Probleme beim Benchmarking gibt, wegen zu weniger Werte oder wegen zu vieler boooos,
-    # dann soll der $algorithm (ein miningAlgo eines ganz bestimmten Minerversion) disabled werden,
-    # bis sich ein Mensch darum kümmert.
-    _reserve_and_lock_file ../BENCH_ALGO_DISABLED
-    printf "%s %s %02i %30s %s\n" "${nowDate}" "${nowSecs}" "$3" "$1" "$2" >>../BENCH_ALGO_DISABLED
-    _remove_lock                                     # ... und wieder freigeben
-    echo "Der Algorithm ${algorithm} wurde in die Datei BENCH_ALGO_DISABLED eingetragen."
-}
 
 disd_msg[${#disd_msg[@]}]="--->-------------------------------------------------------------------------------<---"
 disd_msg[${#disd_msg[@]}]="--->         Beginn mit der Durchsuchung der DISABLED Algos und/oder Coins         <---"
@@ -1771,12 +1763,7 @@ coin_algorithm=${coin}#${pool}#${algorithm}
 ################################################################################
 
 # Ein paar Standardverzeichnisse zur Verbesserung der Übersicht:
-if   [ ! -d ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version} ]; then
-    mkdir   ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}
-fi
-if   [ ! -d ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo} ]; then
-    mkdir   ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}
-fi
+mkdir -p ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmarking/${miner_name}#${miner_version}/${miningAlgo}
 
 # Um Codeteile, die ursprüngöich in der MinerShell entwickelt wurden und dann als Funktion
 # in die gpu-bENCH.inc übernommen wurden, auch hier rufen zu können und entsprechende Variablen
@@ -1798,7 +1785,6 @@ temp_hash_sum="test/${miningAlgo}_${gpu_uuid}_temp_hash_sum"
 temp_watt_sum="test/${miningAlgo}_${gpu_uuid}_temp_watt_sum"
 RETRIES_COUNT="test/${miningAlgo}_${gpu_uuid}.retry"
 BoooooS_COUNT="test/${miningAlgo}_${gpu_uuid}.booos"
-CCMINER_PID=.$$_ccminer.pid
 
 rm -f ${BENCHLOGFILE} ${TWEAKLOGFILE} ${WATTSLOGFILE} ${WATTSMAXFILE}
 
@@ -1926,6 +1912,7 @@ else
         #           wenigstens noch ein paar SHares abgeliefert und bezahlt werden.
         live_mode="l"
         [ ! "${pool}" == "nh" ] && live_mode="o"
+        [ "$live_mode" == "l" ] && offline_still_mode_possible=1
     fi
 fi
 
@@ -2097,6 +2084,9 @@ done
 
 cd ${_WORKDIR_} >/dev/null
 
+# Ab jetzt wird die _On_Exit Routine bei einem Abbruch ausgeführt
+trap _On_Exit EXIT
+
 # Startsekunde festhalten.
 # Wir halten auch die Sekunde nach dem Killing des Miners bei Eintritt in die On_Exit() Routine fest.
 # Wir könnten also überlegen, ob wir Endesekunde - Startsekunde als Messdauer für die Hashwerte festhalten?
@@ -2106,7 +2096,7 @@ bENCH_START=$(date +%s)
 
 echo $(date "+%Y-%m-%d %H:%M:%S" ) ${bENCH_START} "${This}: Starting Miner..."
 ${minerstart} >>${BENCHLOGFILE} &
-echo $! >${CCMINER_PID}
+echo $! >${MINER}.pid
 Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
 gnome-terminal --hide-menubar \
                --title="Benchmark Output of Miner ${miner_name}#${miner_version}" \
@@ -2127,24 +2117,10 @@ if [ ${STOP_AFTER_MIN_REACHED} -eq 0 ]; then
                         ${READY_FOR_SIGNALS}"
     tweak_start_cmd="./tweak_commands.sh ${tweak_start_params}"
 
-    if [ 1 -eq 0 ]; then
-        unset ii; declare -i ii=0
-        ofsX=$((ii*60+50))
-        ofsY=$((ii*30+50))
-        echo "Starting Tweaking Terminal..."
-        gnome-terminal --hide-menubar \
-                       --title="Tweaking Terminal for ${miningAlgo} on GPU #${gpu_uuid}" \
-                       --geometry="100x24+${ofsX}+${ofsY}" \
-                       -x bash -c ${tweak_start_cmd}
-    elif [ 1 -eq 1 ]; then
-        #xterm -kt vt220 -ti vt220 bash -c "${tweak_start_cmd}"
-        xterm -T "Tweaking Terminal for ${miningAlgo} on GPU #${gpu_uuid}" \
-              -fn 10x20         \
-              -geometry 100x25  \
-              -e "${tweak_start_cmd}" &
-    else
-        echo ${tweak_start_params} >${TWEAK_CMD_START_PARAMS}
-    fi
+    xterm -T "Tweaking Terminal for ${miningAlgo} on GPU #${gpu_uuid}" \
+          -fn 10x20         \
+          -geometry 100x25  \
+          -e "${tweak_start_cmd}" &
 fi
 
 ################################################################################
