@@ -249,7 +249,7 @@ while :; do
             | tee -a ${ERRLOG} ${BENCHLOGFILE}
         echo ${minerstart}
 
-        ${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2) &
+        ${LINUX_MULTI_MINING_ROOT}/.#rtprio# -f ${RTPRIO_Miner} ${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2) &
         echo $! | tee ${MINER}.pid
         MINER_pid=$(< ${MINER}.pid)
         Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"

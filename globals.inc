@@ -134,6 +134,10 @@ GPU_VALID_FLAG=.valid_data_delivered
 MM_validating_delay=10
 RUN_SYNC_delay=5
 
+RTPRIO_Miner=49 #            Angezeigt als -40  in  MinerShell.sh
+RTPRIO_MM=39    #            Angezeigt als -40  in  multi_mining_calc.sh / bc
+RTPRIO_GPUgv=24 # + gpu_idx  Angezeigt ab  -25  in  gpu_gv-algo.sh (Am Anfang)
+
 # Diese Funktion ist bequem, aber langsamer als die Member eines Arrays in einer for-Schleife zu verbinden.
 # Für große Datenmengen, große Arrays, daher besser in einem Array zusammen-joinen.
 # UND: Wenn die Funktion OFT gerufen wird, dann ebenfalls lieber eine for-Schleife schreiben.

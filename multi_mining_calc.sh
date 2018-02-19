@@ -286,7 +286,7 @@ while : ; do
     [ -s BEST_ALGO_CNT ] && BEST_ALGO_CNT=$(< BEST_ALGO_CNT)
     
     if [ ${#rtprio_set} -eq 0 ]; then
-        ./.#rtprio# -f -p 49 $$
+        ./.#rtprio# -f -p ${RTPRIO_MM} $$
         rtprio_set=1
     fi
 

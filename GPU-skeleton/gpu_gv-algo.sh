@@ -364,7 +364,7 @@ while :; do
     _update_SELF_if_necessary
 
     if [ ${#rtprio_set} -eq 0 ]; then
-        ${LINUX_MULTI_MINING_ROOT}/.#rtprio# -f -p 39 $$
+        ${LINUX_MULTI_MINING_ROOT}/.#rtprio# -f -p $(( ${RTPRIO_GPUgv} + ${gpu_idx} )) $$
         rtprio_set=1
     fi
 
@@ -1105,6 +1105,15 @@ while :; do
                     [ ${NoCards} ] && parameters="-d -w 5 -m 5"
                     [ -n "${parameters}" ] && echo "        ###---> HardCoded additional Parameters for bench_30s_2.sh: \"${parameters}\""
                     ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_${gpu_idx}_${algorithm}.log
+
+                    case $? in
+                        94) # Internet Connection lost detected
+                            # Wenn das immer noch ist, sollte kein neuer Benchmarkversuch mehr gestartet werden
+                            if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+                                break
+                            fi
+                            ;;
+                    esac
 
                 done
                 cd ${_WORKDIR_}

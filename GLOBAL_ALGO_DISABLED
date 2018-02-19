@@ -4,7 +4,67 @@
 # z.B: disabled der folgende Eintrag den cryptonight nur für Sebastians Desktop-GPU,
 #      weil der so rechenintensiv ist, dass der Desktop nicht mehr vernünftig bedienbar ist:
 
+# If this Coin is to disable    then disable this ALGO:
+# whirlpoolx                    whirlpool
+# x11gost                       sib
+# sha256                        sha256d
+# lyra2rev2                     lyra2v2
+# scryptjanenf16                scrypt-jane
+# blake256r8                    blakecoin
+# blake256r14                   blake
+# blake256r8vnl                 vanilla
+# exp                           eth
+# ubiq                          eth
+# btg                           equihash
+# zen                           equihash
+# zec                           equihash
+# zencash                       equihash
+# zcash                         equihash
+# zclassic                      equihash
+# bitcoin-gold                  equihash
+# mona                          lyra2v2
+# vtc                           lyra2v2
+# stak                          lyra2v2
+# dcr                           decred
+# dgbq                          qubit
+# geo                           qubit
+# geocoin                       qubit
+# digibyte-qubit                qubit
+# auroracoin-qubit              qubit
+# lbc                           lbry
+# xzc                           lyra2z
+# zcoin                         lyra2z
+# dgbg                          myr-gr
+# ethereum                      ethash
+# ethereum-classic              ethash
+# musicoin                      ethash
+# expanse                       ethash
+# monero                        cryptonight
+# electroneum                   cryptonight
+# maxcoin                       keccak
+# feathercoin                   neoscrypt
+# groestlcoin                   groestl
+# vertcoin                      lyra2re2
+# monacoin                      lyra2re2
+# siacoin                       sia
+# gamecredits                   scrypt
+# litecoin                      scrypt
+# verge-scrypt                  scrypt
+# sexcoin                       scrypt
+# globalboosty                  yescrypt
+# myriadcoin-yescrypt           yescrypt
+# startcoin                     x11
+# adzcoin                       x11
+# dash                          x11
+# digibyte-skein                skein
+# myriadcoin-skein              skein
+# digibyte-groestl              myriad-groestl
+# myriadcoin-groestl            myriad-groestl
+# bitcoin-cash                  sha256
+# bitcoin                       sha256
+
 #cryptonight:GPU-742cb121-baad-f7c4-0314-cfec63c6ec70
+sib:GPU-2a45908c-7fdc-9cee-98e7-d550b3a8c377
 
 # Jede weitere GPU-UUID könnte wieder mit einem führenden Doppelpunkt ":" dazugehängt und damit disabled werden.
 #
