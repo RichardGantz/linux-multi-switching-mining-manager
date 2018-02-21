@@ -1282,6 +1282,12 @@ while :; do
                   $cmdParameterString \
                   >>${MinerShell}.log &
                 echo $! >${MinerShell}.ppid
+
+                # Falls es bei einer Verzögerung zu keiner Neuberechnung kommt, wird im bisherigen Code auch die "alte" RUNNING_STATE nicht eingelesen.
+                # Deshalb setzen wir hier mal - und das dürfte an dieser Stelle allein NICHT genügen - die späteren "alten" Werte
+                IamEnabled=${WasItEnabled[${gpu_uuid}]}
+                MyActWatts=${RunningWatts[${gpu_uuid}]}
+                RuningAlgo=${WhatsRunning[${gpu_uuid}]}
             fi
         fi
     fi

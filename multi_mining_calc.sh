@@ -408,7 +408,7 @@ while : ; do
         echo "---> ACHTUNG: Im Moment werden KEINE GPU's bei der Berechnung berücksichtigt, weil sie zu spät Werte abgeliefert haben"
     fi
 
-    [ ${debug} -eq 1 ] && echo "Last read nowSecs: \${nowSecs}.\${nowFrac} ${nowSecs}.${nowFrac}"
+    [ ${debug} -eq 1 ] && echo "Last read nowSecs: ${nowSecs}.${nowFrac}             [ SS.SF: ${SynSecs}.${SynFrac} ]"
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
     [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >3.< GPUs haben alle Daten geschrieben" >>perfmon.log
 

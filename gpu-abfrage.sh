@@ -68,6 +68,7 @@
 # Erst mal die beiden Funktionen _read_in_SYSTEM_FILE_and_SYSTEM_STATEin und _update_SYSTEM_STATEin_if_necessary
 [[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
 
+declare -Ag NVIDIA_SMI_PM_LAUNCHED
 
 function _func_gpu_abfrage_sh () {
 
@@ -138,35 +139,42 @@ if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index(
     # Script gpu_gv-algo.sh hinein kopieren
     #
     for ((i=0; $i<${#index[@]}; i+=1)) ; do
-        if [ ! -d ${uuid[${index[$i]}]} ]; then
+        local gpu_idx=${index[$i]}
+        local UUID=${uuid[${gpu_idx}]}
+        if [[ -z "${NVIDIA_SMI_PM_LAUNCHED[${UUID}]}" ]]; then
+            ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/smi --id=${gpu_idx} -pm 1
+            echo "Command 'nvidia-smi --id=${gpu_idx} -pm 1' launched"
+            NVIDIA_SMI_PM_LAUNCHED[${UUID}]=1
+        fi
+        if [ ! -d ${UUID} ]; then
             #erstellen des folders mit der UUID + copy einer bench-skeleton + gpu_algo.sh
             if [ ${#beChatty} -gt 0 ]; then
-                echo "Erstelle den GPU-Folder '${uuid[${index[$i]}]}'"
+                echo "Erstelle den GPU-Folder '${UUID}'"
             fi
-            mkdir ${uuid[${index[$i]}]}
-            cp GPU-skeleton/benchmark_skeleton.json ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json
+            mkdir ${UUID}
+            cp GPU-skeleton/benchmark_skeleton.json ${UUID}/benchmark_${UUID}.json
             if [ ${#beChatty} -gt 0 ]; then
-                echo "---> 1. Die Karte ist neu! Bitte editiere die Datei 'benchmark_${uuid[${index[$i]}]}.json' !!!"
+                echo "---> 1. Die Karte ist neu! Bitte editiere die Datei 'benchmark_${UUID}.json' !!!"
             fi
         fi
         # Wenn es zu chaotisch geworden ist, kann die Datei auch einfach gelöscht werden.
         # Sie wird dann hier wieder hergestellt und durch automatisches Benchmarking aufgefüllt werden.
-        if [ ! -f ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json ]; then
-            cp GPU-skeleton/benchmark_skeleton.json ${uuid[${index[$i]}]}/benchmark_${uuid[${index[$i]}]}.json
+        if [ ! -f ${UUID}/benchmark_${UUID}.json ]; then
+            cp GPU-skeleton/benchmark_skeleton.json ${UUID}/benchmark_${UUID}.json
         fi
-        if [ ! -f "${uuid[${index[$i]}]}/gpu_gv-algo.sh" ]; then cp GPU-skeleton/gpu_gv-algo.sh ${uuid[${index[$i]}]}/; fi
+        if [ ! -f "${UUID}/gpu_gv-algo.sh" ]; then cp GPU-skeleton/gpu_gv-algo.sh ${UUID}/; fi
 
-        if [ ! -f "${uuid[${index[$i]}]}/gpu-bENCH.sh"   ]; then
-            cp -f GPU-skeleton/gpu-bENCH.sh ${uuid[${index[$i]}]}/
-        elif [ $(stat -c %Y GPU-skeleton/gpu-bENCH.sh) -gt $(stat -c %Y ${uuid[${index[$i]}]}/gpu-bENCH.sh) ]; then
-            cp -f GPU-skeleton/gpu-bENCH.sh ${uuid[${index[$i]}]}/
+        if [ ! -f "${UUID}/gpu-bENCH.sh"   ]; then
+            cp -f GPU-skeleton/gpu-bENCH.sh ${UUID}/
+        elif [ $(stat -c %Y GPU-skeleton/gpu-bENCH.sh) -gt $(stat -c %Y ${UUID}/gpu-bENCH.sh) ]; then
+            cp -f GPU-skeleton/gpu-bENCH.sh ${UUID}/
         fi
 
         if [ ${#beChatty} -gt 0 ]; then
-            echo Kartenverzeichnis ${name[${index[$i]}]} existiert und die Karte ist \
-                 $( [[ "${uuidEnabledSOLL[${uuid[${index[$i]}]}]}" == "1" ]] && echo "Enabled" || echo "DISABLED" )
+            echo Kartenverzeichnis ${name[${gpu_idx}]} existiert und die Karte ist \
+                 $( [[ "${uuidEnabledSOLL[${UUID}]}" == "1" ]] && echo "Enabled" || echo "DISABLED" )
         fi
-        echo ${index[$i]} > ${uuid[${index[$i]}]}/gpu_index.in
+        echo ${gpu_idx} > ${UUID}/gpu_index.in
     done
 }
 
