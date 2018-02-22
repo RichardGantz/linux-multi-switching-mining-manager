@@ -243,7 +243,13 @@ while : ; do
                 mv -f ${GPU_GV_LOG} ${GPU_GV_LOG}.BAK
                 echo "GPU #${lfd_gpu_idx}: Starting process in the background..."
                 exec 1>&9
-                ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
+                if [ ${RTPRIO_GPUgv} -gt 0 ]; then
+                    ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RTPOLICY_GPUgv} ${RTPRIO_GPUgv} \
+                                              ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
+                else
+                    ${LINUX_MULTI_MINING_ROOT}/.#nice# -n -20 \
+                                              ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
+                fi
                 BG_PIDs+=( $! )
                 exec 1>>${MultiMining_log}
                 # gnome-terminal -x ./abc.sh

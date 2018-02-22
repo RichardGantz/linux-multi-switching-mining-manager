@@ -363,10 +363,10 @@ while :; do
     #  1. Ruft _update_SELF_if_necessary
     _update_SELF_if_necessary
 
-    if [ ${#rtprio_set} -eq 0 ]; then
-        ${LINUX_MULTI_MINING_ROOT}/.#rtprio# -f -p $(( ${RTPRIO_GPUgv} + ${gpu_idx} )) $$
-        rtprio_set=1
-    fi
+    #if [ ${#rtprio_set} -eq 0 ]; then
+    #    ${LINUX_MULTI_MINING_ROOT}/.#rtprio# -f -p $(( ${RTPRIO_GPUgv} + ${gpu_idx} )) $$
+    #    rtprio_set=1
+    #fi
 
     # new_Data_available wurde direkt vor der Endlosschleife gesetzt oder gleich nach dem Herausfallen ganz unten
     # Wie alt das SYNCFILE maximal sein darf steht in der Variablen ${GPU_alive_delay}, in globals.inc gesetzt.

@@ -128,15 +128,17 @@ if [ $HOME == "/home/richard" ]; then
     PoolActive["mh"]=1
 fi
 
-GPU_alive_delay=2
+GPU_alive_delay=6
 GPU_ALIVE_FLAG=.willing_to_deliver_data
 GPU_VALID_FLAG=.valid_data_delivered
 MM_validating_delay=10
 RUN_SYNC_delay=5
 
-RTPRIO_Miner=49 #            Angezeigt als -40  in  MinerShell.sh
-RTPRIO_MM=39    #            Angezeigt als -40  in  multi_mining_calc.sh / bc
-RTPRIO_GPUgv=24 # + gpu_idx  Angezeigt ab  -25  in  gpu_gv-algo.sh (Am Anfang)
+RTPRIO_Miner=31   # Angezeigt wird -( RTPRIO_GPUgv + 1 ), verwendet  in  MinerShell.sh
+RTPOLICY_Miner=-r # -r für round-robin, -f für FIFO
+RTPRIO_MM=0       # 0 ist niedrigste Priorität, Policy SCHED_OTHER, verwendet  in  multi_mining_calc.sh / bc
+RTPRIO_GPUgv=1    # Angezeigt wird -( RTPRIO_GPUgv + 1 )
+RTPOLICY_GPUgv=-r #            -r für round-robin, -f für FIFO
 
 # Diese Funktion ist bequem, aber langsamer als die Member eines Arrays in einer for-Schleife zu verbinden.
 # Für große Datenmengen, große Arrays, daher besser in einem Array zusammen-joinen.

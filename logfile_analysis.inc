@@ -26,7 +26,9 @@ NOT_CONNECTED_MSGs=(
     # equihash "zm"
     '#  connection closed by server '
     '#  server not responding - retrying'
-    'SSL_connect failed '
+    'stratum subscribe failed'
+    'connect failed'
+    # 'SSL_connect failed '
     # cryptonight "xmrMiner" (Windows-Name "xmr-stak")
     ' : SOCKET ERROR - '
 )
