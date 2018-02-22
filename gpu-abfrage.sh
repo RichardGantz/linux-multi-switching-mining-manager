@@ -91,7 +91,7 @@ if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index(
                    | tee ${SYSTEM_FILE} \
                    | wc -l)
     else
-        GPU_COUNT=$(nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit,enforced.power.limit --format=csv,noheader \
+        GPU_COUNT=$(./.#nice# -n -20 nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit,enforced.power.limit --format=csv,noheader \
                    | gawk -e 'BEGIN {FS=", "} { \
 print $1; print $2; print $3; print $4
 if ($5 !~ /^[[:digit:]]+ %$/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }

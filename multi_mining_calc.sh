@@ -77,6 +77,20 @@ Danach den MultiMiner neu starten.
     exit 2 # No Real-Time Priority
 fi
 
+_NICE_=$(ls -la .#nice#)
+if [[ ! "${_NICE_}" =~ ${REGEXPAT} ]]; then
+    echo "
+Damit der MultiMiner überhaupt vernünftig arbeiten kann, bitte als Kenner des root-Passworts die folgenden Kommandos in der MM-Root ausführen:
+$ su
+# cp /usr/bin/nice .#nice#
+# chmod 4755 .#nice#
+# exit
+
+Danach den MultiMiner neu starten.
+"
+    exit 3 # No Nice-Command
+fi
+
 #./.#rtprio# -f -p 95 $$
 
 
@@ -372,7 +386,7 @@ while : ; do
         # Warten bis zu 5 Sekunden, bis wenigstens 1 GPU gültige Werte signalisiert hat.
         touch .now_$$
         read nowSecs nowFrac <<<$(_get_file_modified_time_ .now_$$)
-        until (( ${nowSecs} >= ${SynSecs} || ( ${nowSecs} == ${SynSecs} && ${nowFrac} > ${SynFrac} ) )); do
+        until (( ${nowSecs} > ${SynSecs} || ( ${nowSecs} == ${SynSecs} && ${nowFrac} > ${SynFrac} ) )); do
             for UUID in ${!uuidEnabledSOLL[@]}; do
                 if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
 
