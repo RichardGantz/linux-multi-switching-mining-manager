@@ -91,8 +91,6 @@ Danach den MultiMiner neu starten.
     exit 3 # No Nice-Command
 fi
 
-#./.#rtprio# -f -p 95 $$
-
 
 export MULTI_MINERS_PID=$$
 export ERRLOG=${LINUX_MULTI_MINING_ROOT}/${This}.err
@@ -214,6 +212,11 @@ declare -ig GPU_COUNT
 export GPU_COUNT
 echo ${BEST_ALGO_CNT} >BEST_ALGO_CNT
 
+# Das Prioritätenkürzel für die MINER.
+# Kann hier global gesetzt werden, weil nur der Miner aus diesem Skript gestartet wird.
+# Bei der Änderung der eigenen RT-Priorität verwenden wir "mm" statt einer Variablen
+ProC="gpu"
+
 # Das gibt Informationen der gpu-abfrage.sh aus
 ATTENTION_FOR_USER_INPUT=1
 while : ; do
@@ -243,14 +246,16 @@ while : ; do
                 mv -f ${GPU_GV_LOG} ${GPU_GV_LOG}.BAK
                 echo "GPU #${lfd_gpu_idx}: Starting process in the background..."
                 exec 1>&9
-                if [ ${RTPRIO_GPUgv} -gt 0 ]; then
-                    ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RTPOLICY_GPUgv} ${RTPRIO_GPUgv} \
+
+                if [ ${RT_PRIORITY[${ProC}]} -gt 0 ]; then
+                    ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]} \
                                               ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
                 else
-                    ${LINUX_MULTI_MINING_ROOT}/.#nice# -n -20 \
+                    ${LINUX_MULTI_MINING_ROOT}/.#nice# -n ${NICE[${ProC}]} \
                                               ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
                 fi
                 BG_PIDs+=( $! )
+
                 exec 1>>${MultiMining_log}
                 # gnome-terminal -x ./abc.sh
                 #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
@@ -306,7 +311,12 @@ while : ; do
     [ -s BEST_ALGO_CNT ] && BEST_ALGO_CNT=$(< BEST_ALGO_CNT)
     
     if [ ${#rtprio_set} -eq 0 ]; then
-        ./.#rtprio# -f -p ${RTPRIO_MM} $$
+        # ./.#rtprio# -f -p ${RTPRIO_MM} $$
+        if [ ${RT_PRIORITY["mm"]} -gt 0 ]; then
+            ./.#rtprio# ${RT_POLICY["mm"]} -p ${RT_PRIORITY["mm"]} $$
+        #else # RENICE NEEDED!!!!
+        #    ./.#nice# -n ${NICE["mm"]}
+        fi
         rtprio_set=1
     fi
 

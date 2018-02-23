@@ -156,6 +156,10 @@ echo $$ >${This}.pid
 #ps -j --pid $$
 #echo "Die Prozessgruppe, die der MULTI_MINER eröffnet hat, hat die PID == PGID == ${MULTI_MINERS_PID}"
 
+# Das Prioritätenkürzel für die MinerShell's
+# Kann hier global gesetzt werden, weil nur die MinerShell aus diesem Skript gestartet wird
+ProC="ms"
+
 #
 # Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
 #
@@ -1269,18 +1273,37 @@ while :; do
                 
                 echo "GPU #${gpu_idx}: STARTE Miner Shell ${MinerShell}.sh und übergebe Algorithm ${coin_algorithm} und mehr..."
                 cp -f ../GPU-skeleton/MinerShell.sh ${MinerShell}.sh
-                ./${MinerShell}.sh    \
-                  ${coin_algorithm}   \
-                  ${gpu_idx}          \
-                  ${continent}        \
-                  ${algo_port}        \
-                  ${worker}           \
-                  ${gpu_uuid}         \
-                  ${domain}           \
-                  ${server_name}      \
-                  ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
-                  $cmdParameterString \
-                  >>${MinerShell}.log &
+
+		if [ ${RT_PRIORITY[${ProC}]} -gt 0 ]; then
+		    ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]} \
+					      ./${MinerShell}.sh    \
+					      ${coin_algorithm}   \
+					      ${gpu_idx}          \
+					      ${continent}        \
+					      ${algo_port}        \
+					      ${worker}           \
+					      ${gpu_uuid}         \
+					      ${domain}           \
+					      ${server_name}      \
+					      ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
+					      $cmdParameterString \
+					      >>${MinerShell}.log &
+		else
+		    echo "Starting ${MinerShell}.sh with Nice-Value" ${NICE[${ProC}]} | tee -a ${ERRLOG}
+		    ${LINUX_MULTI_MINING_ROOT}/.#nice# --adjustment=${NICE[${ProC}]} \
+					      ./${MinerShell}.sh    \
+					      ${coin_algorithm}   \
+					      ${gpu_idx}          \
+					      ${continent}        \
+					      ${algo_port}        \
+					      ${worker}           \
+					      ${gpu_uuid}         \
+					      ${domain}           \
+					      ${server_name}      \
+					      ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
+					      $cmdParameterString \
+					      >>${MinerShell}.log &
+		fi
                 echo $! >${MinerShell}.ppid
 
                 # Falls es bei einer Verzögerung zu keiner Neuberechnung kommt, wird im bisherigen Code auch die "alte" RUNNING_STATE nicht eingelesen.

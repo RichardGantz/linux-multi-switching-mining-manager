@@ -29,7 +29,9 @@
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
 
-${LINUX_MULTI_MINING_ROOT}/.#rtprio# -o -p 0 $$
+# Das Prioritätenkürzel für die MINER.
+# Kann hier global gesetzt werden, weil nur der Miner aus diesem Skript gestartet wird
+ProC="mi"
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
 debug=1
@@ -249,7 +251,13 @@ while :; do
             | tee -a ${ERRLOG} ${BENCHLOGFILE}
         echo ${minerstart}
 
-        ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RTPOLICY_Miner} ${RTPRIO_Miner} ${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2) &
+        if [ ${RT_PRIORITY[${ProC}]} -gt 0 ]; then
+            ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]} \
+                                      ${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2) &
+        else
+            ${LINUX_MULTI_MINING_ROOT}/.#nice# -n ${NICE[${ProC}]} \
+                                      ${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2) &
+        fi
         echo $! | tee ${MINER}.pid
         MINER_pid=$(< ${MINER}.pid)
         Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
