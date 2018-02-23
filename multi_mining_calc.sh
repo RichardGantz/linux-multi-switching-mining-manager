@@ -217,6 +217,24 @@ echo ${BEST_ALGO_CNT} >BEST_ALGO_CNT
 # Bei der Änderung der eigenen RT-Priorität verwenden wir "mm" statt einer Variablen
 ProC="gpu"
 
+printf "\n=========         Beginn neues Logfile um:    $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
+echo "Scheduling-Daten für die Miner:"
+echo "RT_PRIORITY[\"mi\"] ="${RT_PRIORITY["mi"]}
+echo "RT_POLICY[\"mi\"]   ="${RT_POLICY["mi"]}
+echo "NICE[\"mi\"]        ="${NICE["mi"]}
+echo "Scheduling-Daten für die MinerShells:"
+echo "RT_PRIORITY[\"ms\"] ="${RT_PRIORITY["ms"]}
+echo "RT_POLICY[\"ms\"]   ="${RT_POLICY["ms"]}
+echo "NICE[\"ms\"]        ="${NICE["ms"]}
+echo "Scheduling-Daten für die gpu_gv-algos:"
+echo "RT_PRIORITY[\"gpu\"]="${RT_PRIORITY["gpu"]}
+echo "RT_POLICY[\"gpu\"]  ="${RT_POLICY["gpu"]}
+echo "NICE[\"gpu\"]       ="${NICE["gpu"]}
+echo "Scheduling-Daten für den MM:"
+echo "RT_PRIORITY[\"mm\"] ="${RT_PRIORITY["mm"]}
+echo "RT_POLICY[\"mm\"]   ="${RT_POLICY["mm"]}
+echo "NICE[\"mm\"]        ="${NICE["mm"]}
+
 # Das gibt Informationen der gpu-abfrage.sh aus
 ATTENTION_FOR_USER_INPUT=1
 while : ; do
