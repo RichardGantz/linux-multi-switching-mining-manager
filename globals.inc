@@ -131,16 +131,30 @@ fi
 GPU_alive_delay=6
 GPU_ALIVE_FLAG=.willing_to_deliver_data
 GPU_VALID_FLAG=.valid_data_delivered
-MM_validating_delay=10
+MM_validating_delay=15
 RUN_SYNC_delay=5
 
 RTPRIO_Miner=31   # Angezeigt wird -( RTPRIO_GPUgv + 1 ), verwendet  in  MinerShell.sh
 RTPOLICY_Miner=-r # -r für round-robin, -f für FIFO
 RTPRIO_MM=0       # 0 ist niedrigste Priorität, Policy SCHED_OTHER, verwendet  in  multi_mining_calc.sh / bc
+RTPOLICY_MM=-r
 RTPRIO_GPUgv=1    # Angezeigt wird -( RTPRIO_GPUgv + 1 )
 RTPOLICY_GPUgv=-r #            -r für round-robin, -f für FIFO
 
-# Diese Funktion ist bequem, aber langsamer als die Member eines Arrays in einer for-Schleife zu verbinden.
+declare -A RT_PRIORITY RT_POLICY NICE
+RT_PRIORITY["mi"]=31   # Angezeigt wird -( RT_PRIORITY[] + 1 ), verwendet  in  MinerShell.sh
+RT_POLICY["mi"]=-r     # -r für round-robin, -f für FIFO
+NICE["mi"]=-20
+RT_PRIORITY["ms"]=0    # Angezeigt wird -( RT_PRIORITY[] + 1 ), verwendet  in  gpu_gv-algo.sh
+RT_POLICY["ms"]=-r     # -r für round-robin, -f für FIFO
+NICE["ms"]=-10
+RT_PRIORITY["gpu"]=0   # Angezeigt wird -( RT_PRIORITY[] + 1 ), verwendet  in  multi_mining_calc.sh / bc
+RT_POLICY["gpu"]=-r    # -r für round-robin, -f für FIFO
+NICE["gpu"]=-20
+RT_PRIORITY["mm"]=0    # Angezeigt wird -( RT_PRIORITY[] + 1 ), verwendet  in  multi_mining_calc.sh / bc
+RT_POLICY["mm"]=-r     # -r für round-robin, -f für FIFO
+NICE["mm"]=-20
+
 # Für große Datenmengen, große Arrays, daher besser in einem Array zusammen-joinen.
 # UND: Wenn die Funktion OFT gerufen wird, dann ebenfalls lieber eine for-Schleife schreiben.
 pos_join () { local IFS="$1"; shift; echo "$*"; }
