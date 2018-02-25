@@ -6,12 +6,19 @@
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
 source estimate_delays.inc
 
+# Zwei wichtige Pfade
+GRAF_DST_DIR="/home/avalon/temp/graf";
+ARCHIV_DIR=${GRAF_DST_DIR}/.logs
+if [ $NoCards ]; then
+    GRAF_DST_DIR="$LINUX_MULTI_MINING_ROOT/graf";
+    ARCHIV_DIR=${LINUX_MULTI_MINING_ROOT}/.logs
+fi
+
 This=$(basename $0 .sh)
 
 debug=0
 Exit=0
 
-PHASE=1
 #[[ $# -eq 0 ]] && set -- "-h"
 while [[ $# -gt 0 ]]; do
     parameter="$1"
@@ -31,9 +38,7 @@ while [[ $# -gt 0 ]]; do
                  [-d|--debug-infos] 
                  [-h|--help]'
 EOF
-            #echo "-p PHASE"
-            #echo "   PHASE=1: dauert sehr lang, wertet alle Logfiles aus, 1 Zeile pro Logfile"
-            #echo "   PHASE=2: Wertet das Logfile von Phase 1 aus zu einer Gesamtberechnung, geht sehr schnell"
+            echo "-a ARCHIVE-Name with or without a path"
             echo "-d keeps temporary files for debugging purposes"
             echo "-h this help message"
             exit
@@ -49,33 +54,40 @@ _reserve_and_lock_file ${SYSTEM_STATE}         # Zum Lesen und Bearbeiten reserv
 _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 _remove_lock                                   # ... und wieder freigeben
 
-GRAF_DST_DIR="/home/avalon/temp/graf";
-ARCHIV_DIR=${GRAF_DST_DIR}/.logs
-if [ $NoCards ]; then
-    GRAF_DST_DIR="$LINUX_MULTI_MINING_ROOT/graf";
-    ARCHIV_DIR=${LINUX_MULTI_MINING_ROOT}/.logs
-fi
-
 #########################################################################
 ###
 ### DER LOGFILE NAME
 ### Um die Dateien aus dem letzten Archiv zu holen:
 ###
-ARCHIVE=last_logfiles_1519516408.tar.bz2
+if [ -z "${ARCHIVE}" ]; then
+    #ARCHIVE=${ARCHIV_DIR}/last_logfiles_1519516408.tar.bz2
+    ARCHIVES=($(ls ${ARCHIV_DIR}/*.bz2))
+    max=0
+    for arch in ${ARCHIVES[@]}; do
+        echo $max
+        LOGNR=${arch##*_}
+        LOGNR=${LOGNR%%.*}
+        if [ ${LOGNR} -gt ${max} ]; then
+            max=${LOGNR}
+            ARCHIVE=${arch}
+        fi
+    done
+fi
 
-# Die letzten 8 Ziffern des Epochdate des Logfile-Archivs
-LOGNR=${ARCHIVE%%.*}
-LOGNR=${LOGNR##*_}
-LOGNR=${LOGNR:2}
+# Die letzten 8 Ziffern des Epochdate des Logfile-Archivs. ACHTUNG: Die Reihenfolge der Befehle ist hier wichtig, um die Zahlz zu isolieren
+LOGNR=${ARCHIVE##*_}   # Zuerst alles von vorne wegnehmen bis einschließlich des "_" vor der Zahl
+LOGNR=${LOGNR%%.*}     # Dann von hinten alles wegnehmen bis einschlißlich des "." nach der Zahl
+LOGNR=${LOGNR:2}       # Die ersten beiden Ziffern brauchen wir (noch) nicht.
 if [ ! -d ${ARCHIV_DIR}/${LOGNR} ]; then
     mkdir -p ${ARCHIV_DIR}/${LOGNR}
+    tar -xvjf ${ARCHIVE} -C ${ARCHIV_DIR}
     cd ${ARCHIV_DIR}
-    tar -xvjf ${ARCHIV_DIR}/${ARCHIVE}
-    ARCHIVE=${ARCHIVE%.*}
-    tar -xvf ${ARCHIVE} -C ${LOGNR} --wildcards \
-	multi_mining_calc.log.BAK \
-	*gpu_gv-algo_*.log
-    rm -f ${ARCHIVE}
+    TARCHIVE=${ARCHIVE%.*}
+    TARCHIVE=${TARCHIVE##*/}
+    tar -xvf ${TARCHIVE} -C ${LOGNR} --wildcards \
+        multi_mining_calc.log.BAK \
+        *gpu_gv-algo_*.log
+    rm -f ${TARCHIVE}
     cd ${_WORKDIR_}
 fi
 
@@ -88,7 +100,7 @@ _calculate_gpu
 
 # Jetzt die Erstellung der Grafiken
 for CSV in ${CSVFILES[@]}; do
-    php diagramm_validate_mm_GPU.php ${LOGNR} ${CSV}
+    php diagramm_validate_mm_GPU.php ${ARCHIV_DIR} ${LOGNR} ${CSV} ${GRAF_DST_DIR}
 done
 
 

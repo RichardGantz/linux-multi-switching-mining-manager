@@ -439,8 +439,8 @@ while : ; do
             sleep .1
             touch .now_$$
             read nowSecs            nowFrac <<<$(_get_file_modified_time_ .now_$$)
-            read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
-            SynSecs=$((${new_Data_available} + ${MM_validating_delay}))
+            #read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
+            #SynSecs=$((${new_Data_available} + ${MM_validating_delay}))
         done
         rm -f .now_$$ ..now_$$.lock
     else

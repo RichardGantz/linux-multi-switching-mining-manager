@@ -5,32 +5,28 @@ include ("/usr/share/jpgraph/jpgraph_line.php");
 include ("/usr/share/jpgraph/jpgraph_error.php");
 
 
-// variablen übernehmen aus der bash "php diagramm_validate_mm_GPU.php 406514 xxxx.csv"
-// die nummer ist das Verzeichniss der logs und wird mit " $argv[1] " oder auch mehrere
+// variablen übernehmen aus der bash "php diagramm_validate_mm_GPU.php Archivverz 406514 xxxx.csv Grafverzeichnis"
+// die nummer ist das Verzeichniss der logs und wird mit " $argv[1] ", etc.
 // dem php script übergeben 
-//php diagramm_validate_mm_GPU.php 406514 mm_cycles.csv
-//php diagramm_validate_mm_GPU.php 406514 GPU#1.csv
+//php diagramm_validate_mm_GPU.php /home/avalon/temp/graf/.logs 406514 mm_cycles.csv /home/avalon/temp/graf
+//php diagramm_validate_mm_GPU.php /home/avalon/temp/graf/.logs 406514 GPU#1.csv /home/avalon/temp/graf
+// ( Falls Sonderbehandlungen nötig sein sollten: if ( $_SERVER["LOGNAME"] == "richard" ) )
 
-$LOGNR="$argv[1]";
-$CSV="$argv[2]";
+$ARCHIV_DIR    ="$argv[1]";
+$LOGNR         ="$argv[2]";
+$CSV           ="$argv[3]";
+$GRAF_DST_DIR  ="$argv[4]";
 
-$LINUX_MULTI_MINING_ROOT="/home/avalon/lmms2";        //  <--------  STIMMT DAS ??????
-$GRAF_DST_DIR           ="/home/avalon/temp/graf";
-$LOGFILES_ROOT          ="$GRAF_DST_DIR/.logs/$LOGNR";
-if ( $_SERVER["LOGNAME"] == "richard" ) {
-   $LINUX_MULTI_MINING_ROOT="/home/richard/git/linux-multi-switching-mining-manager";
-   $GRAF_DST_DIR="$LINUX_MULTI_MINING_ROOT/graf";
-   $LOGFILES_ROOT="$LINUX_MULTI_MINING_ROOT/.logs/$LOGNR";
-   }
+$LOGFILES_ROOT ="$ARCHIV_DIR/$LOGNR";
 
 $row = 0;
 if (($handle = fopen("$LOGFILES_ROOT/$CSV", "r")) !== FALSE) {
     while (($data = fgetcsv($handle, 20, ";")) !== FALSE) {
         $num = count($data);
         for ($c=0; $c < $num; $c++) {
-	    if ($c==0) { $datay[] = $data[$c]; }
-	    if ($c==1) { $dataY[] = $data[$c]; }
-	    if ($c==2) { $dataZ[] = $data[$c]; }
+            if ($c==0) { $datay[] = $data[$c]; }
+            if ($c==1) { $dataY[] = $data[$c]; }
+            if ($c==2) { $dataZ[] = $data[$c]; }
             //echo $data[$c] . "\n";
         }
         $row++;  // Gleichzeitig Anzahl Member der Arrays, weil wir den letzten Wert verwerfen
@@ -49,7 +45,7 @@ if (($handle = fopen("$LOGFILES_ROOT/$CSV", "r")) !== FALSE) {
 
 //Auflöhsung in pixel
 $graph = new Graph(1920,1200,"auto");
-$graph->img->SetMargin(40,20,20,80);	
+$graph->img->SetMargin(40,20,20,80);
 $graph->img->SetAntiAliasing();
 $graph->SetScale("textlin");
 

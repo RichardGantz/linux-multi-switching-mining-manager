@@ -15,7 +15,21 @@ Nötige System Programme
 - Curl
 - Nvidia Cuda 8.0 Treiber
 - su -c "apt_get update ; apt-get install libnotify-bin"
+- ( su -c "apt-get install apt-transport-https" ... sollte vor einer PHP7.0 Installation gemacht werden ???)
+- PHP5.6 (Bei Jessie scheinbar standardmäßig installiert)
+- su -c "apt-get install libphp-jpgraph"
+- [ su -c "apt-get install libphp-jpgraph-examples" ]
 
+- Vor dem ersten Lauf des MM:
+  $su
+  #cd $LMMS_ROOT
+  #cp /???/nvidia-smi (Binary) benchmarking/nvidia-befehle/smi
+  #cp /usr/bin/chrt .#rtprio#
+  #cp /usr/bin/nice .#nice#
+  #chmod 4755 benchmarking/nvidia-befehle/smi
+  #chmod 4755 .#rtprio#
+  #chmod 4755 .#nice#
+  #exit
 
 Handhabung der Sripte und Dateien
 --------
@@ -38,7 +52,7 @@ Scripte:
                 von 1$,2$,3$
         > ausgabe Daten
                 best_algo_netz.out | best_algo_solar.out | best_algo_solar_akku.out
-- 4# multi_mining_sort.sh
+- 4# multi_mining_calc.sh
         < liest Dateien aus GPU Verzeichnissen
                 best_algo_netz.out | best_algo_solar.out | best_algo_solar_akku.out
         > ausgebende Dateien

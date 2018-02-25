@@ -7,6 +7,9 @@
 
 This=$(basename $0 .sh)
 
+debug=0
+Exit=0
+
 PHASE=1
 [[ $# -eq 0 ]] && set -- "-h"
 while [[ $# -gt 0 ]]; do
@@ -18,14 +21,20 @@ while [[ $# -gt 0 ]]; do
             [ ! "${PHASE}" == "1" ] && PHASE=2
             shift 2
             ;;
+        -d|--debug-infos)
+            debug=1
+            shift
+            ;;
         -h|--help)
             echo $0 <<EOF '
                  [-p|--phase]
+                 [-d|--debug-infos] 
                  [-h|--help]'
 EOF
             echo "-p PHASE"
             echo "   PHASE=1: dauert sehr lang, wertet alle Logfiles aus, 1 Zeile pro Logfile"
             echo "   PHASE=2: Wertet das Logfile von Phase 1 aus zu einer Gesamtberechnung, geht sehr schnell"
+            echo "-d keeps temporary files for debugging purposes"
             echo "-h this help message"
             exit
             ;;
@@ -47,9 +56,6 @@ fi
 
 # Datenstrukturen bzgl. des Output der Miner
 source ${This}.inc
-
-debug=0
-Exit=0
 
 if [ ${PHASE} -eq 1 ]; then
     # Backup des letzten Auswertungslaufes

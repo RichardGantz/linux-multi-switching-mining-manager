@@ -65,6 +65,11 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/miners/* \
     ${SRC_DIR}/distribution/make_install_package.sh \
     ${SRC_DIR}/distribution/multi_mining_calc.sh.header \
+    ${SRC_DIR}/estimate_yeses.sh \
+    ${SRC_DIR}/estimate_yeses.inc \
+    ${SRC_DIR}/estimate_delays.sh \
+    ${SRC_DIR}/estimate_delays.inc \
+    ${SRC_DIR}/diagramm_validate_mm_GPU.php \
     ${SRC_DIR}/tar_logs.sh
 
 #    ${SRC_DIR}/benchmarking/nvidia-befehle/nvidia-settings \
