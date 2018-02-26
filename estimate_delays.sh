@@ -122,9 +122,9 @@ else
     LOGNR="LIVE"
 fi
 
-declare -a CSVFILES
+declare -a WAITTIME ENDOFCYCLE CSVFILES CSV_ROWS
 _calculate_mm
-_calculate_gpu
+_calculate_gpu     mm_waittime
 
 # Jetzt die Erstellung der Grafiken
 for CSV in ${CSVFILES[@]}; do
