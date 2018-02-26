@@ -49,7 +49,9 @@ $graph->img->SetMargin(40,20,20,80);
 $graph->img->SetAntiAliasing();
 $graph->SetScale("textlin");
 
-//überschrift des diagrams
+//überschrift des diagrams.
+//   $GPUNAME ist der $CSV Dateiname ohne die Endung ".csv"
+//   Ist also bis auf eine Ausnahme tatsächlich "GPU#x"
 $GPUNAME=substr($CSV,0,strlen($CSV)-4);
 if ( substr($CSV,0,1) == "m" ) {
    $Titel    = "MM's Wartezeiten GPU-Daten und Dauer des Zyklus Log $LOGNR";
@@ -97,7 +99,7 @@ $graph->Add($p1);
 //graph hinzufügen bzw linie
 $p2 = new LinePlot($dataY);
 //$p2->mark->SetType(MARK_FILLEDCIRCLE);
-$p1->SetLegend( $LegendeY );
+$p2->SetLegend( $LegendeY );
 //$p2->mark->SetFillColor("red");
 //$p2->mark->SetWidth(1);
 $p2->SetColor("red");

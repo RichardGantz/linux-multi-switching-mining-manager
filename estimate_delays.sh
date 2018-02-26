@@ -17,7 +17,8 @@ fi
 This=$(basename $0 .sh)
 
 debug=0
-Exit=0
+live_system=0
+mm_ext=".BAK"
 
 #[[ $# -eq 0 ]] && set -- "-h"
 while [[ $# -gt 0 ]]; do
@@ -28,6 +29,11 @@ while [[ $# -gt 0 ]]; do
             ARCHIVE=$2
             shift 2
             ;;
+        -l|--live-system)
+            live_system=1
+            mm_ext=""
+            shift
+            ;;
         -d|--debug-infos)
             debug=1
             shift
@@ -35,10 +41,12 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             echo $0 <<EOF '
                  [-a|--archive]
+                 [-l|--live-system]
                  [-d|--debug-infos] 
                  [-h|--help]'
 EOF
             echo "-a ARCHIVE-Name with or without a path"
+            echo "-l use live-system, do NOT use Archives"
             echo "-d keeps temporary files for debugging purposes"
             echo "-h this help message"
             exit
@@ -64,7 +72,7 @@ if [ -z "${ARCHIVE}" ]; then
     ARCHIVES=($(ls ${ARCHIV_DIR}/*.bz2))
     max=0
     for arch in ${ARCHIVES[@]}; do
-        echo $max
+        #echo $max
         LOGNR=${arch##*_}
         LOGNR=${LOGNR%%.*}
         if [ ${LOGNR} -gt ${max} ]; then
@@ -85,7 +93,7 @@ if [ ! -d ${ARCHIV_DIR}/${LOGNR} ]; then
     TARCHIVE=${ARCHIVE%.*}
     TARCHIVE=${TARCHIVE##*/}
     tar -xvf ${TARCHIVE} -C ${LOGNR} --wildcards \
-        multi_mining_calc.log.BAK \
+        multi_mining_calc.log${mm_ext} \
         *gpu_gv-algo_*.log
     rm -f ${TARCHIVE}
     cd ${_WORKDIR_}
@@ -93,6 +101,21 @@ fi
 
 # Dort wird die Logdateistruktur erwartet und dort landen auch die .csv Dateien
 LOGFILES_ROOT=${ARCHIV_DIR}/${LOGNR}
+if [ ${live_system} -eq 0 ]; then
+    unset uuid uuidEnabledSOLL
+    declare -Ag uuidEnabledSOLL
+    UUIDS=($(ls -d ${LOGFILES_ROOT}/GPU-*))
+    for UUID in ${UUIDS[@]}; do
+        UUID=${UUID##*/}
+        gpu_idx=$(cat ${LOGFILES_ROOT}/${UUID}/gpu_gv-algo_${UUID}.log \
+            | grep -E -m1 -o -e 'GPU #[[:digit:]]' \
+            | grep -E -o -e '[[:digit:]]$')
+        if [ ${gpu_idx} -gt 0 ]; then
+            uuid[${gpu_idx}]=${UUID}
+            uuidEnabledSOLL[${UUID}]=1
+        fi
+    done
+fi
 
 declare -a CSVFILES
 _calculate_mm

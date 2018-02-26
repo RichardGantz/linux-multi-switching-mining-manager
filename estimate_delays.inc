@@ -25,7 +25,7 @@ _calculate_gpu () {
 
 _calculate_mm () {
 
-    cat ${LOGFILES_ROOT}/multi_mining_calc.log.BAK \
+    cat ${LOGFILES_ROOT}/multi_mining_calc.log${mm_ext} \
         | grep -E -e "^Maximum waittime until:|^Last read nowSecs:|Going to wait for all GPUs" \
         | gawk -M -e '
         /^Max/ { m=substr( $NF,  3, 8 )
@@ -54,7 +54,7 @@ _calculate_mm () {
         | grep -E -o -e '[[:digit:].]*$' \
         | readarray -n 0 -O 0 -t WAITTIME
 
-    cat ${LOGFILES_ROOT}/multi_mining_calc.log.BAK \
+    cat ${LOGFILES_ROOT}/multi_mining_calc.log${mm_ext} \
         | grep -E -e "Beginn neuer Zyklus um:|Ende des Zyklus um:" \
         | gawk -M -e '
 $2 ~ /Beginn/ { b=$8; next }

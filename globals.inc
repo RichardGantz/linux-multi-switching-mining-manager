@@ -61,6 +61,7 @@ FATAL_ERRORS="${LINUX_MULTI_MINING_ROOT}/FATAL_ERRORS.log"
 # Wieviele Zeilen der gpu_system.out gehören zu jeweils einer GPU
 declare -ig num_gpu_rows=7
 zm_list_devices_cmd="/home/miner/mining/miner/zm_0.5.7/zm --list-devices"
+[ "${LOGNAME}" == "avalon" ] && zm_list_devices_cmd="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/zm_0.5.6 --list-devices"
 ZM_FILE="${LINUX_MULTI_MINING_ROOT}/zm_system.out"
 
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
