@@ -62,46 +62,47 @@ _reserve_and_lock_file ${SYSTEM_STATE}         # Zum Lesen und Bearbeiten reserv
 _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 _remove_lock                                   # ... und wieder freigeben
 
-#########################################################################
-###
-### DER LOGFILE NAME
-### Um die Dateien aus dem letzten Archiv zu holen:
-###
-if [ -z "${ARCHIVE}" ]; then
-    #ARCHIVE=${ARCHIV_DIR}/last_logfiles_1519516408.tar.bz2
-    ARCHIVES=($(ls ${ARCHIV_DIR}/*.bz2))
-    max=0
-    for arch in ${ARCHIVES[@]}; do
-        #echo $max
-        LOGNR=${arch##*_}
-        LOGNR=${LOGNR%%.*}
-        if [ ${LOGNR} -gt ${max} ]; then
-            max=${LOGNR}
-            ARCHIVE=${arch}
-        fi
-    done
-fi
-
-# Die letzten 8 Ziffern des Epochdate des Logfile-Archivs. ACHTUNG: Die Reihenfolge der Befehle ist hier wichtig, um die Zahlz zu isolieren
-LOGNR=${ARCHIVE##*_}   # Zuerst alles von vorne wegnehmen bis einschließlich des "_" vor der Zahl
-LOGNR=${LOGNR%%.*}     # Dann von hinten alles wegnehmen bis einschlißlich des "." nach der Zahl
-LOGNR=${LOGNR:2}       # Die ersten beiden Ziffern brauchen wir (noch) nicht.
-if [ ! -d ${ARCHIV_DIR}/${LOGNR} ]; then
-    mkdir -p ${ARCHIV_DIR}/${LOGNR}
-    tar -xvjf ${ARCHIVE} -C ${ARCHIV_DIR}
-    cd ${ARCHIV_DIR}
-    TARCHIVE=${ARCHIVE%.*}
-    TARCHIVE=${TARCHIVE##*/}
-    tar -xvf ${TARCHIVE} -C ${LOGNR} --wildcards \
-        multi_mining_calc.log${mm_ext} \
-        *gpu_gv-algo_*.log
-    rm -f ${TARCHIVE}
-    cd ${_WORKDIR_}
-fi
-
-# Dort wird die Logdateistruktur erwartet und dort landen auch die .csv Dateien
-LOGFILES_ROOT=${ARCHIV_DIR}/${LOGNR}
 if [ ${live_system} -eq 0 ]; then
+    #########################################################################
+    ###
+    ### DER LOGFILE NAME
+    ### Um die Dateien aus dem letzten Archiv zu holen:
+    ###
+    if [ -z "${ARCHIVE}" ]; then
+        #ARCHIVE=${ARCHIV_DIR}/last_logfiles_1519516408.tar.bz2
+        ARCHIVES=($(ls ${ARCHIV_DIR}/*.bz2))
+        max=0
+        for arch in ${ARCHIVES[@]}; do
+            #echo $max
+            LOGNR=${arch##*_}
+            LOGNR=${LOGNR%%.*}
+            if [ ${LOGNR} -gt ${max} ]; then
+                max=${LOGNR}
+                ARCHIVE=${arch}
+            fi
+        done
+    fi
+
+    # Die letzten 8 Ziffern des Epochdate des Logfile-Archivs.
+    # ACHTUNG: Die Reihenfolge der Befehle ist hier wichtig, um die Zahl zu isolieren
+    LOGNR=${ARCHIVE##*_}   # Zuerst alles von vorne wegnehmen bis einschließlich des "_" vor der Zahl
+    LOGNR=${LOGNR%%.*}     # Dann von hinten alles wegnehmen bis einschlißlich des "." nach der Zahl
+    LOGNR=${LOGNR:2}       # Die ersten beiden Ziffern brauchen wir (noch) nicht.
+    if [ ! -d ${ARCHIV_DIR}/${LOGNR} ]; then
+        mkdir -p ${ARCHIV_DIR}/${LOGNR}
+        tar -xvjf ${ARCHIVE} -C ${ARCHIV_DIR}
+        cd ${ARCHIV_DIR}
+        TARCHIVE=${ARCHIVE%.*}
+        TARCHIVE=${TARCHIVE##*/}
+        tar -xvf ${TARCHIVE} -C ${LOGNR} --wildcards \
+            multi_mining_calc.log${mm_ext} \
+            *gpu_gv-algo_*.log
+        rm -f ${TARCHIVE}
+        cd ${_WORKDIR_}
+    fi
+
+    # Dort wird die Logdateistruktur erwartet und dort landen auch die .csv Dateien
+    LOGFILES_ROOT=${ARCHIV_DIR}/${LOGNR}
     unset uuid uuidEnabledSOLL
     declare -Ag uuidEnabledSOLL
     UUIDS=($(ls -d ${LOGFILES_ROOT}/GPU-*))
@@ -115,6 +116,10 @@ if [ ${live_system} -eq 0 ]; then
             uuidEnabledSOLL[${UUID}]=1
         fi
     done
+else
+    ARCHIV_DIR=${LINUX_MULTI_MINING_ROOT}
+    LOGFILES_ROOT=${LINUX_MULTI_MINING_ROOT}
+    LOGNR="LIVE"
 fi
 
 declare -a CSVFILES

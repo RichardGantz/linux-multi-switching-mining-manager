@@ -30,7 +30,8 @@ _calculate_mm () {
         | gawk -M -e '
         /^Max/ { m=substr( $NF,  3, 8 )
                  M=substr( $NF, 12, 2 )
-                 s= m - 10
+                 s= m - '${MM_validating_delay}'
+                 next
                }
         /^Las/ { if ( NF == 5 ) {
                     # Alte Logzeile ohne s.S - Angabe

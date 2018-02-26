@@ -18,6 +18,7 @@ $CSV           ="$argv[3]";
 $GRAF_DST_DIR  ="$argv[4]";
 
 $LOGFILES_ROOT ="$ARCHIV_DIR/$LOGNR";
+if ( $LOGNR == "LIVE" ) { $LOGFILES_ROOT = $ARCHIV_DIR; }
 
 $row = 0;
 if (($handle = fopen("$LOGFILES_ROOT/$CSV", "r")) !== FALSE) {
