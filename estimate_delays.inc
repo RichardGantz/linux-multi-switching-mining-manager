@@ -78,6 +78,7 @@ _calculate_gpu () {
                 | grep -E -v -e '#############|^--|^declare' \
                 | gawk -M -e '
 { start=substr( $3,  3, 8 ); getline
+  while (match( $0, "are now UNLOCKED" ) == 0) { getline }
   valid=substr( $3,  3, 8 ); V=substr( $3, 12, 2 ); getline
   Rstat=substr( $3,  3, 8 ); getline; getline
   ende =substr( $3,  3, 8 ); getline

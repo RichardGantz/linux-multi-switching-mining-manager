@@ -122,7 +122,7 @@ function _prepare_Strompreise_in_BTC_from_the_Web () {
     #  id="ticker_price">3.163,11 €</strong>
 
     # BTC Kurs extrahieren und umwandeln, dass dieser dann als Variable verwendbar und zum Rechnen geeignet ist
-    btcEUR=$(gawk -e '/id="ticker_price">[0-9.,]* €</ \
+    btcEUR=$(gawk -e '/id="ticker_price">[0-9.,]*/ \
                   { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' \
                   ${BTC_EUR_KURS_WEB} \
              | grep -E -m 1 -o -e '[0-9.]*' \

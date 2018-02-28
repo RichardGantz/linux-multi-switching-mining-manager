@@ -378,7 +378,7 @@ while :; do
     touch .now_$$
     read NOWSECS nowFrac <<<$(_get_file_modified_time_ .now_$$)
     rm -f .now_$$ ..now_$$.lock .ALGO_WATTS_MINES.in
-    if [[ ${NOWSECS} -le ${SynSecs} || (${NOWSECS} -eq ${SynSecs} && ${nowFrac} -le ${SynFrac}) ]]; then
+    if [[ ${NOWSECS} -lt ${SynSecs} || (${NOWSECS} -eq ${SynSecs} && ${nowFrac} -le ${SynFrac}) ]]; then
 
         # (2018-01-23) Bisher konnten wir darauf verzichten.
         #_reserve_and_lock_file ${_WORKDIR_}/${GPU_ALIVE_FLAG}
