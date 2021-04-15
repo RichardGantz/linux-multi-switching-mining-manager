@@ -7,9 +7,10 @@
 #      der meist das Produkt im seiner Adresse hat, abgeliefert.
 #      Manche Pools verbinden das Produkt auch mit einem Server-Port statt mit der Server-Adresse
 ################################################################################################################
-# suprnova COIN   MiningAlgo Name
-# NiceHash ALGO   MiningAlgo Name
-# More Products   MiningAlgo Name
-equihash          equihash
-zec               equihash
-zen               equihash
+### suprnova COIN   MiningAlgo Name
+### NiceHash ALGO   MiningAlgo Name
+### More Products   MiningAlgo Name
+#equihash          equihash
+#zec               equihash
+#zen               equihash
+zhash              zhash

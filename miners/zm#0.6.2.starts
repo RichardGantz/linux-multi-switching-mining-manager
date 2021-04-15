@@ -1,0 +1,82 @@
+#!/bin/bash
+###############################################################################
+#
+# EQUIHASH Startkommando
+#
+# Hier muss auch das Benchmarking mit dem Live-Kommando gemacht werden!
+#
+
+minerfolder="/home/avalon/miner/zmminer/zm-0.6.2"
+
+# Laut Doku sicherheitshalber der server vorne und die options hinten:
+#Usage:
+# zm --server hostname --port port_nr --user user_name
+#    [--pass password] [options]...
+LIVE_START_CMD='%s/%s --server %s --port %s --user %s.%s --pass %s --dev %s --time'
+LIVE_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "server_name"
+    "algo_port"
+    "user_name"
+    "worker"
+    "password"
+    "miner_device"
+)
+
+function PREP_LIVE_PARAMETERSTACK () {
+    # ${pool} muss von gpu_gv-algo.sh an die MinerShell mit übergeben werden
+    #         und  von bench_30s_2.sh selbst richtig eingestellt werden (was bereits der Fall ist)
+    case "${pool}" in
+        "nh")
+            server_name="${coin}.${continent}.${domain}"
+            user_name="12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
+            password=x
+            ;;
+        "sn")
+            user_name="unbekannt"
+            password=x
+            ;;
+    esac
+}
+
+# Wenn kein BENCH_START_CMD angegeben ist, wird nur LIVE Benchmarked.
+#
+#if [ ${NoCards} ]; then
+if [ 1 -eq 1 ]; then
+    # Das ist ein Fake auf einem System ohne GPUs, um das Benchmarkkommando auch im Offline-Mode testen zu können
+
+    #BENCH_START_CMD='%s/%s --server %s.%s --port %s --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.%s --pass x --dev %s --time --logfile %s'
+    BENCH_START_CMD='%s/%s --server %s --port %s --user %s.%s --pass %s --dev %s --time'
+    BENCH_PARAMETERSTACK=(
+        "minerfolder"
+        "miner_name"
+        "server_name"
+        "algo_port"
+        "user_name"
+        "worker"
+        "password"
+        "miner_device"
+    )
+
+    function PREP_BENCH_PARAMETERSTACK () {
+    # ${pool} muss von gpu_gv-algo.sh an die MinerShell mit übergeben werden
+    #         und  von bench_30s_2.sh selbst richtig eingestellt werden (was bereits der Fall ist)
+    case "${pool}" in
+        "nh")
+            server_name="${coin}.${continent}.${domain}"
+            user_name="12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
+            password=x
+            ;;
+        "sn")
+            user_name="unbekannt"
+            password=x
+            ;;
+    esac
+    }
+
+    #function PREP_BENCH_PARAMETERSTACK () {
+    #}
+
+fi
+

@@ -53,53 +53,95 @@ function _notify_about_NO_VALID_DATA_FROM_THE_WEB () {
 }
 
 # Die folgenden Variablen werden in globals.inc gesetzt:
-# algoID_KURSE_PORTS_WEB="KURSE.json"
-# algoID_KURSE_PORTS_ARR="KURSE_PORTS.in"
+# algoID_KURSE_PORTS_WEB="NH_PORTS.json"
+# algoID_KURSE__PAY__WEB="NH_PAYINGS.json"
+# algoID_KURSE_PORTS_ARR="NH_PORTS.in"
+# algoID_KURSE_PORTS_PAY="NH_PAYINGS.in"
 function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
     declare -i jsonValid=0
-    searchPattern='^[{]"result":[{]"simplemultialgo":\['
-    jsonValid=$(curl "https://api.nicehash.com/api?method=simplemultialgo.info" \
-                       | tee ${algoID_KURSE_PORTS_WEB} \
+    searchPattern='^[{]"miningAlgorithms":\['
+
+    # PAYING muss aus dieser Datei geholt werden.
+    # https://api2.nicehash.com/main/api/v2/public/simplemultialgo/info
+    jsonValid=$(curl "https://api2.nicehash.com/main/api/v2/public/simplemultialgo/info" \
+                       | tee ${algoID_KURSE__PAY__WEB} \
                        | grep -c -e "$searchPattern" )
     if [ ${jsonValid} -eq 0 ]; then
         _notify_about_NO_VALID_DATA_FROM_THE_WEB \
-            "${algoID_KURSE_PORTS_WEB}" "${algoID_KURSE_PORTS_ARR}" "$searchPattern"
+            "${algoID_KURSE__PAY__WEB}" "${algoID_KURSE_PORTS_PAY}" "$searchPattern"
         return 1
     fi
-    unset NoAlgoNames_notified NoAlgoNames_recorded
-    # Auswertung und Erzeugung der ARR-Datei, die bequemer von anderen eingelesen werden kann
-    gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"} \
-          match( $0, /"name":"[[:alnum:]]*/ )\
-               { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
-          match( $0, /"paying":"[.[:digit:]]*/ )\
+
+    # PORTS müssen aus dieser Datei geholt werden.
+    # https://api2.nicehash.com/main/api/v2/mining/algorithms
+    # Da sich die Ports wohl kaum ändern, genügt es, jede Stunde abzurufen
+    Pay_Time=$(date --utc --reference=${algoID_KURSE__PAY__WEB} +%s)
+    [ -s ${algoID_KURSE_PORTS_WEB} ] && PortTime=$(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s) || PortTime=0
+    if [ $((${Pay_Time}-3600)) -gt ${PortTime} ]; then
+	jsonValid=$(curl "https://api2.nicehash.com/main/api/v2/mining/algorithms" \
+			| tee ${algoID_KURSE_PORTS_WEB} \
+			| grep -c -e "$searchPattern" )
+	if [ ${jsonValid} -eq 0 ]; then
+            _notify_about_NO_VALID_DATA_FROM_THE_WEB \
+		"${algoID_KURSE_PORTS_WEB}" "${algoID_KURSE_PORTS_ARR}" "$searchPattern"
+            return 1
+	fi
+	# Auswertung und Erzeugung der ARR-Datei, aus der die Arrays ALGOs, PORTs und ALGO_IDs eingelesen werden
+	gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"} \
+          match( $0, /"algorithm":"[[:alnum:]]*/ )\
                { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
           match( $0, /"port":[[:digit:]]*/ )\
                { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) } \
-          match( $0, /"algo":[[:digit:]]*/ )\
+          match( $0, /"order":[[:digit:]]*/ )\
                { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
-         ${algoID_KURSE_PORTS_WEB} 2>/dev/null \
-        >${algoID_KURSE_PORTS_ARR}
+             ${algoID_KURSE_PORTS_WEB} 2>/dev/null \
+             >${algoID_KURSE_PORTS_ARR}
+	# Das Flag für _read_in_ALGO_PORTS_KURSE, die Arrays aus der eben erstellten Datei einzulesen
+    fi
+    unset NoAlgoNames_notified NoAlgoNames_recorded
+    # Auswertung und Erzeugung der PAY-Datei, aus der das Array KURSE eingelesen wird
+    gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"} \
+          match( $0, /"algorithm":"[[:alnum:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
+          match( $0, /"paying":[.[:digit:]E\-]*/ )\
+               { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
+         ${algoID_KURSE__PAY__WEB} 2>/dev/null \
+        >${algoID_KURSE_PORTS_PAY}
 }
 
 # Die folgenden Variablen werden in globals.inc gesetzt:
-# algoID_KURSE_PORTS_WEB="KURSE.json"
-# algoID_KURSE_PORTS_ARR="KURSE_PORTS.in"
+# algoID_KURSE_PORTS_WEB="NH_PORTS.json"
+# algoID_KURSE__PAY__WEB="NH_PAYINGS.json"
+# algoID_KURSE_PORTS_ARR="NH_PORTS.in"
+# algoID_KURSE_PORTS_PAY="NH_PAYINGS.in"
 function _read_in_ALGO_PORTS_KURSE () {
 
     # Algoname:Algo-ID:Algo-Port:Paying Paare extrahieren nach READARR
-    unset READARR
     unset ALGOs;    declare -ag ALGOs
-    unset KURSE;    declare -Ag KURSE
     unset PORTs;    declare -Ag PORTs
     unset ALGO_IDs; declare -Ag ALGO_IDs
-
+    unset READARR
     readarray -n 0 -O 0 -t READARR <${algoID_KURSE_PORTS_ARR}
-    for ((i=0; $i<${#READARR[@]}; i+=4)) ; do
-        ALGOs[${READARR[$i+3]}]=${READARR[$i]}
-        KURSE[${READARR[$i]}]=${READARR[$i+1]}
-        PORTs[${READARR[$i]}]=${READARR[$i+2]}
-        ALGO_IDs[${READARR[$i]}]=${READARR[$i+3]}
+    for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+        ALGOs[${READARR[$i+2]}]=${READARR[$i]}
+        PORTs[${READARR[$i]}]=${READARR[$i+1]}
+        ALGO_IDs[${READARR[$i]}]=${READARR[$i+2]}
     done
+
+    unset KURSE;    declare -Ag KURSE
+    unset READARR
+    readarray -n 0 -O 0 -t READARR <${algoID_KURSE_PORTS_PAY}
+    for ((i=0; $i<${#READARR[@]}; i+=2)) ; do
+        KURSE[${READARR[$i]}]="("${READARR[$i+1]/E/\*10\^}")"
+    done
+
+    if [ 1 -eq 0 ]; then
+	for ALGO in ${ALGOs[@]}; do
+	    echo ${ALGO}
+	    echo ${PORTs[${ALGO}]}
+	    echo ${KURSE[${ALGO}]}
+	done
+    fi
 }
 
 function _prepare_Strompreise_in_BTC_from_the_Web () {
@@ -122,11 +164,14 @@ function _prepare_Strompreise_in_BTC_from_the_Web () {
     #  id="ticker_price">3.163,11 €</strong>
 
     # BTC Kurs extrahieren und umwandeln, dass dieser dann als Variable verwendbar und zum Rechnen geeignet ist
-    btcEUR=$(gawk -e '/id="ticker_price">[0-9.,]*/ \
-                  { sub(/\./,"",$NF); sub(/,/,".",$NF); print $NF; exit }' \
+    btcEUR=$(gawk -e '/id="ticker_price"[^>]*>[0-9.,]*/ \
+          	     { if (match( $NF, />[0-9.,]*/ )) {\
+               	          M=substr( $NF, RSTART, RLENGTH); M = substr( M, 2 ); \
+			  sub(/\./,"",M); sub(/,/,".",M); print M; exit } \
+		     }' \
                   ${BTC_EUR_KURS_WEB} \
-             | grep -E -m 1 -o -e '[0-9.]*' \
-             | tee BTC_EUR_kurs.in )
+		 | grep -E -m 1 -o -e '[0-9.]*' \
+		 | tee BTC_EUR_kurs.in )
 
     # Einmal für alle gleich die fixen kWh-Preise in BTC umwandeln
     for ((grid=0; $grid<${#GRID[@]}; grid++)) ; do
@@ -250,37 +295,3 @@ function _read_in_COIN_TO_BTC_EXCHANGE_FACTOR () {
     done
 }
 
-# https://api.nicehash.com/api?method=stats.provider&addr=12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg
-# ergibt folgendes Ergebnis. Hat angeblich etwas mit der unpayed balance zu tun
-#{"result":
-# {"stats":[
-#	 {"balance":"0.00054475","rejected_speed":"0","algo":5,"accepted_speed":"0"},
-#	 {"balance":"0.00034844","rejected_speed":"0","algo":7,"accepted_speed":"0.156972"},
-#	 {"balance":"0.00047089","rejected_speed":"0","algo":8,"accepted_speed":"0"},
-#	 {"balance":"0.00008712","rejected_speed":"0","algo":9,"accepted_speed":"0"},
-#	 {"balance":"0.00063464","rejected_speed":"0","algo":14,"accepted_speed":"0"},
-#	 {"balance":"0","rejected_speed":"0","algo":16,"accepted_speed":"0"},
-#	 {"balance":"0","rejected_speed":"0","algo":17,"accepted_speed":"0"},
-#	 {"balance":"0","rejected_speed":"0","algo":21,"accepted_speed":"0"},
-#	 {"balance":"0.00550798","rejected_speed":"0","algo":22,"accepted_speed":"0.00000467"},
-#	 {"balance":"0.01577869","rejected_speed":"0.00000009","algo":24,"accepted_speed":"0.00000187"},
-#	 {"balance":"0.00032534","rejected_speed":"0","algo":26,"accepted_speed":"0"},
-#	 {"balance":"0.00033687","rejected_speed":"0","algo":28,"accepted_speed":"0"},
-#	 {"balance":"0.0001911","rejected_speed":"0","algo":29,"accepted_speed":"0"}
-#     ],
-#  "payments":[
-#      {
-#	  "amount":"0.02140867",
-#	  "fee":"0.00112677",
-#	  "TXID":"4554541919c2f19b052ee376de488f1604a89e8cfc817e75fc65ce3ff781c457",
-#	  "time":"2018-01-28 09:28:59"
-#      }
-#  ],
-#  "addr":"12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
-# },
-# "method":"stats.provider"
-#}
-
-
-
-# https://api.nicehash.com/api?method=stats.provider.ex&addr=12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg

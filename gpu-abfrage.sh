@@ -61,6 +61,9 @@
 # ausgabe bitte jeweils in variablen packen und alle $[] "index" "gpu-name" "bus" "uuid"
 #
 
+# Für Debug-Zwecke, diese und die letzte Zeile entkommentieren und dann aufrufen: "bash gpu-abfrage.sh"
+#ATTENTION_FOR_USER_INPUT=1
+
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
 [[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
@@ -79,38 +82,27 @@ function _func_gpu_abfrage_sh () {
 
     # Hier überschreiben wir ${SYSTEM_FILE}...
     #
-    if [ $NoCards ]; then
-        GPU_COUNT=$(cat ${LINUX_MULTI_MINING_ROOT}/.FAKE.nvidia-smi.output \
-                   | grep -E -v -e "^#|^$"      \
-                   | gawk -e 'BEGIN {FS=", "} { \
+    GPU_COUNT=$(./.#nice# -n -20 nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit,enforced.power.limit --format=csv,noheader \
+                    | gawk -e 'BEGIN {FS=", "} { \
 print $1; print $2; print $3; print $4
 if ($5 !~ /^[[:digit:]]+ %$/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
 if ($6 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $6, 1, index($6,".")-1 ) }
 if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index($7,".")-1 ) }
 }' \
-                   | tee ${SYSTEM_FILE} \
-                   | wc -l)
-    else
-        GPU_COUNT=$(./.#nice# -n -20 nvidia-smi --query-gpu=index,gpu_name,gpu_bus_id,gpu_uuid,utilization.gpu,power.default_limit,enforced.power.limit --format=csv,noheader \
-                   | gawk -e 'BEGIN {FS=", "} { \
-print $1; print $2; print $3; print $4
-if ($5 !~ /^[[:digit:]]+ %$/) { print "0" } else { print substr( $5, 1, index($5," ")-1 ) }
-if ($6 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $6, 1, index($6,".")-1 ) }
-if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index($7,".")-1 ) }
-}' \
-                  | tee ${SYSTEM_FILE} \
-                  | wc -l )
-    fi
+                    | tee ${SYSTEM_FILE} \
+                    | wc -l )
     GPU_COUNT=$(( ${GPU_COUNT} / ${num_gpu_rows} ))
 
-    # zm --list-devices Abfrage auswerten
-    ZM_GPU_COUNT=$(${zm_list_devices_cmd} \
-                  | gawk -e '{ print substr( $NF, 1, length($NF)-1 ) $2 }' \
-                  | tee ${ZM_FILE} \
-                  | wc -l)
-    if [[ ${GPU_COUNT} -ne ${ZM_GPU_COUNT} ]]; then
-        echo "Das geht gar nicht: NVIDIA listet ${GPU_COUNT} Devices, ZM listet ${ZM_GPU_COUNT} devices. Bitte prüfen. Es erfolgt ein Abbruch"
-        exit 2
+    # zm --list-devices Abfrage auswerten, falls zm vorhanden ist
+    if [ -n "${zm_list_devices_cmd}" ]; then
+	ZM_GPU_COUNT=$(${zm_list_devices_cmd} \
+			   | gawk -e '{ print substr( $NF, 1, length($NF)-1 ) $2 }' \
+			   | tee ${ZM_FILE} \
+			   | wc -l)
+	if [[ ${GPU_COUNT} -ne ${ZM_GPU_COUNT} ]]; then
+            echo "Das geht gar nicht: NVIDIA listet ${GPU_COUNT} Devices, ZM listet ${ZM_GPU_COUNT} devices. Bitte prüfen. Es erfolgt ein Abbruch"
+            exit 2
+	fi
     fi
 
     # Beim allerersten Start gibt es noch keine System.in und die System.in wird erst beim _update geschrieben
@@ -178,10 +170,6 @@ if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index(
     done
 }
 
-if [ 1 -eq 0 ]; then
-    if [ $NoCards ]; then
-        ATTENTION_FOR_USER_INPUT=1
-        _func_gpu_abfrage_sh
-        exit
-    fi
-fi
+# Für Debug-Zwecke, wenn man nur die Abfrage testen will, kann man die nächste Zeile entkommentieren
+#     und dann mit 'bash gpu-abfrage.sh' ausführen
+#_func_gpu_abfrage_sh

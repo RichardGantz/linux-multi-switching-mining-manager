@@ -12,24 +12,31 @@ Beschreibung
 Nötige System Programme
 ---------
 - Debian Jessie (oder gleichwertig)
+- gawk
 - Curl
+- w3m
 - Nvidia Cuda 8.0 Treiber
 - su -c "apt_get update ; apt-get install libnotify-bin"
 - ( su -c "apt-get install apt-transport-https" ... sollte vor einer PHP7.0 Installation gemacht werden ???)
 - PHP5.6 (Bei Jessie scheinbar standardmäßig installiert)
 - su -c "apt-get install libphp-jpgraph"
 - [ su -c "apt-get install libphp-jpgraph-examples" ]
+- GNU screen
+- Miner "zm" wegen des Kommandos "zm --list-devices" (ist ansonsten veraltet und hat Probleme mit dem connect zu Nicehash)
+- Miner:
+  t-rex (ccminer)
+  gminer
 
 - Vor dem ersten Lauf des MM:
-  $su
-  #cd $LMMS_ROOT
-  #cp /???/nvidia-smi (Binary) benchmarking/nvidia-befehle/smi
-  #cp /usr/bin/chrt .#rtprio#
-  #cp /usr/bin/nice .#nice#
-  #chmod 4755 benchmarking/nvidia-befehle/smi
-  #chmod 4755 .#rtprio#
-  #chmod 4755 .#nice#
-  #exit
+  $ su -
+  # cd $LMMS_ROOT
+  # cp /usr/bin/nvidia-smi (Binary) benchmarking/nvidia-befehle/smi
+  # cp /usr/bin/chrt .#rtprio#
+  # cp /usr/bin/nice .#nice#
+  # chmod 4755 benchmarking/nvidia-befehle/smi
+  # chmod 4755 .#rtprio#
+  # chmod 4755 .#nice#
+  # exit
 
 Handhabung der Sripte und Dateien
 --------

@@ -11,6 +11,21 @@
 #
 ###############################################################################
 
+### SCREEN ADDITIONS: ###
+# Die folgende Variable wird auch in der globals.inc gesetzt (0 bis zum Ende der Tests) und kann hier überschrieben werden.
+# 0 ist der frühere Betrieb an einem graphischen Desktop mit mehreren hochpoppenden Terminals
+# 1 ist der Betrieb unter GNU screen
+UseScreen=1
+#[[ ${#GPU_gv_Title} -eq 0 ]] && GPU_gv_Title=MAIN
+#[[ ${#BencherTitle} -eq 0 ]] && BencherTitle=BENCHMARKER
+#export BencherTitle
+# Die folgende Variable verhindert ...
+#     ...
+#     beendet das Programm, falls automatische Benchmarks wegen unbehandelter .json durchgeführt wurden.
+# 0 bedutet normaler Betrieb mit Miner-Start
+# 1 bedeutet "Trockenbetrieb" ohne Minerstart
+ScreenTest=1
+
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
 [[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
@@ -45,9 +60,9 @@ find . -name \*\.pid                 -delete
 find . -name \*\.lock                -delete
 find . -name ALGO_WATTS_MINES\.in    -delete
 find . -name .sort_profit_algoIdx_\* -delete
-
-# Aufräumen, kann beim nächsten mal wieder raus. Diese Dateien wurden in ein Unterverzeichnis verlegt.
-rm -f benchmarking/bench_*.log
+rm -f "${LINUX_MULTI_MINING_ROOT}/BTCEURkurs" \
+   ${algoID_KURSE_PORTS_WEB} \
+   ${algoID_KURSE__PAY__WEB}
 
 # Aktuelle PID der 'multi_mining_calc.sh' ENDLOSSCHLEIFE
 This=$(basename $0 .sh)
@@ -135,6 +150,12 @@ function _terminate_all_processes_of_script () {
     fi
 }
 
+### SCREEN ADDITIONS: ###
+# Das war nur, um den Namen der .pid-datei zu verifizieren
+if [ ${ScreenTest} -eq 1 ]; then
+    #exit
+fi
+
 function _On_Exit () {
     broken_pipe_text="MultiMiner: _On_EXIT() ENTRY, CLEANING UP RESOURCES NOW...\n"
     _terminate_all_processes_of_script "gpu_gv-algo.sh"
@@ -199,11 +220,11 @@ LOG_PTY_CMD[999]="tail -f ${ERRLOG}"
 ofsX=$((ii*60+50))
 ofsY=$((ii*30+50))
 let ii++
-gnome-terminal --hide-menubar \
-               --title="MultiMining Error Channel Output" \
-               --geometry="100x24+${ofsX}+${ofsY}" \
-               -e "${LOG_PTY_CMD[999]}"
-#               -x bash -c "${LOG_PTY_CMD[999]}"
+${_TERMINAL_} --hide-menubar \
+              --title="MultiMining Error Channel Output" \
+              --geometry="100x24+${ofsX}+${ofsY}" \
+              -e "${LOG_PTY_CMD[999]}"
+#              -x bash -c "${LOG_PTY_CMD[999]}"
 
 # Besteht nun hauptsächlich aus der Funktion _func_gpu_abfrage_sh
 source ./gpu-abfrage.sh
@@ -275,15 +296,15 @@ while : ; do
                 BG_PIDs+=( $! )
 
                 exec 1>>${MultiMining_log}
-                # gnome-terminal -x ./abc.sh
+                # ${_TERMINAL_} -x ./abc.sh
                 #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
                 ofsX=$((ii*60+50))
                 ofsY=$((ii*30+50))
                 LOG_PTY_CMD[${lfd_gpu_idx}]="tail -f ${GPU_GV_LOG}"
-                gnome-terminal --hide-menubar \
-                               --title="GPU #${lfd_gpu_idx}  -  ${lfdUuid}" \
-                               --geometry="100x24+${ofsX}+${ofsY}" \
-                               -e "${LOG_PTY_CMD[${lfd_gpu_idx}]}"
+                ${_TERMINAL_} --hide-menubar \
+                              --title="GPU #${lfd_gpu_idx}  -  ${lfdUuid}" \
+                              --geometry="100x24+${ofsX}+${ofsY}" \
+                              -e "${LOG_PTY_CMD[${lfd_gpu_idx}]}"
                 let ii++
 
                 cd ${_WORKDIR_} >/dev/null
@@ -296,7 +317,7 @@ while : ; do
     #
     if [ ! -f algo_multi_abfrage.pid ]; then
         # Das lohnt sich erst, wenn wir den curl dazu gebracht haben, ebenfalls umzuleiten...
-        # gnome-terminal -x ./abc.sh
+        # ${_TERMINAL_} -x ./abc.sh
         #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
         ofsX=$((ii*60+50))
         ofsY=$((ii*30+50))
@@ -307,10 +328,10 @@ while : ; do
         BG_PIDs+=( $! )
         exec 1>>${MultiMining_log}
         LOG_PTY_CMD[998]="tail -f ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.log"
-        gnome-terminal --hide-menubar \
-                       --title="\"RealTime\" Algos und Kurse aus dem Web" \
-                       --geometry="100x24+${ofsX}+${ofsY}" \
-                       -e "${LOG_PTY_CMD[998]}"
+        ${_TERMINAL_} --hide-menubar \
+                      --title="\"RealTime\" Algos und Kurse aus dem Web" \
+                      --geometry="100x24+${ofsX}+${ofsY}" \
+                      -e "${LOG_PTY_CMD[998]}"
     fi
 
     if [ ${debug} -eq 1 ]; then
@@ -530,21 +551,22 @@ while : ; do
     declare -i ACTUAL_SMARTMETER_KW
     declare -i SolarWattAvailable=0
 
-    if [ ! $NoCards ]; then
+    # Nach Anschluss einer SOLAR-Anlage wieder aktivieren
+    if [ 1 -eq 0 ]; then
         # Datei smartmeter holen
         w3m "http://192.168.6.170/solar_api/v1/GetMeterRealtimeData.cgi?Scope=Device&DeviceId=0&DataCollection=MeterRealtimeData" > smartmeter
+
+	printf "         Sum of actually running WATTS: %5dW\n" ${SUM_OF_RUNNING_WATTS}
+
+	# ABFRAGE PowerReal_P_Sum
+	ACTUAL_SMARTMETER_KW=$(grep $PHASE smartmeter | gawk '{print substr($3,0,index($3,".")-1)}')
+	printf "Aktueller Verbrauch aus dem Smartmeter: %5dW\n" ${ACTUAL_SMARTMETER_KW}
+
+	if [[ $((${ACTUAL_SMARTMETER_KW} - ${SUM_OF_RUNNING_WATTS})) -lt 0 ]]; then
+            SolarWattAvailable=$(expr ${SUM_OF_RUNNING_WATTS} - ${ACTUAL_SMARTMETER_KW})    
+	fi
+	printf "                 Verfügbare SolarPower: %5dW\n" ${SolarWattAvailable}
     fi
-
-    printf "         Sum of actually running WATTS: %5dW\n" ${SUM_OF_RUNNING_WATTS}
-
-    # ABFRAGE PowerReal_P_Sum
-    ACTUAL_SMARTMETER_KW=$(grep $PHASE smartmeter | gawk '{print substr($3,0,index($3,".")-1)}')
-    printf "Aktueller Verbrauch aus dem Smartmeter: %5dW\n" ${ACTUAL_SMARTMETER_KW}
-
-    if [[ $((${ACTUAL_SMARTMETER_KW} - ${SUM_OF_RUNNING_WATTS})) -lt 0 ]]; then
-        SolarWattAvailable=$(expr ${SUM_OF_RUNNING_WATTS} - ${ACTUAL_SMARTMETER_KW})    
-    fi
-    printf "                 Verfügbare SolarPower: %5dW\n" ${SolarWattAvailable}
 
     ###############################################################################################
     #
@@ -1027,7 +1049,6 @@ while : ; do
 
     declare -i SwitchOnCnt=${#GPUINDEXES[@]}
     declare -i GPUsCnt=${#index[@]}
-    declare -i NewLoad=0
 
     if [[ ${verbose} == 1 ]]; then
         echo "Die optimale Konfiguration besteht aus diesen ${SwitchOnCnt} Karten:"
@@ -1119,9 +1140,6 @@ while : ; do
                         cycle_counter[${WhatsRunning[${gpu_uuid}]}]=0
                     fi
                     printf ":${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
-                    if [ $NoCards ]; then
-                        [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
-                    fi
                 else
                     #
                     # Die Karte ist NUN generell DISABLED!
@@ -1159,9 +1177,6 @@ while : ; do
                     echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
                     printf ":${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
                     cycle_counter[${actGPUalgoName[${algoidx}]}]=1
-                    if [ $NoCards ]; then
-                        [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
-                    fi
                 else
                     #
                     # Die Karte BLEIBT generell DISABLED
@@ -1191,9 +1206,6 @@ while : ; do
                 echo "---> SWITCH-CMD: GPU#${gpu_idx} EINSCHALTEN mit Algo \"${actGPUalgoName[${algoidx}]}\""
                 printf "${gpu_uuid}:${gpu_idx}:${uuidEnabledSOLL[${gpu_uuid}]}:${actGPUalgoWatt[${algoidx}]}:${actGPUalgoName[${algoidx}]}\n" >>${RUNNING_STATE}
                 cycle_counter[${actGPUalgoName[${algoidx}]}]=1
-                if [ $NoCards ]; then
-                    [ "${actGPUalgoWatt[${algoidx}]}" != "" ] && NewLoad=$(($NewLoad+${actGPUalgoWatt[${algoidx}]}))
-                fi
             else
                 #
                 # Die Karte IST generell DISABLED
@@ -1324,13 +1336,6 @@ while : ; do
     printf "############################################\n"
     echo "Zugriff auf neues globales Switching Sollzustand Kommandofile ${RUNNING_STATE} freigegeben:"
     cat ${RUNNING_STATE}
-
-    if [ $NoCards ]; then
-        if [[ $NewLoad -gt 0 ]]; then
-            echo "         \"PowerReal_P_Sum\" : $((${ACTUAL_SMARTMETER_KW}-${SUM_OF_RUNNING_WATTS}+${NewLoad})).6099354," \
-                 >smartmeter
-        fi
-    fi
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 

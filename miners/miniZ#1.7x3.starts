@@ -1,0 +1,56 @@
+#!/bin/bash
+###############################################################################
+#
+# Erstellung der Benchmarkwerte mit miniZ Miner
+#
+# miniZ --url=12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.RigID@zhash.eu.nicehash.com:3369 --pass x --pers=auto
+# miniZ --url=12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.RigID@beamv3.eu.nicehash.com:3387 --pass x
+# miniZ --url=12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.RigID@beamv2.eu.nicehash.com:3378 --pass x
+#       You can also write --pers=Beam-PoW  but is not necessary.
+
+minerfolder="/home/avalon/miner/miniZ/1.7x3"
+
+extra_params="--pers=auto --nocolor --show-shares --shares-detail"
+extra_params="--pers=auto --nocolor --show-shares"
+
+LIVE_START_CMD='%s/%s --url=%s.%s@%s:%s --pass %s --cuda-devices=%s '${extra_params}
+LIVE_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "user_name"
+    "worker"
+    "server_name"
+    "algo_port"
+    "password"
+    "miner_device"
+)
+
+function PREP_LIVE_PARAMETERSTACK () {
+    # ${pool} muss von gpu_gv-algo.sh an die MinerShell mit übergeben werden
+    #         und  von bench_30s_2.sh selbst richtig eingestellt werden (was bereits der Fall ist)
+    case "${pool}" in
+        "nh")
+            server_name="${coin}.${continent}.${domain}"
+            user_name="12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
+            password=x
+            ;;
+        "sn")
+            user_name="unbekannt"
+            password=x
+            ;;
+    esac
+}
+
+# Bei diesem gminer gibt es scheinbar keinen Benchmode...
+if [ 1 -eq 0 ]; then
+    BENCH_START_CMD='%s/%s --devices %s -a %s --no-color --benchmark '${extra_params}
+    BENCH_PARAMETERSTACK=(
+	"minerfolder"
+	"miner_name"
+	"miner_device"
+	"miningAlgo"
+    )
+
+    #function PREP_BENCH_PARAMETERSTACK () {
+    #}
+fi

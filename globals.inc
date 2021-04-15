@@ -11,6 +11,17 @@ until [ -d benchmarking ] && [ -d miners ] && [ -d GPU-skeleton ]; do cd ..; don
 LINUX_MULTI_MINING_ROOT=$(pwd)
 cd ${_WORKDIR_} >/dev/null
 
+# Das zu verwendende Terminal für die Loggings, z.B.: "gnome-terminal"
+_TERMINAL_="mate-terminal"
+
+### SCREEN ADDITIONS: ###
+# 0 ist der frühere Betrieb an einem graphischen Desktop mit mehreren hochpoppenden Terminals unter Verwendung von ${_TERMINAL_}
+# 1 ist der Betrieb unter GNU screen
+#  2021-04-08: Wir lassen das hier erst mal aus, bis alle Tests unter GNU screen abgeschlossen sind,
+#              was NICHT heisst, dass der "alte" Betrieb schon getestet ist!!!
+#              Tatsächlich ist er bis zum o.g. Zeitpunkt NOCH NICHT GETESTET WORDEN !!!
+[[ ${#UseScreen} -eq 0 ]] && UseScreen=0
+
 # Wir verwenden oft "readarray" am Ende einer Pipe. Deshalb wollen wir, dass diese Option global verfügbar ist.
 # An jeder Stelle im Source-Code, wo diese Zeile gefunden wird, kann sie also entfernt werden.
 shopt -s lastpipe
@@ -20,10 +31,10 @@ BEST_ALGO_CNT=5
 declare -Ag cycle_counter
 
 # Die SLEEP Zeit nach dem Abbruch eines Miners in Sekunden. Experimentell, .5 bis 3 ???
-Erholung=.9
+Erholung=1.9
 
 # Das wäre die zu bevorzugende Reihenfolge, wenn man die losses ("usa") als ungünstigst ansieht.
-LOCATION=( "eu" "br" "in" "jp" "hk" "usa" )
+LOCATION=( "eu-west" "eu-north" "usa-west" "usa-east" )
 
 InetPingStack=(
     62.138.238.100   # t-online.de          antwortet als Schnellster
@@ -32,7 +43,7 @@ InetPingStack=(
     216.58.207.174   # google.com
 )
 
-export LD_LIBRARY_PATH=/usr/local/cuda-9.1/lib64/:$LD_LIBRARY_PATH
+#export LD_LIBRARY_PATH=/usr/local/cuda-9.1/lib64/:$LD_LIBRARY_PATH
 
 # Die Pools, bzw. Abgabestellen, die wir am besten an einem Kürzel erkennen
 #     und die in verschiedenen Domains zu Hause sind.
@@ -51,7 +62,7 @@ POOLS["sn"]="suprnova.cc";              PoolFee["sn"]=0.25     PoolActive["sn"]=
 #      mh= 0,9 + BOERSE["bittrex"] 0,25 oder BOERSE["cryptopia"] 0.2
 POOLS["mh"]="hub.miningpoolhub.com";    PoolFee["mh"]=1.15     PoolActive["mh"]=0
 
-declare pool="sn"
+declare pool="nh"
 declare domain=${POOLS[${pool}]}
 
 ### gpu-abfrage.sh spezifische Variablen
@@ -60,8 +71,14 @@ SYSTEM_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_SYSTEM_STATE"
 FATAL_ERRORS="${LINUX_MULTI_MINING_ROOT}/FATAL_ERRORS.log"
 # Wieviele Zeilen der gpu_system.out gehören zu jeweils einer GPU
 declare -ig num_gpu_rows=7
-zm_list_devices_cmd="/home/miner/mining/miner/zm_0.5.7/zm --list-devices"
-[ "${LOGNAME}" == "avalon" ] && zm_list_devices_cmd="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/zm_0.5.6 --list-devices"
+
+# Der zm miner muss etwas anders behandelt werden und ist nur vorhanden, bzw. wird nur berücksichtigt,
+# wenn die folgende Variable in der nächsten Zeile (zm_list_devices_cmd) NICHT leer ist.
+# (Vorhanden sein sollte sie aber schon, damit die Abfragen keine Fehlermeldungen auslösen.
+#  Deshalb am besten in einer ZWEITEN Zeile definieren, falls ein ZM miner vorhanden ist
+#  und die Leerdefinition immer stehen lassen.)
+zm_list_devices_cmd="/home/avalon/miner/zmminer/zm-0.6.2/zm --list-devices"
+#[ "${LOGNAME}" == "avalon" ] && zm_list_devices_cmd="/media/avalon/dea6f367-2865-4032-8c39-d2ca4c26f5ce/zm_0.5.6 --list-devices"
 ZM_FILE="${LINUX_MULTI_MINING_ROOT}/zm_system.out"
 
 # Hier drin halten wir den aktuellen GLOBALEN Status des Gesamtsystems fest
@@ -70,16 +87,17 @@ RUNNING_STATE="${LINUX_MULTI_MINING_ROOT}/GLOBAL_GPU_ALGO_RUNNING_STATE"
 SYSTEM_MALFUNCTIONS_REPORT="${LINUX_MULTI_MINING_ROOT}/.SYSTEM_MALFUNCTIONS_REPORT"
 
 ### algo_multi_abfrage.sh spezifische Variablen
-algoID_KURSE_PORTS_WEB="${LINUX_MULTI_MINING_ROOT}/KURSE.json"
-algoID_KURSE_PORTS_ARR="${LINUX_MULTI_MINING_ROOT}/KURSE_PORTS.in"
-rm -f "${LINUX_MULTI_MINING_ROOT}/BTCEURkurs"
+algoID_KURSE_PORTS_WEB="${LINUX_MULTI_MINING_ROOT}/NH_PORTS.json"
+algoID_KURSE__PAY__WEB="${LINUX_MULTI_MINING_ROOT}/NH_PAYINGS.json"
+algoID_KURSE_PORTS_ARR="${LINUX_MULTI_MINING_ROOT}/NH_PORTS.in"
+algoID_KURSE_PORTS_PAY="${LINUX_MULTI_MINING_ROOT}/NH_PAYINGS.in"
 BTC_EUR_KURS_WEB="${LINUX_MULTI_MINING_ROOT}/BTC_EUR_kurs.http"
 COIN_PRICING_WEB="${LINUX_MULTI_MINING_ROOT}/WhatToMine.json"
 COIN_PRICING_ARR="${LINUX_MULTI_MINING_ROOT}/WhatToMine.in"
 COIN_TO_BTC_EXCHANGE_WEB="${LINUX_MULTI_MINING_ROOT}/BittrexSummaries.json"
 COIN_TO_BTC_EXCHANGE_ARR="${LINUX_MULTI_MINING_ROOT}/BittrexSummaries.in"
 
-MINER_FEES="${LINUX_MULTI_MINING_ROOT}/miners/all.miner.fees"
+ALL_MINER_FEES_FILE="${LINUX_MULTI_MINING_ROOT}/miners/all.miner.fees"
 
 SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
 
@@ -94,40 +112,6 @@ GRID[2]="solar_akku"
 
 declare -Ag DO_AUTO_BENCHMARK_FOR
 TWEAK_CMD_START_PARAMS="${LINUX_MULTI_MINING_ROOT}/benchmarking/.start_params_for_tweak_commands_sh"
-
-# Für die bech_30s_2.sh und MinerShell.sh zum Zählen der hashCount's
-# Der Output des "zm" Equihash Miners sieht so aus:
-#2017-11-28 17:20:15|>  GPU0  68C  Sol/s: 493.9  Sol/W: 1.87  Avg: 493.9  I/s: 267.3  Sh: 0.00   . .   
-#2017-11-28 17:20:55|   GPU0  70C  Sol/s: 496.0  Sol/W: 1.86  Avg: 494.1  I/s: 265.3  Sh: 0.00   . .   
-#2017-11-28 17:21:15|>  GPU0  69C  Sol/s: 497.5  Sol/W: 1.86  Avg: 495.0  I/s: 264.5  Sh: 0.75   1.00 52  +
-#2017-11-28 17:21:35|   GPU0  69C  Sol/s: 498.9  Sol/W: 1.87  Avg: 495.8  I/s: 264.9  Sh: 1.19   1.00 53  +
-#2017-11-28 17:21:55|   GPU0  69C  Sol/s: 496.7  Sol/W: 1.87  Avg: 495.9  I/s: 264.4  Sh: 1.49   1.00 49  +
-#
-#$1         $2          $3    $4   $5     $6     $7     $8    $9   $10    $11  $12    $13 $14    $15  $16 $NF
-#
-# Und dieser Filter macht aus den o.g. Zeilen die folgenden:
-# Das Feld Nr. 10 (hash) ist der "Avg:"-Wert
-#493.9 Sol/s
-#494.1 Sol/s
-#495.0 Sol/s
-#495.8 Sol/s
-#495.9 Sol/s
-#
-detect_zm_hash_count='BEGIN { hash=10 }
-/GPU[[:digit:]] +[[:digit:]]+C +Sol\/s: [[:digit:].]+ +Sol\/W: [[:digit:].]+ +Avg: [[:digit:].]+ +I\/s: [[:digit:].]+ +Sh: [[:digit:].]+/ \
-    { print $hash " Sol/s"; next }
-{ print }
-'
-
-# Wenn keine Karten da sind, dürfen verschiedene Befehle nicht ausgeführt werden
-# und müssen sich auf den Inhalt fixer Dateien beziehen.
-if [ $HOME == "/home/richard" ]; then
-    NoCards=true
-    PATH=${PATH}:${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle
-    Erholung=.001
-    PoolActive["sn"]=1
-    PoolActive["mh"]=1
-fi
 
 GPU_alive_delay=6
 GPU_ALIVE_FLAG=.willing_to_deliver_data
@@ -158,7 +142,17 @@ NICE["mm"]=-20
 
 # Für große Datenmengen, große Arrays, daher besser in einem Array zusammen-joinen.
 # UND: Wenn die Funktion OFT gerufen wird, dann ebenfalls lieber eine for-Schleife schreiben.
-pos_join () { local IFS="$1"; shift; echo "$*"; }
+# Der "echo" macht aus mehrfachen Spaces ein einzelnes!
+#pos_join () { local IFS="$1"; shift; echo "$*"; }
+pos_join () {
+    local SEP="$1"; shift
+    local OUT=""
+    for STR in "$@"; do
+	OUT+="${STR}${SEP}"
+    done
+    OUT="${OUT%${SEP}}"
+    printf "${OUT}"
+}
 
 _remove_lock () {
     flock -u 999                                     # ... und wieder freigeben

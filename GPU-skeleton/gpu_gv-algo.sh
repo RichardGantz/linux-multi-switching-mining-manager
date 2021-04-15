@@ -46,7 +46,7 @@
 #  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
 #                                        => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
 #  3. (weggefallen)
-#  4. ###WARTET### jetzt, bis die Datei "../KURSE_PORTS.in" vorhanden und NICHT LEER ist.
+#  4. ###WARTET### jetzt, bis die Datei "../NH_KURSE_PORTS.in" vorhanden und NICHT LEER ist.
 #  5. Ruft _read_in_ALGO_PORTS_KURSE     => Array KURSE["AlgoName"] verfügbar
 #     Und Füllt die Arrays, die für die Coin-Berechnung erforderlich sind.
 #  6. Berechnet jetzt die "Mines" in BTC und schreibt die folgenden Angaben in die Datei ALGO_WATTS_MINES.in :
@@ -81,7 +81,8 @@
 #  1. Neustart des Skripts bekommt eine PID, die nur in der Prozesstabelle vorhanden ist
 #  2. Merkt sich die eigene UUID in ${GPU_DIR}
 SRC_DIR=GPU-skeleton
-GPU_DIR=$(pwd | gawk -e 'BEGIN { FS="/" }{print $NF}')
+GPU_DIR=$(pwd)
+GPU_DIR=${GPU_DIR##*/}
 #  3. Definiert _update_SELF_if_necessary()
 _update_SELF_if_necessary()
 {
@@ -93,7 +94,7 @@ _update_SELF_if_necessary()
     rm -f $UPD_FILE
     if [ ! "$GPU_DIR" == "$SRC_DIR" ]; then
         src_secs=$(date --utc --reference=../${SRC_DIR}/${SRC_FILE} +%s)
-        dst_secs=$(date --utc --reference=$SRC_FILE +%s)
+        dst_secs=$(date --utc --reference=${SRC_FILE} +%s)
         if [[ $dst_secs < $src_secs ]]; then
             # create update command file
             echo "cp -f ../${SRC_DIR}/${SRC_FILE} .; \
@@ -114,6 +115,21 @@ _update_SELF_if_necessary()
 #  4. Ruft update_SELF_if_necessary()
 _update_SELF_if_necessary
 
+### SCREEN ADDITIONS: ###
+# Die folgende Variable wird auch in der globals.inc gesetzt (0 bis zum Ende der Tests) und kann hier überschrieben werden.
+# 0 ist der frühere Betrieb an einem graphischen Desktop mit mehreren hochpoppenden Terminals
+# 1 ist der Betrieb unter GNU screen
+UseScreen=1
+[[ ${#GPU_gv_Title} -eq 0 ]] && GPU_gv_Title=MAIN
+[[ ${#BencherTitle} -eq 0 ]] && BencherTitle=BENCHMARKER
+# Die folgende Variable verhindert ...
+#     ...
+#     beendet das Programm, falls automatische Benchmarks wegen unbehandelter .json durchgeführt wurden.
+# 0 bedutet normaler Betrieb mit Miner-Start
+# 1 bedeutet "Trockenbetrieb" ohne Minerstart
+# (Hier drin im Moment nicht verwendet
+#ScreenTest=0
+
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source ../globals.inc
 declare -i verbose=0
@@ -126,7 +142,7 @@ if [ ${#gpu_idx} -eq 0 ]; then
     declare -i i=0
     declare -i n=5
     for (( ; i<n; i++ )); do
-        clear
+        #clear
         echo "---===###>>> MISSING IDENTITY:"
         echo "---===###>>> Ist gpu-abfrage.sh nicht gelaufen?"
         echo "---===###>>> Mir fehlt die Datei gpu_index.in, die mir sagt,"
@@ -199,29 +215,109 @@ function _On_Exit () {
 }
 trap _On_Exit EXIT # == SIGTERM == TERM == -15
 
+gpu_uuid="${GPU_DIR}"
+IMPORTANT_BENCHMARK_JSON="benchmark_${gpu_uuid}.json"
+
 # Die Quelldaten Miner- bzw. AlgoName, BenchmarkSpeed und WATT für diese GraKa
-#  6. Prüft, ob die Benchmarkdatei jemals bearbeitet wurde und bricht ab, wenn nicht.
-#     Dann gibt es nämlich keine Benchmark- und Wattangaben zu den einzelnen Algorithmen.
-# (25.12.2017) Das wird wohl hinfällig, weil wir das System so planen, dass es auch ohne Objekte in der JSON Datei
-#     hochfährt und selbst das Benchmarking startet, um Werte hineinzubekommen.
-# Kann irgendwann ganz rausgelöscht werden, wenn die Erfahrung zeigt, dass auch so alles funktioniert.
-if [ 1 -eq 0 ]; then
+#  6. Prüft, ob die Benchmarkdatei jemals bearbeitet wurde und startet Autobenchmarking, wenn nicht.
+#     Denn es gibt sonst nämlich keine Benchmark- und Wattangaben zu den einzelnen Algorithmen.
+# (09.04.2021) Wir implementieren GNU screen
+if [ 1 -eq 1 ]; then
     IMPORTANT_BENCHMARK_JSON_SRC=../${SRC_DIR}/benchmark_skeleton.json
     IMPORTANT_BENCHMARK_JSON="benchmark_${GPU_DIR}.json"
     diff -q $IMPORTANT_BENCHMARK_JSON $IMPORTANT_BENCHMARK_JSON_SRC &>/dev/null
-    if [ $? == 0 ]; then
-        echo "-------------------------------------------"
-        echo "---        FATAL ERROR GPU #${gpu_idx}           ---"
-        echo "-------------------------------------------"
-        echo "File '$IMPORTANT_BENCHMARK_JSON' not yet edited!!!"
-        echo "Please edit and fill in valid data!"
-        echo "Execution stopped."
-        echo "-------------------------------------------"
-        exit 1
+    if [ $? == 0 -o ! -f $IMPORTANT_BENCHMARK_JSON ]; then
+	if [ 1 -eq 0 ]; then
+            echo "-------------------------------------------"
+            echo "---        FATAL ERROR GPU #${gpu_idx}           ---"
+            echo "-------------------------------------------"
+            echo "File '$IMPORTANT_BENCHMARK_JSON' not yet edited!!!"
+            echo "Please edit and fill in valid data!"
+            echo "Execution stopped."
+            echo "-------------------------------------------"
+            exit 1
+	fi
+	# miner-func ist nach dem nächsten Befehl ebenfalls included
+	[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.sh
+	if [ ! -f ${LINUX_MULTI_MINING_ROOT}/multi_mining_calc.pid ]; then
+	    cd ${LINUX_MULTI_MINING_ROOT}
+	    #ATTENTION_FOR_USER_INPUT=1
+	    _func_gpu_abfrage_sh
+            cd ${_WORKDIR_}
+	else
+	    _set_Miner_Device_to_Nvidia_GpuIdx_maps
+	fi
+	_set_ALLE_LIVE_MINER
+	# Vor dem Aufruf der folgenden Funktion muss IMPORTANT_BENCHMARK_JSON gesetzt sein!!!
+	_read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
+	#_read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
+
+        # Eigene gpu_uuid disablen.
+        # Kann sehr gefahrlos gemacht werden, weil der multi_miner diesen Prozess gerade erst gestartet hat oder gar nicht läuft.
+        printf "GPU #${gpu_idx}: ###---> Going to take me out of the system, recognized as \"DISABLED\"..."
+        _disable_GPU_UUID_GLOBALLY ${gpu_uuid}
+        printf " done\n"
+
+        # ALL_MISSING_ALGORITHMs abarbeiten
+        cd ${LINUX_MULTI_MINING_ROOT}/benchmarking
+        mkdir -p autobenchlogs
+
+	# Hier soll der Benchmarker gestartet werden.
+	# Für alle algos, die die Miner können.
+	for minerName in ${ALLE_MINER[@]}; do
+            read miner_name miner_version <<<"${minerName//#/ }"
+            declare -n actMissingAlgos="Missing_${miner_name//\-/_}_${miner_version//\./_}_Algos"
+
+            if [ ${#actMissingAlgos[@]} -gt 0 ]; then
+		for algo in ${actMissingAlgos[@]}; do
+                    algorithm=${algo}#${minerName}
+		    echo "GPU #${gpu_idx}: ###---> Going to Auto-Benchmark Algorithm/Miner ${algorithm}, trying to produce some Coins on the fly..."
+
+		    parameters="-d"
+		    [ -n "${parameters}" ] && echo "        ###---> HardCoded additional Parameters for bench_30s_2.sh: \"${parameters}\""
+		    cmd="export BencherTitle=${BencherTitle}; ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_GPU#${gpu_idx}_${algorithm}.log"
+
+		    ### SCREEN ADDITIONS: ###
+		    if [ ${UseScreen} -eq 1 ]; then
+			screen -X eval split "resize -v 10" focus
+			screen -p + -t ${BencherTitle} ${BASH} -c "${cmd}"
+			# Warten, bis der Benchmarker gestartet ist...
+			benchPIDfile=.bench_30s_2_GPU#${gpu_idx}.pid
+			until [ -s ${benchPIDfile} ]; do sleep .01; done
+			# Warten, solange der Benchmarker läuft...
+			benchPID=$(< ${benchPIDfile})
+			while [ -f ${benchPIDfile} -o $(ps -q ${benchPID} &>/dev/null; echo $?) -eq 0 ]; do sleep 1; done
+			screen -X eval only
+		    else
+			"${cmd}"
+		    fi
+
+		    case $? in
+			94) # Internet Connection lost detected
+			    # Wenn das immer noch ist, sollte kein neuer Benchmarkversuch mehr gestartet werden
+			    if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+				break
+			    fi
+			    ;;
+		    esac
+
+		done
+            fi
+	done
+        
+        cd ${_WORKDIR_}
+
+        printf "GPU #${gpu_idx}: ###---> Going to take me back into the system, recognized as \"Enabled\"..."
+        _enable_GPU_UUID_GLOBALLY ${gpu_uuid}
+        printf " done\n"
+
+	# Sicherheitshalber nach den Benchmarks beenden.
+	# Automatische Benchmarks abgeschlossen.
+	# Die GPU ist wieder enabled und wird beim nächsten multi_miner-Zyklus berücksichtigt.
+	# Da es keine Datei gpu_gv-algo.pid mehr in diesem Verzeichnis gibt, startet der multi_miner das Script also wieder automatisch.
+	exit 99
     fi
 fi
-gpu_uuid="${GPU_DIR}"
-IMPORTANT_BENCHMARK_JSON="benchmark_${gpu_uuid}.json"
 
 ###############################################################################
 #
@@ -238,12 +334,12 @@ IMPORTANT_BENCHMARK_JSON="benchmark_${gpu_uuid}.json"
 #     HASH_DURATION["AlgoName"]
 #     BENCH_DATE["AlgoName"]
 #     BENCH_KIND["AlgoName"]
-#     MinerFee["AlgoName"]
-#     EXTRA_PARAMS["AlgoName"]
-#     GRAFIK_CLOCK["AlgoName"]
-#     MEMORY_CLOCK["AlgoName"]
-#     FAN_SPEED["AlgoName"]
+#     GRAFIK_CLOCK["AlgoName"] - heisst in der .json: "GPUGraphicsClockOffset[3]"
+#     MEMORY_CLOCK["AlgoName"] - heisst in der .json: "GPUMemoryTransferRateOffset[3]"
+#     FAN_SPEED["AlgoName"]    - heisst in der .json: "GPUTargetFanSpeed"
 #     POWER_LIMIT["AlgoName"]
+#      "HashCountPerSeconds": 0,
+#      "BenchMode": o,
 #     LESS_THREADS["AlgoName"]
 #     aufnimmt
 #
@@ -267,6 +363,12 @@ bENCH_SRC_OLD=""; if [ -f "$bENCH_SRC_OLD" ]; then rm "$bENCH_SRC_OLD"; fi
 # Damit readarray als letzter Prozess in einer Pipeline nicht in einer subshell
 # ausgeführt wird und diese beim Austriit gleich wieder seine Variablen verwirft
 shopt -s lastpipe
+
+# Die Datei macht einiges, was das Format der benchmark.json betrifft, wobei die entsprechenden Funktionen dafür
+# in der Datei gpu-bENCH.inc definiert sind.
+# Eine Strukturänderung der benchmark.json wird nur durchgeführt, wenn zwei Dateien im GPU-skeleton Verzeichnis
+#      denselben Zeitstempel haben.
+# Muss mal sauber dokumentiert werden!!!
 source gpu-bENCH.sh
 
 # Auf jeden Fall beim Starten das Array bENCH[] und WATTS[] aufbauen
@@ -283,7 +385,7 @@ _read_IMPORTANT_BENCHMARK_JSON_in  # without_miners Muss AUF JEDEN FALL die Mine
 #
 ######################################
 
-# 10. Definiert _read_in_ALGO_PORTS_KURSE(), welches die Datei "../KURSE_PORTS.in" in das Array KURSE["AlgoName"] aufnimmt.
+# 10. Definiert _read_in_ALGO_PORTS_KURSE(), welches die Datei "../NH_KURSE_PORTS.in" in das Array KURSE["AlgoName"] aufnimmt.
 #     Das Alter dieser Datei ist unwichtig, weil sie IMMER durch algo_multi_abfrage.sh aus dem Web aktualisiert wird.
 #     Andere müssen dafür sorgen, dass die Daten in dieser Datei gültig sind!
 [[ ${#_ALGOINFOS_INCLUDED} -eq 0 ]]   && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
@@ -311,10 +413,93 @@ _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
 
 # 10.3. Alle fehlenden Pool-Infos setzen wie Coin, ServerName und Port
 # Ab hier sind die folgenden Informationen in den Arrays verfügbar
-#    actCoinsOfPool="CoinsOfPool_${pool}"
-#    actServerNameOfPool="ServerNameOfPool_${pool}"
-#    actPortsOfPool="PortsOfPool_${pool}"
+#    actCoinsOfPool      ="CoinsOfPool_${pool}"
+#    actMiningAlgosOfPool="MiningAlgosOfPool_${pool}"
+#    # actServerNameOfPool="ServerNameOfPool_${pool}"
+#    # actPortsOfPool="PortsOfPool_${pool}"
+#    # Coin_MiningAlgo_ServerName_Port[i] = zwar global, aber Inhalt der letzten all.${pool}-Datei
+#    UniqueMiningAlgoArray[${miningAlgo}]+="${coin}#${pool}#${server_name}#${algo_port} "
+#    CoinsPoolsOfMiningAlgo_${mining_Algo}[i] = UniqueMiningAlgoArray[${miningAlgo}]
 _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
+
+
+# Fehlende mining_algo's berechnen könnte man auch hier machen und wurde in der Anpassungsphase gemacht, um die neuen Karten mit Werten zu versorgen.
+# Später nochmal prüfen, ob man das vielleicht generell so stehen lassen kann.
+# Dann ist zu bedenken, dass oben auch so ein Block ist, der auf eine "leere" .json prüft...
+if [ 1 -eq 1 ]; then
+    if [ 1 -eq 1 ]; then
+        # Eigene gpu_uuid disablen.
+        # Kann sehr gefahrlos gemacht werden, weil der multi_miner diesen Prozess gerade erst gestartet hat oder gar nicht läuft.
+        printf "GPU #${gpu_idx}: ###---> Going to take me out of the system, recognized as \"DISABLED\"..."
+        _disable_GPU_UUID_GLOBALLY ${gpu_uuid}
+        printf " done\n"
+
+        # ALL_MISSING_ALGORITHMs abarbeiten
+        cd ${LINUX_MULTI_MINING_ROOT}/benchmarking
+        mkdir -p autobenchlogs
+
+	# Hier soll der Benchmarker gestartet werden.
+	# Für alle algos, die die Miner können.
+	for minerName in ${ALLE_MINER[@]}; do
+            read miner_name miner_version <<<"${minerName//#/ }"
+            declare -n actMissingAlgos="Missing_${miner_name//\-/_}_${miner_version//\./_}_Algos"
+
+            if [ ${#actMissingAlgos[@]} -gt 0 ]; then
+		for algo in ${actMissingAlgos[@]}; do
+                    algorithm=${algo}#${minerName}
+		    echo "GPU #${gpu_idx}: ###---> Going to Auto-Benchmark Algorithm/Miner ${algorithm}, trying to produce some Coins on the fly..."
+
+		    parameters="-d"
+		    [ -n "${parameters}" ] && echo "        ###---> HardCoded additional Parameters for bench_30s_2.sh: \"${parameters}\""
+		    cmd="export BencherTitle=${BencherTitle}; ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_GPU#${gpu_idx}_${algorithm}.log"
+
+		    ### SCREEN ADDITIONS: ###
+		    if [ ${UseScreen} -eq 1 ]; then
+			screen -X eval split "resize -v 10" focus
+			screen -p + -t ${BencherTitle} ${BASH} -c "${cmd}"
+			# Warten, bis der Benchmarker gestartet ist...
+			benchPIDfile=.bench_30s_2_GPU#${gpu_idx}.pid
+			until [ -s ${benchPIDfile} ]; do sleep .01; done
+			# Warten, solange der Benchmarker läuft...
+			benchPID=$(< ${benchPIDfile})
+			#while [ -f ${benchPIDfile} -o $(ps -q ${benchPID} &>/dev/null; echo $?) -eq 0 ]; do sleep 1; done
+			while [ $(ps -q ${benchPID} &>/dev/null; echo $?) -eq 0 ]; do sleep 1; done
+			screen -X eval only
+		    else
+			"${cmd}"
+		    fi
+
+		    ### $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+		    ### Die RÜCKGABEN UNTER SCREEN MÜSSEN ANDERS AUSGEWERTET WERDEN!!!
+		    ### $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+		    case $? in
+			94) # Internet Connection lost detected
+			    # Wenn das immer noch ist, sollte kein neuer Benchmarkversuch mehr gestartet werden
+			    if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
+				break
+			    fi
+			    ;;
+		    esac
+
+		done
+            fi
+	done
+        
+        cd ${_WORKDIR_}
+
+        printf "GPU #${gpu_idx}: ###---> Going to take me back into the system, recognized as \"Enabled\"..."
+        _enable_GPU_UUID_GLOBALLY ${gpu_uuid}
+        printf " done\n"
+
+	# Sicherheitshalber nach den Benchmarks beenden.
+	# Automatische Benchmarks abgeschlossen.
+	# Die GPU ist wieder enabled und wird beim nächsten multi_miner-Zyklus berücksichtigt.
+	# Da es keine Datei gpu_gv-algo.pid mehr in diesem Verzeichnis gibt, startet der multi_miner das Script also wieder automatisch.
+	exit 99
+    fi
+fi
+
+
 
 ###############################################################################
 #
@@ -395,12 +580,12 @@ while :; do
         fi
 
         # Die Reihenfolge der Dateierstellungen durch ../algo_multi_abfrage.sh ist:
-        # (21.11.2017)
-        # Wir wissen jetzt, dass alle relevanten Werte in der "simplemultialgo"-api Abfrage enthalten sind
-        #     und brauchen die ../ALGO_NAMES.in überhaupt nicht mehr.
-        #     Das folgende kann raus und es ergibt sich eine neue Reihenfolge:
-        #     1.: $algoID_KURSE_PORTS_WEB und $algoID_KURSE_PORTS_ARR
-        #     2.: ../BTC_EUR_kurs.in
+        # (31.03.2021)
+	#     1.: $algoID_KURSE__PAY__WEB="NH_PAYINGS.json"
+	#     2.: $algoID_KURSE_PORTS_WEB="NH_PORTS.json"
+	#     3.: $algoID_KURSE_PORTS_PAY="NH_PAYINGS.in"
+        #     4.: $algoID_KURSE_PORTS_ARR="NH_PORTS.in"
+        #     5.: ../BTC_EUR_kurs.in
         # Letzte: ${SYNCFILE}
 
         # Wenn es noch keine ${RUNNING_STATE} gibt, wurde das Gesamtsystem vor Kurzem gestartet und multi_mining_calc wartet erst mal auf die
@@ -450,9 +635,9 @@ while :; do
 
                 "nh")
                     if [ ${PoolActive[${pool}]} -eq 1 ]; then
-                        #  4. ###WARTET### jetzt, bis die Datei "../KURSE_PORTS.in" vorhanden und NICHT LEER ist.
-                        until [ -s ${algoID_KURSE_PORTS_ARR} ]; do
-                            echo "GPU #${gpu_idx}: ###---> Waiting for ${algoID_KURSE_PORTS_ARR} to become available..."
+                        #  4. ###WARTET### jetzt, bis die Datei "../NH_KURSE_PORTS.in" vorhanden und NICHT LEER ist.
+                        until [ -s ${algoID_KURSE_PORTS_PAY} ]; do
+                            echo "GPU #${gpu_idx}: ###---> Waiting for ${algoID_KURSE_PORTS_PAY} to become available..."
                             sleep .5
                         done
                         #  5. Ruft _read_in_ALGO_PORTS_KURSE
@@ -587,8 +772,9 @@ while :; do
         unset ALL_MISSING_ALGORITHMs I_want_to_Disable_myself_for_AutoBenchmarking
         declare -a ALL_MISSING_ALGORITHMs
         for minerName in "${ALLE_MINER[@]}"; do
+	    #[ ${debug} -ge 1 ] && echo "Durchgehen des Arrays ALLE_MINER, welches folgende Werte hat: ${ALLE_MINER[@]} "
             read m_name m_version <<<"${minerName//#/ }"
-            declare -n   actMissingAlgos="Missing_${m_name}_${m_version//\./_}_Algos"
+            declare -n   actMissingAlgos="Missing_${m_name//-/_}_${m_version//\./_}_Algos"
             #echo ${!actMissingAlgos}
 
             for actAlgo in ${!actMissingAlgos[@]}; do
@@ -606,6 +792,7 @@ while :; do
             done
         done
 
+	#[ ${debug} -ge 1 ] && echo "\${#ALL_MISSING_ALGORITHMs[@]} == ${#ALL_MISSING_ALGORITHMs[@]}: ${ALL_MISSING_ALGORITHMs[@]}"
         if [ ${#ALL_MISSING_ALGORITHMs[@]} -gt 0 ]; then
             I_want_to_Disable_myself_for_AutoBenchmarking=1
             if [ ${debug} -eq 1 ]; then
@@ -632,7 +819,6 @@ while :; do
         #
 
         for algorithm in "${!bENCH[@]}"; do
-
             # Manche Algos kommen erst gar nicht in die Datei rein, z.B. wenn sie DISABLED wurden
             # oder wenn gerade nichts dafür bezahlt wird.
 
@@ -648,6 +834,11 @@ while :; do
             read miningAlgo miner_name miner_version muck888 <<<${algorithm//#/ }
             MINER=${miner_name}#${miner_version}
             [ ${#ALLE_LIVE_MINER[${MINER}]} -eq 0 ] && continue
+
+	    # 2021-04-12: Implementierung der vom miningAlgo abhängigen Fees
+	    miner_fee=0
+	    [ ${#MINER_FEES[${MINER}]}               -gt 0 ] && miner_fee=${MINER_FEES[${MINER}]}
+	    [ ${#MINER_FEES[${MINER}:${miningAlgo}]} -gt 0 ] && miner_fee=${MINER_FEES[${MINER}:${miningAlgo}]}
 
             declare -n actCoinsPoolsOfMiningAlgo="CoinsPoolsOfMiningAlgo_${miningAlgo//-/_}"
             [ $debug -eq 1 ] && (echo ${actCoinsPoolsOfMiningAlgo[@]} | tr ' ' '\n' >.${!actCoinsPoolsOfMiningAlgo})
@@ -679,15 +870,14 @@ while :; do
                                 if [[          ${#bENCH[${algorithm}]}  -gt    0 \
                                             && ${#KURSE[${coin}]}       -gt    0 \
                                             && ${#PoolFee[${pool}]}     -gt    0 \
-                                            && ${#MINER_FEES[${MINER}]} -gt    0 \
                                             && ${WATTS[${algorithm}]}   -lt 1000 \
                                     ]]; then
                                     # "Mines" in BTC berechnen
-                                    algoMines=$(echo "scale=8;   ${bENCH[${algorithm}]}  \
+                                    algoMines=$(echo "scale=20;   ${bENCH[${algorithm}]}  \
                                                            * ${KURSE[${coin}]}  \
                                                            / ${k_base}^3  \
                                                            * ( 100 - "${PoolFee[${pool}]}" )     \
-                                                           * ( 100 - "${MINER_FEES[${MINER}]}" ) \
+                                                           * ( 100 - "${miner_fee}" ) \
                                                            / 10000
                                              " \
                                                        | bc )
@@ -713,14 +903,13 @@ while :; do
                                             && ${#CoinHash[${coin}]}        -gt    0 \
                                             && ${#Coin2BTC_factor[${coin}]} -gt    0 \
                                             && ${#PoolFee[${pool}]}         -gt    0 \
-                                            && ${#MINER_FEES[${MINER}]}     -gt    0 \
                                             && ${WATTS[${algorithm}]}       -lt 1000 \
                                     ]]; then
                                     # "Mines" in BTC berechnen
-                                    algoMines=$(echo "scale=8;   86400 * ${BlockReward[${coin}]} * ${Coin2BTC_factor[${coin}]}   \
+                                    algoMines=$(echo "scale=20;   86400 * ${BlockReward[${coin}]} * ${Coin2BTC_factor[${coin}]}   \
                                                            / ( ${BlockTime[${coin}]} * (1 + ${CoinHash[${coin}]} / ${bENCH[${algorithm}]}) ) \
                                                            * ( 100 - "${PoolFee[${pool}]}" )     \
-                                                           * ( 100 - "${MINER_FEES[${MINER}]}" ) \
+                                                           * ( 100 - "${miner_fee}" ) \
                                                            / 10000
                                              " \
                                                        | bc )
@@ -1108,9 +1297,9 @@ while :; do
 
                 echo "GPU #${gpu_idx}: ###---> Going to Auto-Benchmark Algorithm/Miner ${algorithm}, trying to produce some Coins on the fly..."
                 parameters="-d"
-                [ ${NoCards} ] && parameters="-d -w 5 -m 5"
                 [ -n "${parameters}" ] && echo "        ###---> HardCoded additional Parameters for bench_30s_2.sh: \"${parameters}\""
-                ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_${gpu_idx}_${algorithm}.log
+                #echo cmd == './bench_30s_2.sh -a '${gpu_idx} ${algorithm} ${parameters} '| tee autobenchlogs/bench_GPU#'${gpu_idx}_${algorithm}.log
+                ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_GPU#${gpu_idx}_${algorithm}.log
 
                 case $? in
                     94) # Internet Connection lost detected

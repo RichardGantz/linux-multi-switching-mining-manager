@@ -7,11 +7,6 @@
 
 _NVIDIACMD_INCLUDED=1
 
-if [ $NoCards ]; then
-    temperatures=( "54" "52" "58" "57" "60" "54" )
-    declare -i lfdTemp=0
-fi
-
 # NVIDIA Befehle
 #nvidia-smi -i ${gpu_idx} -q -d Clock,Power
 #nvidia-smi -i ${gpu_idx} --query-gpu=temperature.gpu --format=csv,noheader
@@ -69,7 +64,7 @@ function _setup_Nvidia_Default_Tuning_CmdStack () {
     unset CmdStack
     declare -ag CmdStack
     local i
-    for (( i=0; $i<2; i++ )); do
+    for (( i=0; i<2; i++ )); do
         push_it=1
         if [ ${#lastNvPara[$i]} -gt 0 ]; then [ ${lastNvPara[$i]} -eq ${nvidiaPara[$i]} ] && push_it=0; fi
         [ ${push_it} -eq 1 ] && printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[$i]}" ${gpu_idx} ${nvidiaPara[$i]}
@@ -83,21 +78,21 @@ function _setup_Nvidia_Default_Tuning_CmdStack () {
     # ODER nur Wechsel der Lüftergeschwindigkeit
     if [ ${push_it} -eq 1 ]; then
         if [ ${nvidiaPara[2]} -eq 0 ]; then
-            # Einstellung auf "Automatische Geschwindikeitskontrolle"
-            printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
+	    # Einstellung auf "Automatische Geschwindikeitskontrolle"
+	    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 0
         else
-            # Wenn es einen vorherigen Wert gab, dann stand ganz sicher eine Fan-Geschwindigkeit drin,
-            #      weil der neue Wert !=0 ist (s. letzter Vergleich),
-            #      UND die beiden Werte UNTERSCHIEDLICH sind, sonst wären wir hier nicht drin.
-            # Wenn es also einen vorherigen Wert gab, wurde die Manuele Steuerung bereits eingestellt und der Befehl
-            #      zur Manuellen Steuerung muss nicht nocheinmal eingegeben werden,
-            #      ES SEI DENN, der alte Wert war ==0
-            # es gab keinen Wert      -oder     der vorherige Wert war 0
-            if [[ ${#lastNvPara[2]} -eq 0 || ${lastNvPara[2]} -eq 0 ]]; then
+	    # Wenn es einen vorherigen Wert gab, dann stand ganz sicher eine Fan-Geschwindigkeit drin,
+	    #      weil der neue Wert !=0 ist (s. letzter Vergleich),
+	    #      UND die beiden Werte UNTERSCHIEDLICH sind, sonst wären wir hier nicht drin.
+	    # Wenn es also einen vorherigen Wert gab, wurde die Manuele Steuerung bereits eingestellt und der Befehl
+	    #      zur Manuellen Steuerung muss nicht nocheinmal eingegeben werden,
+	    #      ES SEI DENN, der alte Wert war ==0
+	    # es gab keinen Wert      -oder     der vorherige Wert war 0
+	    if [[ ${#lastNvPara[2]} -eq 0 || ${lastNvPara[2]} -eq 0 ]]; then
                 printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[-1]}" ${gpu_idx} 1
-            fi
-            # Fan Speed auf eingelesenen Wert setzen
-            printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[2]}" ${gpu_idx} ${nvidiaPara[2]}
+	    fi
+	    # Fan Speed auf eingelesenen Wert setzen
+	    printf -v CmdStack[${#CmdStack[@]}] "${nvidiaCmd[2]}" ${gpu_idx} ${nvidiaPara[2]}
         fi
     fi
 
@@ -110,12 +105,8 @@ function _setup_Nvidia_Default_Tuning_CmdStack () {
 
 function _query_actual_Power_Temp_and_Clocks () {
     shopt -s lastpipe
-    if [ ! $NoCards ]; then
-        nvidia-smi -q -i ${gpu_idx} -d Clock,Power >nvidia-befehle/nvidia-Clock-Power.out
-        actTemp=$(nvidia-smi -i ${gpu_idx} --query-gpu=temperature.gpu --format=csv,noheader)
-    else
-        actTemp=${temperatures[$((lfdTemp++ % ${#temperatures[@]}))]}
-    fi
+    nvidia-smi -q -i ${gpu_idx} -d Clock,Power >nvidia-befehle/nvidia-Clock-Power.out
+    actTemp=$(nvidia-smi -i ${gpu_idx} --query-gpu=temperature.gpu --format=csv,noheader)
 
     unset actClocks; declare -Ag actClocks
     unset maxClocks; declare -Ag maxClocks
@@ -125,7 +116,7 @@ function _query_actual_Power_Temp_and_Clocks () {
     cat nvidia-befehle/nvidia-Clock-Power.out \
         | grep -A 4 -e '^[[:space:]]*Clocks$' \
         | readarray -n 0 -O 0 -t NVIDIA_ARR
-    for ((i=1; $i<${#NVIDIA_ARR[@]}; i++)); do
+    for ((i=1; i<${#NVIDIA_ARR[@]}; i++)); do
         actClocks[$(echo ${NVIDIA_ARR[$i]} | cut -d ' ' -f1)]="${NVIDIA_ARR[$i]//[![:digit:]]/}"
     done
 
@@ -133,7 +124,7 @@ function _query_actual_Power_Temp_and_Clocks () {
     cat nvidia-befehle/nvidia-Clock-Power.out \
         | grep -A 4 -e '^[[:space:]]*Max Clocks$' \
         | readarray -n 0 -O 0 -t NVIDIA_ARR
-    for ((i=1; $i<${#NVIDIA_ARR[@]}; i++)); do
+    for ((i=1; i<${#NVIDIA_ARR[@]}; i++)); do
         maxClocks[$(echo ${NVIDIA_ARR[$i]} | cut -d ' ' -f1)]="${NVIDIA_ARR[$i]//[![:digit:]]/}"
     done
 
@@ -141,7 +132,7 @@ function _query_actual_Power_Temp_and_Clocks () {
     cat nvidia-befehle/nvidia-Clock-Power.out \
         | grep -A 7 -e '^[[:space:]]*Power Readings$' \
         | readarray -n 0 -O 0 -t NVIDIA_ARR
-    for ((i=2; $i<${#NVIDIA_ARR[@]}; i++)); do
+    for ((i=2; i<${#NVIDIA_ARR[@]}; i++)); do
         key=$(echo ${NVIDIA_ARR[$i]} | cut -d ':' -f1)
         key=${key%[[:space:]]*}
         actPowers[${key}]="${NVIDIA_ARR[$i]//[![:digit:].]/}"

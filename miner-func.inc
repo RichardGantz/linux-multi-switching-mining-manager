@@ -7,14 +7,22 @@
 #
 # Hier muss das Verzeichnis zu miners mitgegeben werden, z.B. ../miners
 #
+# Die folgenden Funktionen werden hier drin definiert:
+# function _read_in_minerFees_to_MINER_FEES () {
+# function _set_ALLE_MINER_from_path () {
+# function _set_ALLE_LIVE_MINER () {
+# function _split_into_Available_and_Missing_Miner_Algo_Arrays () {
+# function _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays () {
+# function _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array () {
+# function _set_Miner_Device_to_Nvidia_GpuIdx_maps () {
 
 _MINERFUNC_INCLUDED=1
 
 function _read_in_minerFees_to_MINER_FEES () {
     local miner
 
-    _reserve_and_lock_file all.miner.fees
-    declare -i act_miner_fees_epoch=$(date --reference=${LINUX_MULTI_MINING_ROOT}/miners/all.miner.fees +%s)
+    _reserve_and_lock_file ${ALL_MINER_FEES_FILE}
+    declare -i act_miner_fees_epoch=$(date --reference=${ALL_MINER_FEES_FILE} +%s)
 
     [ -z "${all_miner_fees_epoch}" ] && declare -ig all_miner_fees_epoch=0
     if [[  ${act_miner_fees_epoch} > ${all_miner_fees_epoch} ]]; then
@@ -22,16 +30,12 @@ function _read_in_minerFees_to_MINER_FEES () {
         unset READARR
         unset MINER_FEES; declare -Ag MINER_FEES
 
-        for miner in ${ALLE_MINER[@]}; do
-            MINER_FEES[${miner}]=0
-        done
-
-        cat ${LINUX_MULTI_MINING_ROOT}/miners/all.miner.fees \
+        cat ${ALL_MINER_FEES_FILE} \
             | grep -E -v -e "^#|^$"  \
             | readarray -n 0 -O 0 -t READARR
         for ((i=0; $i<${#READARR[@]}; i++)) ; do
             #echo ${READARR[$i]}
-            MINER_FEES[${READARR[$i]%:*}]=${READARR[$i]#*:}
+            MINER_FEES[${READARR[$i]%:*}]=${READARR[$i]##*:}
         done
         all_miner_fees_epoch=${act_miner_fees_epoch}
     fi
@@ -46,7 +50,7 @@ function _set_ALLE_MINER_from_path () {
 
     _reserve_and_lock_file any_miner_algos_changed
     ls -l *.algos >.act_miner_algos
-    [[ ! -f .all_miner_algos         ]] && touch .all_miner_algos
+    [[ ! -f .all_miner_algos ]] && touch .all_miner_algos
     diff -q .act_miner_algos .all_miner_algos &>/dev/null
     [[ $? -gt 0 ]] && touch .any_miner_algos_changed
     cp -f .act_miner_algos .all_miner_algos
@@ -74,9 +78,12 @@ function _set_ALLE_MINER_from_path () {
             # Deshalb wandeln wir für die interne Indexierung der assoziativen Arrays alle "." in "_".
             # Damit können wir die Bestandteile des Strings sicher auch später wieder indentifizieren
             #
-            declare -n       deleteIt="Mining_${m_name}_${m_version//\./_}_Algos";     unset deleteIt
-            declare -Ag               "Mining_${m_name}_${m_version//\./_}_Algos"
-            declare -n actMiningAlgos="Mining_${m_name}_${m_version//\./_}_Algos"
+	    # 2021-03-28: Probleme mit dem Bindestrich im Miner-Name "t-rex".
+	    #             Wir werden experimentell sehen müssen, wo das noch auftritt oder ob wir das irgendwo zurückwandeln müssen.
+	    #             Falls diese Information über den Namen aus dem Index abgeleitet werden muss, müssen wir anders vorgehen.
+            declare -n       deleteIt="Mining_${m_name//-/_}_${m_version//\./_}_Algos";     unset deleteIt
+            declare -Ag               "Mining_${m_name//-/_}_${m_version//\./_}_Algos"
+            declare -n actMiningAlgos="Mining_${m_name//-/_}_${m_version//\./_}_Algos"
 
             unset COINS_MiningAlgos
             # Erst die Ausnahme-Namen, wenn es welche gibt...
@@ -125,7 +132,7 @@ function _set_ALLE_LIVE_MINER () {
         cp -f .act_live_miners live_miners
         unset ALLE_LIVE_MINER alle_live_miner
         declare -Ag ALLE_LIVE_MINER
-        read -a alle_live_miner <<<$(< live_miners)
+	readarray -n 0 -O 0 -t alle_live_miner <<<$(< live_miners)
         for MINER in ${alle_live_miner[@]}; do
             msg+=" ${MINER}"
             ALLE_LIVE_MINER[${MINER}]=1
@@ -144,13 +151,13 @@ function _set_ALLE_LIVE_MINER () {
 # $IMPORTANT_BENCHMARK_JSON muss gesetzt sein
 #
 function _split_into_Available_and_Missing_Miner_Algo_Arrays () {
-    declare -n          deleteIt="Missing_${1}_${2//\./_}_Algos";   unset deleteIt
-    declare -ag                  "Missing_${1}_${2//\./_}_Algos"
-    declare -n   actMissingAlgos="Missing_${1}_${2//\./_}_Algos"
+    declare -n          deleteIt="Missing_${1//-/_}_${2//\./_}_Algos";   unset deleteIt
+    declare -ag                  "Missing_${1//-/_}_${2//\./_}_Algos"
+    declare -n   actMissingAlgos="Missing_${1//-/_}_${2//\./_}_Algos"
 
-    declare -n          deleteIt="Available_${1}_${2//\./_}_Algos"; unset deleteIt
-    declare -ag                  "Available_${1}_${2//\./_}_Algos"
-    declare -n actAvailableAlgos="Available_${1}_${2//\./_}_Algos"
+    declare -n          deleteIt="Available_${1//-/_}_${2//\./_}_Algos"; unset deleteIt
+    declare -ag                  "Available_${1//-/_}_${2//\./_}_Algos"
+    declare -n actAvailableAlgos="Available_${1//-/_}_${2//\./_}_Algos"
 
     for lfdMiningAlgo in ${actMiningAlgos[@]}; do
         #echo "\$lfdMiningAlgo $lfdMiningAlgo"
@@ -163,6 +170,7 @@ function _split_into_Available_and_Missing_Miner_Algo_Arrays () {
             #    müssen wir sicherstellen, dass nur das Effektiv-Objekt in den MissingAlgos landet.
             # Wenn wir also auf 888 stossen, suchen wir weiter.
             # Ist das 888 nicht da, brechen wir ab
+	    #echo SED-Part, ${IMPORTANT_BENCHMARK_JSON}
             sed -n -e '/"Name": "'${lfdMiningAlgo}'",/{               # if found ${miningAlgo}
                          N;/"MinerName": "'${1}'",/{                  # appe(N)d 1 line;  if found $1 == ${miner_name}
                          N;/"MinerVersion": "'${2}'",/{               # appe(N)d 1 line;  if found $2 == ${miner_version}
@@ -172,6 +180,7 @@ function _split_into_Available_and_Missing_Miner_Algo_Arrays () {
                 ${IMPORTANT_BENCHMARK_JSON}
             found=$?
         fi
+	#echo FOUND == ${found}
         if [ $found -eq 99 ]; then
             actMissingAlgos[${#actMissingAlgos[@]}]=${lfdMiningAlgo}
         else
@@ -179,8 +188,8 @@ function _split_into_Available_and_Missing_Miner_Algo_Arrays () {
         fi
     done
     # Doppelt brauchen wir sie nicht. Ist nur sinnvoll in actMiningAlgos
-    actMissingAlgos=(  $(echo ${actMissingAlgos[@]}   | tr ' ' '\n' | sort -u ))
-    actAvailableAlgos=($(echo ${actAvailableAlgos[@]} | tr ' ' '\n' | sort -u ))
+    actMissingAlgos=(   $(echo ${actMissingAlgos[@]}   | tr ' ' '\n' | sort -u ) )
+    actAvailableAlgos=( $(echo ${actAvailableAlgos[@]} | tr ' ' '\n' | sort -u ) )
     if [ "${_test_}" == "1" ]; then
         declare -p actMiningAlgos
         echo "${#actMiningAlgos[@]} Members in Mining Array"
@@ -209,7 +218,7 @@ function _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays () {
             echo "\$minerName: $minerName"
             echo "\$m_name: $m_name, \$m_version: $m_version"
         fi
-        declare -n actMiningAlgos="Mining_${m_name}_${m_version//\./_}_Algos"
+        declare -n actMiningAlgos="Mining_${m_name//-/_}_${m_version//\./_}_Algos"
         if [ ${#actMiningAlgos[@]} -gt 0 ]; then
             _split_into_Available_and_Missing_Miner_Algo_Arrays ${m_name} ${m_version}
         fi
@@ -253,7 +262,7 @@ function _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array ()
 
                 declare -n                   deleteIt="MiningAlgosOfPool_${pool}";      unset deleteIt
                 declare -ag                           "MiningAlgosOfPool_${pool}"
-                declare -n             actMiningAlgosOfPool="MiningAlgosOfPool_${pool}"
+                declare -n       actMiningAlgosOfPool="MiningAlgosOfPool_${pool}"
 
                 #declare -n                   deleteIt="ServerNameOfPool_${pool}";       unset deleteIt
                 #declare -Ag                           "ServerNameOfPool_${pool}"
@@ -268,6 +277,7 @@ function _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array ()
                 cat ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[${pool}]} \
                     | grep -E -v -e "^#|^$" \
                     | readarray -n 0 -O 0 -t Coin_MiningAlgo_ServerName_Port
+		# Jede Zeile aus der all.* Datei ist jetzt ein Member dieses indexed Arrays Coin_MiningAlgo_ServerName_Port[i]
                 for ((i=0; $i<${#Coin_MiningAlgo_ServerName_Port[@]}; i++)) ; do
                     read coin miningAlgo server_name algo_port <<<${Coin_MiningAlgo_ServerName_Port[$i]//:/ }
                     actCoinsOfPool[$i]=${coin}
@@ -315,7 +325,7 @@ function _set_Miner_Device_to_Nvidia_GpuIdx_maps () {
 
             case "${MinerFullName}" in
 
-                # Die Ausnahmen hier oben
+                # Die Ausnahmen von der Ausgabe, die der "zm --devices" macht, hier oben...
                 # "xmrMiner#0.2.1")
                 #   miner_gpu_idx["${MinerFullName}#0"]=
                 #   miner_gpu_idx["${MinerFullName}#1"]=
@@ -326,16 +336,24 @@ function _set_Miner_Device_to_Nvidia_GpuIdx_maps () {
                 #   miner_gpu_idx["${MinerFullName}#6"]=
                 #   ;;
 
-                *)
+                # Die Ausnahmen hier oben
+		# Die folgenden miner richten sich, wenn es um das mining_device geht, nach einer anderen Nummerierungs-Reihenfolge
+                t-rex#*|zm#*)
                     # miner_gpu_idx[  ${MINER}#${gpu_idx}  ] = miner_dev
-                    #miner_gpu_idx["${MinerFullName}#0"]=1          # Bisher sind nur die ersten beiden vertauscht.
-                    #miner_gpu_idx["${MinerFullName}#1"]=0
                     # 2018-01-25 ${bus[${gidx}]} enthält die "PCI-Bus ID" dezimal
                     #            Das Array ${zm_device_on_pci_bus[ "PCI-Bus ID" ]} hält die Miner Device ID
                     for gidx in ${index[@]}; do
                         miner_gpu_idx["${MinerFullName}#${gidx}"]=${zm_device_on_pci_bus[${bus[${gidx}]}]}
                     done
                     ;;
+
+                *)
+		    # Die miner_devices sind bei den meisten Minern mit der Nvidia-Ausgabe identisch
+                    for gidx in ${index[@]}; do
+                        miner_gpu_idx["${MinerFullName}#${gidx}"]=${gidx}
+                    done
+                    ;;
+
             esac
         done
     fi

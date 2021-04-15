@@ -109,7 +109,7 @@ function _calculate_ACTUAL_REAL_PROFIT () {
     #     weil alle Stellen >scale einfach weggeschmissen werden.
     #gesamtFormel="mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000"
     #echo "scale=8; ${gesamtFormel}; print real_profit, \" \", mines_sum" \
-    echo "scale=8; mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000; print real_profit, \" \", mines_sum" \
+    echo "scale=20; mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000; print real_profit, \" \", mines_sum" \
         | bc \
         | read ACTUAL_REAL_PROFIT ACTUAL_MAX_FP_MINES
     #   | tee bc_inner_commands \
@@ -162,7 +162,7 @@ function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
     OLD_MAX_PROFIT=${MAX_PROFIT}
     OLD_MAX_FP_MINES=${MAX_FP_MINES}
 
-    echo 'scale=8;
+    echo 'scale=20;
 mines_sum='$3';
 real_profit= mines_sum - ( '"${gesamtKostenBTC}"' ) * 24 / 1000;
 max_profit='"${MAX_PROFIT}"';
@@ -382,7 +382,7 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
     gpu_algo_mines_str=''
 
     # Der Anfang des bc Programmes:
-    bc_prog="scale=8;max_profit=${MAX_PROFIT};max_mines=${MAX_FP_MINES};solar_kosten_btc=${SolarWattAvailable}*${kWhMin};"
+    bc_prog="scale=20;max_profit=${MAX_PROFIT};max_mines=${MAX_FP_MINES};solar_kosten_btc=${SolarWattAvailable}*${kWhMin};"
 
     for (( lfdGPU=0; $lfdGPU<${MAX_GPU_TIEFE}; lfdGPU++ )); do
         gpu_idx=${TestCombinationGPUs[${lfdGPU}]}

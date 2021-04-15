@@ -32,7 +32,6 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/all.miningpoolhub \
     ${SRC_DIR}/all.nicehash \
     ${SRC_DIR}/all.suprnova \
-    ${SRC_DIR}/.FAKE.nvidia-smi.output \
     ${SRC_DIR}/GLOBAL_ALGO_DISABLED \
     ${SRC_DIR}/globals.inc \
     ${SRC_DIR}/gpu-abfrage.inc \
@@ -50,7 +49,6 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/pstree_log.sh \
     ${SRC_DIR}/README_GER.md \
     ${SRC_DIR}/README.md \
-    ${SRC_DIR}/smartmeter \
     ${SRC_DIR}/benchmarking/auto_benchmark_all_missing.sh \
     ${SRC_DIR}/benchmarking/bench_30s_2.sh \
     ${SRC_DIR}/benchmarking/nvidia-befehle/nvidia-query.inc \

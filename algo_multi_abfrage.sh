@@ -33,8 +33,9 @@ echo $$ >${This}.pid
 function _On_Exit () {
     # WhatToMine.* \
     [[ ${debug} -eq 0 ]] \
-        && rm -f ${algoID_KURSE_PORTS_WEB} ${algoID_KURSE_PORTS_ARR} ${BTC_EUR_KURS_WEB} BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} \
-              KURSE.in ALGO_NAMES.json ALGO_NAMES.in \
+        && rm -f ${algoID_KURSE_PORTS_WEB} ${algoID_KURSE__PAY__WEB} ${algoID_KURSE_PORTS_ARR} ${algoID_KURSE_PORTS_PAY} ${BTC_EUR_KURS_WEB} \
+	      BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} \
+              ALGO_NAMES.json ALGO_NAMES.in \
               ${COIN_PRICING_ARR} ${COIN_TO_BTC_EXCHANGE_ARR} \
               I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t \
               ${This}.err
@@ -130,7 +131,7 @@ while :; do
     # Erstaunlicherweise kommt es oft vor, dass das manche noch in der selben Sekunde machen,
     # in der auch $SYNCFILE getouched wurde.
 
-    # Anstatt nur 31s lang zu schlafen, prüfen wir sekündlich ie Internetverbindung...
+    # Anstatt nur 31s lang zu schlafen, prüfen wir sekündlich die Internetverbindung...
     # sleep 31
     SleepingStart=$(date --utc --reference=${SYNCFILE} +%s)
 

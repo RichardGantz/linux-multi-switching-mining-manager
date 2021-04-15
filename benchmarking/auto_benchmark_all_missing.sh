@@ -21,7 +21,7 @@ debug=0
 
 # Durch Parameterübergabe beim Aufruf änderbar:
 declare -i MIN_HASH_COUNT=20    # -m Anzahl         : Mindestanzahl Hashberechnungswerte, die abgewartet werden müssen
-declare -i MIN_WATT_COUNT=30    # -w Anzahl Sekunden: Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
+declare -i MIN_WATT_COUNT=60    # -w Anzahl Sekunden: Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
 
 initialParameters="$*"
 POSITIONAL=()
@@ -167,7 +167,7 @@ for gpu_idx in ${index[@]}; do
     gpu_uuid=${uuid[${gpu_idx}]}
     IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
     #_test_=1
-    _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays "${LINUX_MULTI_MINING_ROOT}/miners"
+    _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
 
     ###
     ### 3. Auswahl des Miners
@@ -178,7 +178,7 @@ for gpu_idx in ${index[@]}; do
         ###
         ### 4. Durchgehen aller Missing Algos
         ###
-        declare -n actMissingAlgos="Missing_${miner_name}_${miner_version//\./_}_Algos"
+        declare -n actMissingAlgos="Missing_${miner_name//\-/_}_${miner_version//\./_}_Algos"
         if [ ${#actMissingAlgos[@]} -gt 0 ]; then
             for algo in ${actMissingAlgos[@]}; do
                 algorithm=${algo}#${miner_name}#${miner_version}

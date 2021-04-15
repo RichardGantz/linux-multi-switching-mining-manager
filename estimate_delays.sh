@@ -9,10 +9,6 @@ source estimate_delays.inc
 # Zwei wichtige Pfade
 GRAF_DST_DIR="/home/avalon/temp/graf";
 ARCHIV_DIR=${GRAF_DST_DIR}/.logs
-if [ $NoCards ]; then
-    GRAF_DST_DIR="$LINUX_MULTI_MINING_ROOT/graf";
-    ARCHIV_DIR=${LINUX_MULTI_MINING_ROOT}/.logs
-fi
 
 This=$(basename $0 .sh)
 

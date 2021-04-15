@@ -1,0 +1,56 @@
+#!/bin/bash
+###############################################################################
+#
+# Erstellung der Benchmarkwerte mit Hilfe des CCminers
+#
+#
+# miner --algo ethash --server daggerhashimoto.usa.nicehash.com:3353 --user 3LsTTSsSy17xuoShcMHuRgGBxKn1AHgeVN --proto stratum
+# ./miner --server grincuckatoo31.eu-west.nicehash.com --port 3372 --user 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.test --pass x --devices 1 --algo cuckatoo31 --proto stratum --color 0 
+#    --logfile /home/avalon/miner/gminer/gpu-test.log
+
+minerfolder="/home/avalon/miner/gminer/2.51"
+
+extra_params="--proto stratum --color 0"
+
+LIVE_START_CMD='%s/%s --server %s --port %s --user %s.%s --pass %s --devices %s --algo %s '${extra_params}
+LIVE_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "server_name"
+    "algo_port"
+    "user_name"
+    "worker"
+    "password"
+    "miner_device"
+    "miningAlgo"
+)
+
+function PREP_LIVE_PARAMETERSTACK () {
+    # ${pool} muss von gpu_gv-algo.sh an die MinerShell mit übergeben werden
+    #         und  von bench_30s_2.sh selbst richtig eingestellt werden (was bereits der Fall ist)
+    case "${pool}" in
+        "nh")
+            server_name="${coin}.${continent}.${domain}"
+            user_name="12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
+            password=x
+            ;;
+        "sn")
+            user_name="unbekannt"
+            password=x
+            ;;
+    esac
+}
+
+# Bei diesem gminer gibt es scheinbar keinen Benchmode...
+if [ 1 -eq 0 ]; then
+    BENCH_START_CMD='%s/%s --devices %s -a %s --no-color --benchmark '${extra_params}
+    BENCH_PARAMETERSTACK=(
+	"minerfolder"
+	"miner_name"
+	"miner_device"
+	"miningAlgo"
+    )
+
+    #function PREP_BENCH_PARAMETERSTACK () {
+    #}
+fi

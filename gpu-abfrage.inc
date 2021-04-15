@@ -31,7 +31,7 @@ function _update_SYSTEM_STATEin_if_necessary () {
     fi
     for ((i=0; $i<${#index[@]}; i+=1)) ; do
         if [ ${#verbose} -gt 0 ]; then
-            echo "GPU #${index[$i]} ist ${name[${index[$i]}]} auf port ${bus[${index[$i]}]}"
+            echo "GPU #${index[$i]} ist ${name[${index[$i]}]} auf PCI port (bus) ${bus[${index[$i]}]}"
             echo "       und hat die UUID ${uuid[${index[$i]}]} und ist zu ${auslastung[${index[$i]}]} % ausgelastet"
         fi
 
@@ -101,7 +101,7 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
         declare -n deleteIt="GPU${act_gpu_idx}Profit";          unset deleteIt
         declare -n deleteIt="GPU${act_gpu_idx}WATTS";           unset deleteIt
         declare -n deleteIt="GPU${act_gpu_idx}MINES";           unset deleteIt
-        declare -n backItUp="LAST_SORTED${act_gpu_idx}PROFITs"; unset deleteIt
+        declare -n backItUp="LAST_SORTED${act_gpu_idx}PROFITs"; #unset deleteIt # Ist entweder zu viel oder sollte 'backItUp' heissen ???
         declare -ag "LAST_SORTED${act_gpu_idx}PROFITs"
         declare -n deleteIt="SORTED${act_gpu_idx}PROFITs";
         backItUp=( ${deleteIt[@]} )
@@ -115,13 +115,24 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
         declare -ag "SORTED${act_gpu_idx}PROFITs"
     done
 
-    unset zm_device_on_pci_bus
-    unset READARR
-    readarray -n 0 -O 0 -t READARR <${ZM_FILE}
-    for ((i=0; $i<${#READARR[@]}; i++)) ; do
-        zm_device_on_pci_bus[${READARR[$i]%:*}]=${READARR[$i]#*:}
-    done
-    
+    # Ehemaliger Inhalt der Datei $ZM_FILE (zm_system.out)
+    # 2:0
+    # 1:1
+    # 3:2
+    # 4:3
+    # 8:4
+    # 11:5
+    # 12:6
+    # 13:7
+    if [ -n "${zm_list_devices_cmd}" ]; then
+	unset zm_device_on_pci_bus
+	unset READARR
+	readarray -n 0 -O 0 -t READARR <${ZM_FILE}
+	for ((i=0; $i<${#READARR[@]}; i++)) ; do
+            zm_device_on_pci_bus[${READARR[$i]%:*}]=${READARR[$i]#*:}
+	done
+    fi
+
     # Die folgende Datei GLOBAL_GPU_SYSTEM_STATE.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
     # Sie wird, wenn nicht vorhanden vom Skript erstellt, damit wir die UUID's und Namen haben.
     # Und wenn sie vorhanden ist, merken wir uns die manuell gesetzten Enabled-Zustände,

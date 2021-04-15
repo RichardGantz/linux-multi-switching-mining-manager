@@ -27,7 +27,7 @@
 
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source ../globals.inc
-[[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
+[[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
 
 # Das Prioritätenkürzel für die MINER.
 # Kann hier global gesetzt werden, weil nur der Miner aus diesem Skript gestartet wird
@@ -87,7 +87,7 @@ _init_NH_continent_handling
 
 # Dieser Aufruf zieht die entsprechenden Variablen rein, die für den Miner
 # definiert sind, damit die Aufrufmechanik für alle gleich ist.
-source ../miners/${MINER}.starts
+source ${LINUX_MULTI_MINING_ROOT}/miners/${MINER}.starts
 
 # Ein paar Standardverzeichnisse im GPU-UUID Verzeichnis zur Verbesserung der Übersicht:
 [[ ! -d live ]]                        && mkdir live
@@ -98,10 +98,6 @@ LOGPATH="live/${MINER}/${miningAlgo}"
 BENCHLOGFILE="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/live/${MINER}_${miningAlgo}_mining.log"
 # Einer der letzten zu setzenden Parameter für den Parameterstack des equihash "miner"
 LIVE_LOGFILE=${BENCHLOGFILE}
-if [ ${NoCards} ]; then
-    # Der equihash "miner" arbeitet nur auf test-Systemen ohne Karten auch im Benchmark-Modus
-    BENCH_LOGFILE=${BENCHLOGFILE}
-fi
 
 
 _build_minerstart_commandline () {
@@ -205,14 +201,6 @@ for (( i=0; $i<${#CmdStack[@]}; i++ )); do
     ${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
 done
 
-#if [ $NoCards ]; then
-#    if [ ! -f "${BENCHLOGFILE}" ]; then
-#        # cp ../benchmarking/test/benchmark_blake256r8vnl_GPU-742cb121-baad-f7c4-0314-cfec63c6ec70.fake ${BENCHLOGFILE}
-#        cp ../benchmarking/test/bnch_retry_catch_fake.log ${BENCHLOGFILE}
-#        # cp ../booos ${BENCHLOGFILE}
-#    fi
-#fi  ## $NoCards
-
 
 ####################################################################################
 ################################################################################
@@ -261,11 +249,14 @@ while :; do
         echo $! | tee ${MINER}.pid
         MINER_pid=$(< ${MINER}.pid)
         Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
-        gnome-terminal --hide-menubar \
-                       --title="GPU #${gpu_idx}  -  Mining ${coin_algorithm}" \
-                       -e "${Bench_Log_PTY_Cmd}"
-        echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "Miner and Logging gnome-terminal are running since here."
+        ${_TERMINAL_} --hide-menubar \
+                      --title="GPU #${gpu_idx}  -  Mining ${coin_algorithm}" \
+                      -e "${Bench_Log_PTY_Cmd}"
+        echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "Miner and Logging ${_TERMINAL_} are running since here."
         if [ $debug -eq 1 ]; then
+	    ### SCREEN ADDITIONS: ###
+	    # Wennn man mit Screen arbeitet, sollte man vorher oder nachher die Region "killen",
+	    # damit die Aufteilung am Bildschirm für den Logger wieder verschwindet.
             REGEXPAT="${Bench_Log_PTY_Cmd//\//\\/}"
             REGEXPAT="${REGEXPAT//\+/\\+}"
             kill_pids=$(ps -ef \
@@ -288,11 +279,13 @@ while :; do
     #      x% Abweichung sind erlaubt.
     # ---> Noch zu implementieren:
     
-    touch ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
+    touch ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
     hashCount=$(cat ${BENCHLOGFILE} \
-                       | tee >(grep -c -m1 -e "${CONEXPR//[|]/\\|}" >${MINER}.retry; \
-                               rm -f ${MINER}.retry.lock) \
-                             >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+		    | tee >(grep -E -c -m1 -e "${ERREXPR}" >${MINER}.fatal_err; \
+			    rm -f ${MINER}.fatal_err.lock) \
+			  >(grep -E -c -m1 -e "${CONEXPR}" >${MINER}.retry; \
+                            rm -f ${MINER}.retry.lock) \
+                          >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
                                    BEGIN { yeses=0; booos=0; seq_booos=0 }
                                    $0 ~ BOO { booos++; seq_booos++; next }
                                    $0 ~ YES { yeses++; seq_booos=0;
@@ -300,13 +293,31 @@ while :; do
                                                   { yeses+=(RLENGTH-1) }
                                             }
                                    END { print seq_booos " " booos " " yeses }' >${MINER}.booos; \
-                               rm -f ${MINER}.booos.lock) \
-                             >(grep -c -m1 -e "${OVREXPR//[|]/\\|}" >${MINER}.overclock; \
+			    rm -f ${MINER}.booos.lock) \
+                          >(grep -E -c -e "${OVREXPR}" >${MINER}.overclock; \
                                rm -f ${MINER}.overclock.lock) \
-                  | sed -e 's/ *(yes!)$//g' \
+                  | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
                   | gawk -e "${detect_zm_hash_count}" \
-                  | grep -E -c "/s *$")
-    while [[ -f ${MINER}.retry.lock || -f ${MINER}.booos.lock || -f ${MINER}.overclock.lock ]]; do sleep .01; done
+                  | grep -E -c "/s\s*$")
+    while [[ -f ${MINER}.fatal_err.lock || -f ${MINER}.retry.lock || -f ${MINER}.booos.lock || -f ${MINER}.overclock.lock ]]; do sleep .01; done
+
+    ################################################################################
+    ###
+    ###          0. ABBRUCHBEDINGUNG:       "FATALE Fehler, Miner Startet überhaupt nicht, z.B. OUT OF MEMORY"
+    ###
+    ################################################################################
+    if [[ $(< ${MINER}.fatal_err) -gt 0 ]]; then
+        echo "GPU #${gpu_idx}: FATAL ERROR detected..."
+
+        nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+        nowSecs=$(date +%s)
+        # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
+        echo ${nowDate} ${nowSecs} \
+             "GPU #${gpu_idx}: BEENDEN des Miners PID ${MINER_pid} alias ${coin_algorithm} wegen eines FATALEN ERRORS." \
+            | tee -a ${LOG_FATALERROR_ALL} ${LOG_FATALERROR} ${ERRLOG} ${BENCHLOGFILE}
+        _disable_algorithm "${algorithm}" "Abbruch wegen eines FATALEN ERRORS (FATAL_ERR_CNT)." "${gpu_idx}"
+	break
+    fi
 
     ################################################################################
     ###
@@ -316,14 +327,14 @@ while :; do
     ################################################################################
 
     # Check Overclocking
-    if [[ $(< ${MINER}.overclock) -eq 1 ]]; then
+    if [[ $(< ${MINER}.overclock) -gt 0 ]]; then
         # Overclockings zählen ?
         # Miner abbrechen und neu starten?
         # Algo für 5 Minuten deaktivieren für diese Karte
         :
     fi
 
-    if [[ $(< ${MINER}.retry) -eq 1 ]]; then
+    if [[ $(< ${MINER}.retry) -gt 0 ]]; then
         echo "GPU #${gpu_idx}: Connection loss detected..."
         if [[ -f ../I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t ]]; then
             let inetLost_detected++
@@ -427,9 +438,6 @@ while :; do
                              "GPU #${gpu_idx}: ... und Neustart des Miners alias ${coin_algorithm} nach Continent-Wechsel zu \"${continent}\"..." \
                             | tee -a ${LOG_CONLOSS_ALL} ${LOG_CONLOSS} ${ERRLOG} \
                                   >${BENCHLOGFILE}
-                        if [ $NoCards ]; then
-                            cat ../benchmarking/test/bnch_retry_catch_fake.log >>${BENCHLOGFILE}
-                        fi  ## $NoCards
                         continue
                     fi
                     ;;
@@ -471,15 +479,6 @@ while :; do
         break
     elif [[ ${booos} -ge 5 ]]; then
         echo "GPU #${gpu_idx}: Miner alias ${coin_algorithm} gibt bereits ${booos} 'booooos' hintereinander von sich..."
-        if [ $NoCards ]; then
-            [[ $(($secs%3)) -gt 0 ]] && \
-                echo "#[2017-11-20 18:00:37] accepted: 0/12 (diff 9.171), 1648.05 MH/s (booooo)" >>${BENCHLOGFILE}
-        fi
-    else
-        if [ $NoCards ]; then
-            [[ $(($secs%3)) -gt 0 ]] && \
-                echo "#[2017-11-20 18:00:37] accepted: 0/12 (diff 9.171), 1648.05 MH/s (booooo)" >>${BENCHLOGFILE}
-        fi
     fi
 
 
@@ -500,7 +499,7 @@ while :; do
         # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
         echo ${nowDate} ${nowSecs} \
              "GPU #${gpu_idx}: Abbruch des Miners PID ${MINER_pid} alias ${coin_algorithm} wegen 320s ohne Hashwerte." \
-            | tee -a ../log_No_Hash log_No_Hash_${coin_algorithm} ${ERRLOG} ${BENCHLOGFILE}
+            | tee -a ${LOG_NO_HASH_ALL} ${LOG_NO_HASH} ${ERRLOG} ${BENCHLOGFILE}
         break
     fi
 

@@ -1,3 +1,45 @@
-# $miner_name # $miner_version : MinerFee in %
-miner#0.3.4b:2
-zm#0.5.6:2
+# $miner_name # $miner_version [: $mining_algo ] : MinerFee oder AlgoFee in %
+# miner#0.3.4b:2            <-- Einer der ersten aus den 2017er Jahren, der gleich heißt wie der gminer aus den 2021er Jahren
+
+# miniZ zhash Miner Developer fee
+# Equihash: 2.0%.
+# ProgPoW: 1%.
+# Ethash: 0.75%
+miniZ#1.7x3:2
+miniZ#1.7x3:ethash:0.75
+miniZ#1.7x3:kawpow:1
+
+# t-rex (ccminer Nachfolger ?)
+t-rex#0.19.12:1
+t-rex#0.19.14:1
+# AlgoName-abhängige Fees (2021-04-12)
+t-rex#0.19.12:octopus:2
+t-rex#0.19.14:octopus:2
+
+# gminer (2.51) Fee-Liste:
+#Supported algorithms and developer commission:
+#eth, ethash               0.65%    <-- von uns verwendet
+#etc, etchash              0.65%
+#kawpow, rvn, ravencoin    1%       <-- von uns verwendet
+#cuckatoo32, grin32        2%       <-- von uns verwendet
+#cortex                    5%
+#beamhash                  2%       <-- von uns verwendet
+#equihash144_5             2%
+#equihash125_4             2%
+#equihash192_7             2%
+#equihash210_9             2%
+#cuckoo29, aeternity       2%
+#cuckatoo31, grin31        2%       <-- von uns verwendet
+#cuckaroo29b, bittube      4%
+#cuckaroo29s, swap         2%
+
+# AlgoName-abhängige Fees (2021-04-12)
+# Da der cuckatoo sowieso nur auf einer Karte läuft, setzen wir die Fee mal auf den Wert 2, weil er am häufigsten vorkommt.
+#    Alle von 2% verschiedenen Algos müssen zusätzlich eingetragen werden
+miner#2.51:2
+miner#2.51:ethash:0.65
+miner#2.51:kawpow:1
+
+#  2021-04-08: Der zm läuft im Moment überhaupt nicht. Bekommt keinen Connect hin. 2021-04-08
+#zm#0.5.6:2
+#zm#0.6.2:2

@@ -13,6 +13,14 @@
 #     $algorithm   (== algo#miner_name#miner_version)
 #     angesprochen werden können.
 #
+# Die folgenden Funktionen werden hier drin definiert:
+# function _expand_IMPORTANT_BENCHMARK_JSON ()
+# function _read_IMPORTANT_BENCHMARK_JSON_in ()
+# function _init_some_file_and_path_variables () {
+# function _init_NH_continent_handling () {
+# function _disable_algo_for_5_minutes () {
+# function _terminate_Logger_Terminal () {
+# function _terminate_Miner () {
 
 _GPU_BENCH_INCLUDED=1
 
@@ -39,7 +47,7 @@ _GPU_BENCH_INCLUDED=1
 #     - tweak_commands.sh
 # Zweite Session:
 #     - multi_mining_cals.sh muss zusammen mit gpu_gv-algo.sh die ALGO_WATTS_MINES.in abstimmen!
-#     sind ale vorbereitet, dass jeder Prozess die neue Struktur vorfindet.
+#     sind alle vorbereitet, dass jeder Prozess die neue Struktur vorfindet.
 
 function _expand_IMPORTANT_BENCHMARK_JSON ()
 {
@@ -89,7 +97,7 @@ function _expand_IMPORTANT_BENCHMARK_JSON ()
 
 }
 
-_read_IMPORTANT_BENCHMARK_JSON_in()
+function _read_IMPORTANT_BENCHMARK_JSON_in ()
 {
     local w_o_miners=0
     if [ "$1" == "without_miners" ]; then w_o_miners=1; fi
@@ -102,7 +110,11 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
         #################################################################################
 
         # Einlesen aller $algorithm-Objekte (Algo#MinerName#MinerVersion) aus den ${miner_name}#${miner_version}.algos Dateien
-        # in ALLE die Arrays "Mining_${miner_name}_${miner_version//\./_}_Algos"
+        # in ALLE diese Arrays:
+	# ALLE_MINER[ i ]   = ${miner_name}#${miner_version}
+	# MINER_IS_AVAILABLE[ ${miner_name}#${miner_version} ] = 1
+	# MINER_FEES[         ${miner_name}#${miner_version} ] = 1.25
+	# -n "Mining_${miner_name//-/_}_${miner_version//\./_}_Algos"[ ${coin} ] = ${algo}
         # Das Verzeichnis, das alle diese Informationen bereit hält ist: ${LINUX_MULTI_MINING_ROOT}/miners
         _set_ALLE_MINER_from_path
 
@@ -282,12 +294,15 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
 
         for minerName in ${ALLE_MINER[@]}; do
             read m_name m_version <<<"${minerName//#/ }"
-            declare -n actMiningAlgos="Mining_${m_name}_${m_version//\./_}_Algos"
+	    #$$$ Dieses Array hat als keys wenigstens 1x actMiningAlgos[${algo_coin}]="${mining_algo}"
+	    # den ${algo_coin} und als Value den ${mining_algo}
+	    # Irgendetwas stimmt hier nicht $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+            declare -n actMiningAlgos="Mining_${m_name//\-/_}_${m_version//\./_}_Algos"
             unset algo_checked
             declare -A algo_checked
             for lfdMiningAlgo in ${actMiningAlgos[@]}; do
+                lfdAlgorithm="${lfdMiningAlgo}#${m_name}#${m_version}"
                 if [ ${#algo_checked[${lfdAlgorithm}]} -eq 0 ]; then
-                    lfdAlgorithm="${lfdMiningAlgo}#${m_name}#${m_version}"
                     if [ ${#bENCH[${lfdAlgorithm}]} -eq 0 ]; then
                         printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
                                ${gpu_idx} ${lfdAlgorithm}
@@ -306,11 +321,16 @@ _read_IMPORTANT_BENCHMARK_JSON_in()
 ###
 ################################################################################
 
-_init_some_file_and_path_variables () {
+# Hier fehlt irgendwie noch das Overclocking !? $$$$$$$$$$$$$$$$$$$$
+function _init_some_file_and_path_variables () {
+    LOG_FATALERROR_ALL=${LINUX_MULTI_MINING_ROOT}/log_FATALERROR
+    LOG_FATALERROR=${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/log_FATALERROR_${coin_algorithm}
     LOG_CONLOSS_ALL=${LINUX_MULTI_MINING_ROOT}/log_ConLoss
     LOG_CONLOSS=${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/log_ConLoss_${coin_algorithm}
     LOG_BOOOOOS_ALL=${LINUX_MULTI_MINING_ROOT}/log_Booooos
     LOG_BOOOOOS=${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/log_Booooos_${coin_algorithm}
+    LOG_NO_HASH_ALL=${LINUX_MULTI_MINING_ROOT}/log_No_Hash
+    LOG_NO_HASH=${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/log_No_Hash_${coin_algorithm}
 }
 
 ################################################################################
@@ -318,7 +338,7 @@ _init_some_file_and_path_variables () {
 ###          Ganz schöne Ääction wegen der "continent"e Verwaltung
 ###
 ################################################################################
-_init_NH_continent_handling () {
+function _init_NH_continent_handling () {
     nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
     declare -ig nowSecs=$(date +%s) timestamp
     if [ "${pool}" == "nh" ]; then
@@ -363,7 +383,22 @@ _init_NH_continent_handling () {
     fi
 }
 
-_disable_algo_for_5_minutes () {
+# Wenn es Probleme beim Benchmarking gibt, wegen zu weniger Werte oder wegen zu vieler boooos,
+# dann soll der $algorithm (ein miningAlgo eines ganz bestimmten Minerversion) disabled werden,
+# bis sich ein Mensch darum kümmert.
+function _disable_algorithm () {
+    # $1 - $algorithm
+    # $2 - $reason
+    # $3 - $gpu_idx
+    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+    nowSecs=$(date +%s)
+    _reserve_and_lock_file ../BENCH_ALGO_DISABLED
+    printf "%s %s %02i %30s %s\n" "${nowDate}" "${nowSecs}" "$3" "$1" "$2" >>../BENCH_ALGO_DISABLED
+    _remove_lock                                     # ... und wieder freigeben
+    echo "Der Algorithm ${algorithm} wurde in die Datei BENCH_ALGO_DISABLED eingetragen."
+}
+
+function _disable_algo_for_5_minutes () {
     # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
     _reserve_and_lock_file ../MINER_ALGO_DISABLED_HISTORY
     printf "disable " >>../MINER_ALGO_DISABLED_HISTORY
@@ -373,12 +408,19 @@ _disable_algo_for_5_minutes () {
     _remove_lock                                     # ... und wieder freigeben
 }
 
-_terminate_Logger_Terminal () {
+function _terminate_Logger_Terminal () {
+    ### SCREEN ADDITIONS: ###
+    # Wennn man mit Screen arbeitet, sollte man vorher oder nachher die Region "killen",
+    # damit die Aufteilung am Bildschirm für den Logger wieder verschwindet.
+    # In einer ersten Annäherung wird hier der focus als $1 übergeben
+    [ ${#1} -gt 0 ] && screen -X eval focus $1 remove fit
+
     printf "Beenden des Logger-Terminals alias ${MINER} ... "
     REGEXPAT="${Bench_Log_PTY_Cmd//\//\\/}"
     REGEXPAT="${REGEXPAT//\+/\\+}"
+    REGEXPAT="${REGEXPAT//\$/\\$}"
     if [ ${#REGEXPAT} -eq 0 ]; then
-        printf "\nDas Logger-Terminal soll beendet werden, die Variable \${Bench_Log_PTY_Cmd} ist aber leer:\n--->${Bench_Log_PTY_Cmd}<---\n"
+        printf "\nDas Logger-Terminal soll beendet werden, die Variable \${Bench_Log_PTY_Cmd} ist aber leer:\n–––>${Bench_Log_PTY_Cmd}<–––\n"
     else
         kill_pids=$(ps -ef \
                   | grep -E -e "${REGEXPAT}" \
@@ -393,7 +435,7 @@ _terminate_Logger_Terminal () {
     fi
 }
 
-_terminate_Miner () {
+function _terminate_Miner () {
     if [ -s ${MINER}.pid ]; then
         MINER_pid=$(< ${MINER}.pid)
         if [ -n "${MINER_pid}" ]; then
@@ -410,7 +452,7 @@ _terminate_Miner () {
                     if [[ $? -eq 0 ]]; then
                         printf "KILL SIGKILL SIGNAL SUCCESSFULLY SENT, but had to be \"kill -9 $kill_pid\" !\n"
                     else
-                        printf "\n---> KILL_PANIC: KILL SIGKILL SIGNAL COULD NOT BE SENT SUCCESSFULLY, even not \"kill -9 $kill_pid\" !\n"
+                        printf "\n–––> KILL_PANIC: KILL SIGKILL SIGNAL COULD NOT BE SENT SUCCESSFULLY, even not \"kill -9 $kill_pid\" !\n"
                     fi
                 fi
                 sleep $Erholung   # "Erholung" nach jedem kill und vor vor einem Neustart
@@ -419,31 +461,31 @@ _terminate_Miner () {
                 printf "Check PID ${MINER_pid} again after $Erholung seconds ... "
                 kill_pid=$(ps -ef | gawk -e '$2 == '${MINER_pid}' && /'"${REGEXPAT}"'/ {print $2; exit }')
                 if [ -n "$kill_pid" ]; then
-                    printf "\n---> KILL_PANIC: GPU #${gpu_idx}: $(basename $0): PID ${MINER_pid} of Miner ${MINER} ...
+                    printf "\n–––> KILL_PANIC: GPU #${gpu_idx}: $(basename $0): PID ${MINER_pid} of Miner ${MINER} ...
 nach $Erholung Sekunden Erholzeit nach kill 15 immer noch vorhanden.
 Es folgt ein kill -9... "
                     kill -9 $kill_pid
                     if [[ $? -eq 0 ]]; then
                         printf "KILL -9 SIGNAL SUCCESSFULLY SENT.\n"
                     else
-                        printf "\n---> KILL_PANIC: KILL -9 SIGNAL COULD NOT BE SENT SUCCESSFULLY!\n"
+                        printf "\n–––> KILL_PANIC: KILL -9 SIGNAL COULD NOT BE SENT SUCCESSFULLY!\n"
                     fi
                 else
                     printf "no longer there.\n"
                 fi
             else
-                printf "---> KILL_PANIC: GPU #${gpu_idx}: $(basename $0):
+                printf "–––> KILL_PANIC: GPU #${gpu_idx}: $(basename $0):
 PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE after the following search:
 awk -e \"\$2 == \${MINER_pid} && /\${REGEXPAT}/ {print $2; exit }\"
 awk -e \"\$2 == ${MINER_pid} && /${REGEXPAT}/ {print $2; exit }\"\n" | tee -a ${ERRLOG}
             fi
         else
-            printf "---> KILL_PANIC: Sehr komisch. Miner ${MINER} soll beendet werden, es gibt auch eine -s .pid Datei.
----> KILL_PANIC: Nach dem Einlesen des Dateiinhalts in die Variable \${MINER_pid} ist die aber leer \"${MINER_pid}\".\n" | tee -a ${ERRLOG}
+            printf "–––> KILL_PANIC: Sehr komisch. Miner ${MINER} soll beendet werden, es gibt auch eine -s .pid Datei.
+–––> KILL_PANIC: Nach dem Einlesen des Dateiinhalts in die Variable \${MINER_pid} ist die aber leer \"${MINER_pid}\".\n" | tee -a ${ERRLOG}
         fi
     else
-        printf "---> KILL_PANIC: Miner ${MINER} soll beendet werden, es gibt aber keine entsprechende .pid Datei.
----> KILL_PANIC: Möglicherweise wurde er gar nicht gestartet?\n" | tee -a ${ERRLOG}
+        printf "–––> KILL_PANIC: Miner ${MINER} soll beendet werden, es gibt aber keine entsprechende .pid Datei.
+–––> KILL_PANIC: Möglicherweise wurde er gar nicht gestartet?\n" | tee -a ${ERRLOG}
     fi
     rm -f ${MINER}.pid
 }

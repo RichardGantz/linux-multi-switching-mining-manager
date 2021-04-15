@@ -8,7 +8,7 @@
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source ../globals.inc
 
-# Eigentliche wollen wir das Tweaken automatisch sterten, aber das gnome-terminal sperrt sich
+# Eigentliche wollen wir das Tweaken automatisch starten, aber das gnome-terminal sperrt sich
 # und hat irgendwie das EXIT signal abgefangen. Es funktionieren weder <Ctrl>-C noch "exit" noch "kill -9 $$", um das Programm zu beenden.
 # Ohne Startparameter erwarten wir die Startkommandos aus der Datei .start_params_for_tweak_commands_sh bzw. ${TWEAK_CMD_START_PARAMS}
 manual_start=0
@@ -54,6 +54,7 @@ fi
 function _On_Exit () {
     # Bench stoppen, welches den CCminer stoppt
     # Das kill Signal erst senden, wenn bench_30s_2.sh in den SLEEP 1 gegangen ist
+    #echo "In der _On_Exit() Routine"
     declare -i killing_loop_counter=0
     while [ ! -f ${READY_FOR_SIGNALS} ]; do let killing_loop_counter++; done
     kill ${BENCH_30s_PID}
@@ -62,6 +63,10 @@ function _On_Exit () {
     # Am Schluss Kopie der Log-Datei, damit sie nicht verloren geht mit dem aktuellen Zeitpunkt
     if [ -s ${OWN_LOGFILE} ]; then
         cp ${OWN_LOGFILE} ${LOGPATH}/$(date "+%Y%m%d_%H%M%S")_tweak_commands.log
+    fi
+    ### SCREEN ADDITIONS: ###
+    if [ ${UseScreen} -eq 1 ]; then
+	screen -X eval remove
     fi
     #kill -9 $$
 }
@@ -103,11 +108,9 @@ _read_IMPORTANT_BENCHMARK_JSON_in without_miners
 _declare_and_fill_nvidiPara_Array
 
 # Fan-Kontrolle ermöglichen. GPUFanControlState=1 heisst: MANUELL. GPUFanControlState=0 heisst AUTOMATIC
-if [ ! $NoCards ]; then
-    #nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
-    printf -v cmd "${nvidiaCmd[-1]}" ${gpu_idx} 1
-    ${cmd}
-fi
+#nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
+printf -v cmd "${nvidiaCmd[-1]}" ${gpu_idx} 1
+${cmd}
 # Die Fan-Kontrolle MANUELL brauchen wir hier drin nicht mehr.
 if [ ${manual_start} -eq 0 ]; then
     # Wir überschreiben den Wert mit dem Menüpunkt für den Abbruch, weil <Ctrl>-C im gnome-terminal nicht funktioniert
@@ -154,7 +157,7 @@ while :; do
     echo "NVIDIA GPU #${gpu_idx} mit UUID: ${gpu_uuid}"
     echo "Der MINER \"${miner_name}#${miner_version}\" führt diese GPU als Device mit der Nummer " \
          ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} ". Also nicht verwirren lassen."
-    echo "Hier werden Befehle unter Verwendung der echten NVISIA-GPU-Indexnummer abgesetzt, was an der UUID zu erkennen ist."
+    echo "Hier werden Befehle unter Verwendung der echten NVIDIA-GPU-Indexnummer abgesetzt, was an der UUID zu erkennen ist."
     echo "Das ist der Miner,      der ausgewählt ist : ${miner_name} ${miner_version}"
     echo "das ist der MiningAlgo, der ausgewählt ist : ${miningAlgo}"
     echo "das ist der \$algorithm, der ausgewählt ist : ${algorithm}"

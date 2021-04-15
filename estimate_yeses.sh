@@ -50,9 +50,6 @@ _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 _remove_lock                                   # ... und wieder freigeben
 
 LOGFILES_ROOT=${LINUX_MULTI_MINING_ROOT}
-if [ $NoCards ]; then
-    LOGFILES_ROOT=${LINUX_MULTI_MINING_ROOT}/.logs/long
-fi
 
 # Datenstrukturen bzgl. des Output der Miner
 source ${This}.inc
