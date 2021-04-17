@@ -22,7 +22,7 @@ function _read_in_minerFees_to_MINER_FEES () {
     local miner
 
     _reserve_and_lock_file ${ALL_MINER_FEES_FILE}
-    declare -i act_miner_fees_epoch=$(date --reference=${ALL_MINER_FEES_FILE} +%s)
+    declare -i act_miner_fees_epoch=$(date --utc --reference=${ALL_MINER_FEES_FILE} +%s)
 
     [ -z "${all_miner_fees_epoch}" ] && declare -ig all_miner_fees_epoch=0
     if [[  ${act_miner_fees_epoch} > ${all_miner_fees_epoch} ]]; then
@@ -54,13 +54,14 @@ function _set_ALLE_MINER_from_path () {
     diff -q .act_miner_algos .all_miner_algos &>/dev/null
     [[ $? -gt 0 ]] && touch .any_miner_algos_changed
     cp -f .act_miner_algos .all_miner_algos
-    declare -i act_miner_algos_epoch=$(date --reference=.any_miner_algos_changed +%s)
+    declare -i act_miner_algos_epoch=$(date --utc --reference=.any_miner_algos_changed +%s)
 
     [[ -z "${old_miner_algos_epoch}" ]] && declare -ig old_miner_algos_epoch=0
     if [ ${act_miner_algos_epoch} -gt ${old_miner_algos_epoch} ]; then
         echo "$(basename $0):${gpu_idx}: ###---> Updating ALLE_MINER Algo structures from disk."
 
         unset ALLE_MINER MINER_IS_AVAILABLE
+        declare -ag ALLE_MINER
         declare -Ag MINER_IS_AVAILABLE
         ALLE_MINER=($(ls *.algos))
         ALLE_MINER=(${ALLE_MINER[@]%%[.]algos})
@@ -245,7 +246,7 @@ function _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array ()
         touch .any_all_pool_infos_changed
         cp -f .act_all_pool_infos .all_all_pool_infos
     fi
-    declare -i act_all_pool_infos_epoch=$(date --reference=.any_all_pool_infos_changed +%s)
+    declare -i act_all_pool_infos_epoch=$(date --utc --reference=.any_all_pool_infos_changed +%s)
 
     [[ -z "${old_all_pool_infos_epoch}" ]] && declare -ig old_all_pool_infos_epoch=0
     if [ ${act_all_pool_infos_epoch} -gt ${old_all_pool_infos_epoch} ]; then

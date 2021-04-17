@@ -1340,7 +1340,7 @@ while : ; do
     [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 
     printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
-    while [ "${new_Data_available}" == "$(date --reference=${SYNCFILE} +%s)" ] ; do
+    while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
         sleep 1
     done
 

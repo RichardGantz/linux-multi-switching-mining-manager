@@ -36,11 +36,11 @@ UseScreen=1
 #     verhindert den Eintritt in die Endlosschleife, die Hash- und Wattwerte sekündlich ausgibt und wartet stattdessen auf eine Eingabe, die den BENCHER BEENDET
 # 0 bedutet normaler Betrieb mit Miner-Start
 # 1 bedeutet "Trockenbetrieb" ohne Minerstart
-ScreenTest=1
+ScreenTest=0
 
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
-[[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
+[[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
 # Bitte diese Stelle NICHT editieren, sondern die Option -d beim Aufruf verwenden!
@@ -1059,7 +1059,7 @@ else
                 "nh")
                     echo "------------------   Nicehash-Kurse           ----------------------"
                     if [ ! -s ${algoID_KURSE_PORTS_PAY} ] \
-                           || [[ $(($(date --reference=${algoID_KURSE_PORTS_PAY} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
+                           || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_PAY} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
                         _prepare_ALGO_PORTS_KURSE_from_the_Web
                         while [ $? -eq 1 ]; do
                             echo "Waiting for valid File ${algoID_KURSE_PORTS_PAY} from the Web, Second Nr. $secs"
@@ -1076,7 +1076,7 @@ else
                     if [ $((++one_call_is_enough)) -eq 1 ]; then
                         echo "------------------   WhatToMine BLOCK_REWARD  ----------------------"
                         if [ ! -s ${COIN_PRICING_WEB} ] \
-                               || [[ $(($(date --reference=${COIN_PRICING_WEB} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
+                               || [[ $(($(date --utc --reference=${COIN_PRICING_WEB} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
                             _prepare_COIN_PRICING_from_the_Web
                             while [ $? -eq 1 ]; do
                                 echo "Waiting for valid File ${COIN_PRICING_WEB} from the Web, Second Nr. $secs"
@@ -1090,7 +1090,7 @@ else
 
                         echo "------------------   Bittrex COIN-BTC-Faktor  ----------------------"
                         if [ ! -s ${COIN_TO_BTC_EXCHANGE_WEB} ] \
-                               || [[ $(($(date --reference=${COIN_TO_BTC_EXCHANGE_WEB} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
+                               || [[ $(($(date --utc --reference=${COIN_TO_BTC_EXCHANGE_WEB} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
                             _prepare_COIN_TO_BTC_EXCHANGE_from_the_Web
                             while [ $? -eq 1 ]; do
                                 echo "Waiting for valid File ${COIN_TO_BTC_EXCHANGE_WEB} from the Web, Second Nr. $secs"
@@ -1324,9 +1324,9 @@ disd_msg[${#disd_msg[@]}]="--->         Beginn mit der Durchsuchung der DISABLED
 
 # Erst mal die über GLOBAL_ALGO_DISABLED Algos rausnehmen, in beiden Modes, User und Auto...
 unset GLOBAL_ALGO_DISABLED_ARR
-if [ -s ../GLOBAL_ALGO_DISABLED ]; then
-    _reserve_and_lock_file ../GLOBAL_ALGO_DISABLED
-    cat ../GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
+    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
+    cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
     _remove_lock                                     # ... und wieder freigeben
 
     for ((i=0; i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
@@ -1359,10 +1359,10 @@ if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]]; then
     # und die Automatik soll sie nicht durchführen
     #    Zunächst die über BENCH_ALGO_DISABLED Algos rausnehmen...
     unset BENCH_ALGO_DISABLED_ARR
-    if [ -s ../BENCH_ALGO_DISABLED ]; then
+    if [ -s ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED ]; then
 
-        _reserve_and_lock_file ../BENCH_ALGO_DISABLED
-        cat ../BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR
+        _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED
+        cat ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR
         _remove_lock                                     # ... und wieder freigeben
 
         for actRow in "${BENCH_ALGO_DISABLED_ARR[@]}"; do
@@ -1992,7 +1992,7 @@ if [ 1 -eq 1 ]; then
 	CmdStack=( "$cmd" )
     fi
     # Und mindestanzahl Hashes bei allen ausser octopus hochsetzen auf 100
-    [ "${miningAlgo}" != "octopus" ] && MIN_HASH_COUNT=100
+    [ "${miningAlgo}" != "octopus" ] && MIN_HASH_COUNT=50
     echo "Sonderregelung zum erstellen der ersten Benchmarks für die RTX 3070 Karten bei DAGGERHASHIMOTO:"
     echo "MIN_HASH_COUNT = ${MIN_HASH_COUNT}"
 fi

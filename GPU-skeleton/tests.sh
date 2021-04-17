@@ -9,27 +9,92 @@ gpu_uuid=GPU-000bdf4a-1a2c-db4d-5486-585548cd33cb
 gpu_uuid=GPU-2d93bcf7-ca3d-0ca6-7902-664c9d9557f4
 gpu_uuid=GPU-3ce4f7c0-066c-38ac-2ef7-e23fef53af0f
 gpu_uuid=GPU-50b643a5-f671-3b26-0381-2adea74a7103
+gpu_uuid=GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd
 gpu_uuid=GPU-bd3cdf4a-e1b0-59ef-5dd1-b20e2a43256b
 gpu_uuid=GPU-c6467c28-be24-03ad-e7ea-9bc0e989488f
 gpu_uuid=GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d
 gpu_idx=$(< ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu_index.in)
 IMPORTANT_BENCHMARK_JSON="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmark_${gpu_uuid}.json"
+IMPORTANT_BENCHMARK_JSON="${LINUX_MULTI_MINING_ROOT}/GPU-skeleton/benchmark_skeleton.json"
 
 # Achtung: Das ist gefährlich: Hier hängt er im emacs...
-#[[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu-bENCH.sh
 [[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu-bENCH.inc
+#[[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/GPU-skeleton/gpu-bENCH.inc
+[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 [[ ${#_ALGOINFOS_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 [[ ${#_NVIDIACMD_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
 
-_read_IMPORTANT_BENCHMARK_JSON_in # without_miners
+# Test der Feststellung der zu benchmarkenden Algorithms
 
-_read_in_ALGO_PORTS_KURSE
-# ----------------------------------------------------------
+_read_IMPORTANT_BENCHMARK_JSON_in
+
+declare -p algo_checked
+#declare -p pleaseBenchmarkAlgorithm
+
+unset WillBenchmarkAlgorithm
+declare -a WillBenchmarkAlgorithm
+
+shopt -s lastpipe
+unset GLOBAL_ALGO_DISABLED_ARR
+
+_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
+if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
+    cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+fi
+_remove_lock
+
+#declare -p GLOBAL_ALGO_DISABLED_ARR
+unset MyDisabledAlgos
+declare -a MyDisabledAlgos
+for algo_GPU in ${GLOBAL_ALGO_DISABLED_ARR[@]}; do
+    read disabledAlgo GPUs <<<"${algo_GPU//:/ }"
+    if [ ${#GPUs} -gt 1 ]; then
+	for lfdGPU in ${GPUs}; do
+	    if [ "${lfdGPU}" == "${gpu_uuid}" ]; then
+		MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
+		break
+	    fi
+	done
+    else
+	MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
+    fi
+done
+
+unset MyDisabledAlgorithms MyDisabledAlgorithms_in
+declare -a MyDisabledAlgorithms
+_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED
+if [ -s ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED ]; then
+    cat ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t MyDisabledAlgorithms_in
+fi
+_remove_lock                                     # ... und wieder freigeben
+
+for actRow in "${MyDisabledAlgorithms_in[@]}"; do
+    read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
+    [ ${gpuIdx#0} -eq ${gpu_idx} ] && MyDisabledAlgorithms[${#MyDisabledAlgorithms[@]}]=${lfdAlgorithm}
+done
+
+declare -p MyDisabledAlgorithms
+declare -p MyDisabledAlgos
+
+for lfdAlgorithm in ${pleaseBenchmarkAlgorithm[@]}; do
+    for disabledAlgo in ${MyDisabledAlgorithms[@]}; do
+	[ "${lfdAlgorithm}" == "${disabledAlgo}" ] && continue 2
+    done
+    read lfdAlgo mName mVer muck888 <<<${lfdAlgorithm//#/ }
+    echo "checking $lfdAlgo..."
+    for disabledAlgo in ${MyDisabledAlgos[@]}; do
+	[ "${lfdAlgo}" == "${disabledAlgo}" ] && continue 2
+    done
+    WillBenchmarkAlgorithm[${#WillBenchmarkAlgorithm[@]}]=${lfdAlgorithm}
+done
+declare -p WillBenchmarkAlgorithm
+exit
+
 #    Zusätzlich die über GLOBAL_ALGO_DISABLED Algos rausnehmen...
 unset GLOBAL_ALGO_DISABLED_ARR
-_reserve_and_lock_file ../GLOBAL_ALGO_DISABLED
-if [ -s ../GLOBAL_ALGO_DISABLED ]; then
-    cat ../GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
+if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
+    cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
 
     if [ $debug -eq 1 ]; then
         echo "GPU #${gpu_idx}: Vor  der Prüfung: GLOBAL_ALGO_DISABLED_ARRAY hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"
@@ -55,6 +120,8 @@ if [ -s ../GLOBAL_ALGO_DISABLED ]; then
 fi
 _remove_lock                                     # ... und wieder freigeben
 # ----------------------------------------------------------
+
+exit
 
 # Mal sehen, ob es überhaupt schon Benchmarkwerte gibt oder ob Benchmarks nachzuholen sind.
 # Erst mal alle MiningAlgos ermitteln, die möglich sind und gegen die vorhandenen JSON Einträge checken.

@@ -62,8 +62,8 @@ elif [ "${act_pwd:0:4}" == "GPU-" ]; then
     # ABER: damit wir das Folgende, die STRUKTURANPASSUNG nicht immer wieder und wieder tun, schauen wir, ob wir die
     #       momentane gpu-bENCH.inc nicht schon geholt haben:
     _structure_change=0
-    if [ !     $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc) \
-           -eq $(stat -c %Y gpu-bENCH.inc) ]; then
+    if [ !     $(date --utc --reference=../GPU-skeleton/gpu-bENCH.inc +%s) \
+           -eq $(date --utc --reference=gpu-bENCH.inc +%s) ]; then
         #
         # Quell-bENCH ist seit dem Runterkopieren verändert worden, aber möglicherweise INKONSISTENT
         # Deshalb haben wir vereinbart, dass dieser Zustand so lang als INKONSISTENT anzusehen ist,
@@ -73,8 +73,8 @@ elif [ "${act_pwd:0:4}" == "GPU-" ]; then
         # Das setzt das Editierungsdatum der gpu-bENCH.inc im letztlichen Erfolgsfall zwar VORAUS,
         #     aber das spielt ja keine Rolle. Sie wäre so oder so der GPU-eigenen gpu-bENCH.inc voraus.
         #
-        if [       $(stat -c %Y ../GPU-skeleton/benchmark_skeleton.json) \
-               -eq $(stat -c %Y ../GPU-skeleton/gpu-bENCH.inc ) ]; then
+	if [       $(date --utc --reference=../GPU-skeleton/benchmark_skeleton.json +%s) \
+	       -eq $(date --utc --reference=../GPU-skeleton/gpu-bENCH.inc +%s) ]; then
             #
             # Quell-bENCH ist seit dem Runterkopieren verändert worden, aber jetzt als KONSISTENT signalisiert!
             # Diese Bedingung sagt aus, dass ein konsistenter gpu-bENCH.inc Zustand hergestellt wurde und

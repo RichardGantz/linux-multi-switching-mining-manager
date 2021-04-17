@@ -18,6 +18,7 @@
 # function _read_IMPORTANT_BENCHMARK_JSON_in ()
 # function _init_some_file_and_path_variables () {
 # function _init_NH_continent_handling () {
+# function _disable_algorithm () {
 # function _disable_algo_for_5_minutes () {
 # function _terminate_Logger_Terminal () {
 # function _terminate_Miner () {
@@ -292,22 +293,26 @@ function _read_IMPORTANT_BENCHMARK_JSON_in ()
         # Algos gerade aus der IMPORTANT_BENCHMARK_JSON eingelesen wurden.
         # Wenn nicht, Ausgabe einer entsprechenden Meldung
 
+        unset algo_checked pleaseBenchmarkAlgorithm
+        declare -Ag algo_checked
+	declare -ag pleaseBenchmarkAlgorithm
         for minerName in ${ALLE_MINER[@]}; do
             read m_name m_version <<<"${minerName//#/ }"
 	    #$$$ Dieses Array hat als keys wenigstens 1x actMiningAlgos[${algo_coin}]="${mining_algo}"
 	    # den ${algo_coin} und als Value den ${mining_algo}
 	    # Irgendetwas stimmt hier nicht $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
             declare -n actMiningAlgos="Mining_${m_name//\-/_}_${m_version//\./_}_Algos"
-            unset algo_checked
-            declare -A algo_checked
             for lfdMiningAlgo in ${actMiningAlgos[@]}; do
                 lfdAlgorithm="${lfdMiningAlgo}#${m_name}#${m_version}"
                 if [ ${#algo_checked[${lfdAlgorithm}]} -eq 0 ]; then
                     if [ ${#bENCH[${lfdAlgorithm}]} -eq 0 ]; then
                         printf "GPU #%s:%40s <------- Bitte Benchmark durchführen\n" \
                                ${gpu_idx} ${lfdAlgorithm}
+			pleaseBenchmarkAlgorithm[${#pleaseBenchmarkAlgorithm[@]}]=${lfdAlgorithm}
+			algo_checked[${lfdAlgorithm}]=0
+		    else
+			algo_checked[${lfdAlgorithm}]=1
                     fi
-                    algo_checked[${lfdAlgorithm}]=1
                 fi
             done
         done

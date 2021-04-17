@@ -15,6 +15,36 @@ miningAlgo=beamhash
 
 MINER=${miner_name}#${miner_version}
 
+# LÄUFT NOCH NICHT !!!
+# Bitte die Schleifengeschwindigkeit testen for in vs. for ((
+cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+declare -p GLOBAL_ALGO_DISABLED_ARR
+for ((i=0; i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
+
+    unset disabled_algos_GPUs
+    read -a disabled_algos_GPUs <<<${GLOBAL_ALGO_DISABLED_ARR[$i]//:/ }
+    DisAlgo=${disabled_algos_GPUs[0]}
+    if [ ${#disabled_algos_GPUs[@]} -gt 1 ]; then
+        # Nur für bestimmte GPUs disabled. Wenn die eigene GPU nicht aufgeführt ist, übergehen
+        [[ ! ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ^.*:${gpu_uuid} ]] && unset DisAlgo
+    fi
+    if [ -n "${DisAlgo}" ]; then
+        for ccoin in ${!actMiningAlgos[@]}; do
+            [ "${actMiningAlgos[$ccoin]}" == "${DisAlgo}" ] && unset actMiningAlgos[$ccoin]
+        done
+        for a in ${!actMissingAlgos[@]}; do
+            if [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ]; then
+                unset actMissingAlgos[$a]
+                # Es konnte nur einen Eintrag mit diesem Ccoin geben, deshalb um der Performance willen Abbruch der Schleife
+                break
+            fi
+        done
+        disd_msg[${#disd_msg[@]}]="---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
+    fi
+done
+
+exit
+
 if [ 1 -eq 0 ]; then
 
     BENCHLOGFILE="test/${miningAlgo}_${gpu_uuid}_benchmark.log"
