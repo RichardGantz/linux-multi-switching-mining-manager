@@ -7,8 +7,9 @@
 source estimate_delays.inc
 
 # Zwei wichtige Pfade
-GRAF_DST_DIR="/home/avalon/temp/graf";
+GRAF_DST_DIR="${HOME}/temp/graf";
 ARCHIV_DIR=${GRAF_DST_DIR}/.logs
+mkdir -p ${ARCHIV_DIR}
 
 This=$(basename $0 .sh)
 
