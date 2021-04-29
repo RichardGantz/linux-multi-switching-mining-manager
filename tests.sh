@@ -12,66 +12,40 @@
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_delays.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_yeses.inc
 
-_read_in_SYSTEM_FILE_and_SYSTEM_STATEin
+#_read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 
-#function  _set_Miner_Device_to_Nvidia_GpuIdx_maps () {
-_set_ALLE_MINER_from_path
-    _ALL_MINERS_DATA_CHANGED_ON_DISK_=$?
+#cat $(ls .bc_result_GPUs_3_0_1_4)
+cat $(ls .bc_result_GPUs_*) \
+    | tee >(grep -E -e '^#TOTAL '  | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER) \
+	  >(grep -e '^MAX_PROFIT:' | sort -g -k2 | tail -n 1 >.MAX_PROFIT.in) \
+	  >(grep -e '^FP_M:'       | sort -g -k2 | tail -n 1 >.MAX_FP_MINES.in) \
+	  >/dev/null
+while [[ ! -s .MAX_PROFIT.in || ! -s .MAX_FP_MINES.in || ! -s .GLOBAL_GPU_COMBINATION_LOOP_COUNTER ]]; do sleep .05; done
+echo "I'm out now"
+cat .GLOBAL_GPU_COMBINATION_LOOP_COUNTER
+cat .MAX_PROFIT.in
+cat .MAX_FP_MINES.in
+	    
+	    
+exit
 
-    unset miner_gpu_idx
-    echo "\${index[@]}=${index[@]}"
+# Läuft gut.
+cat $(ls .bc_result_GPUs_*) \
+    | tee >(grep -E -e '^#TOTAL '  | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}') \
+	  >(grep -e '^MAX_PROFIT:' | sort -g -k2 | tail -n 1 ) \
+	  >(grep -e '^FP_M:'       | sort -g -k2 | tail -n 1 ) \
+	  >/dev/null
+exit
 
-    if [ ${#miner_gpu_idx[@]} -eq 0 -o ${_ALL_MINERS_DATA_CHANGED_ON_DISK_} -ne 0 ]; then
-        echo "$(basename $0):${gpu_idx}: ###---> Updating Table \"<Miner Device-Num> to <Nvidia gpu_idx>\"."
-
-        # Key/index dieses Assoziativen Arrays ist eine Kombination aus ${MINER}#${gpu_idx}
-        # ${gpu_idx} ist die Nvidia GPU-Indexnummer.
-        # In dieser Funktion finden wir heraus, welche Nummer wir dem Miner beim MinerStart übergeben müssen.
-        #    damit er die richtige, von uns auch ausgewählte Nividia ${gpu_idx} minet.
-        unset miner_gpu_idx;    declare -Ag miner_gpu_idx
-
-        for MinerFullName in "${ALLE_MINER[@]}"; do
-
-	    echo "\${MinerFullName}=${MinerFullName}"
-            case "${MinerFullName}" in
-
-                # Die Ausnahmen hier oben
-                # "xmrMiner#0.2.1")
-                #   miner_gpu_idx["${MinerFullName}#0"]=
-                #   miner_gpu_idx["${MinerFullName}#1"]=
-                #   miner_gpu_idx["${MinerFullName}#2"]=
-                #   miner_gpu_idx["${MinerFullName}#3"]=
-                #   miner_gpu_idx["${MinerFullName}#4"]=
-                #   miner_gpu_idx["${MinerFullName}#5"]=
-                #   miner_gpu_idx["${MinerFullName}#6"]=
-                #   ;;
-
-                # Die Ausnahmen hier oben
-                t-rex#*|zm#*)
-                    # miner_gpu_idx[  ${MINER}#${gpu_idx}  ] = miner_dev
-                    #miner_gpu_idx["${MinerFullName}#0"]=1          # Bisher sind nur die ersten beiden vertauscht.
-                    #miner_gpu_idx["${MinerFullName}#1"]=0
-                    # 2018-01-25 ${bus[${gidx}]} enthält die "PCI-Bus ID" dezimal
-                    #            Das Array ${zm_device_on_pci_bus[ "PCI-Bus ID" ]} hält die Miner Device ID
-                    for gidx in ${index[@]}; do
-			#echo "gidx=${gidx}, bus[${gidx}]=${bus[${gidx}]}, zm_device_on_pci_bus[${bus[${gidx}]}]=${zm_device_on_pci_bus[${bus[${gidx}]}]}"
-                        miner_gpu_idx["${MinerFullName}#${gidx}"]=${zm_device_on_pci_bus[${bus[${gidx}]}]}
-			echo "gidx=${gidx}, bus[${gidx}]=${bus[${gidx}]}, ${miner_gpu_idx["${MinerFullName}#${gidx}"]}"
-                    done
-                    ;;
-
-                *)
-		    # Die miner_devices sind bei diesem Miner mit dem offiziellen Namen "gminer" identisch mit der Nvidia-Ausgabe
-                    for gidx in ${index[@]}; do
-                        miner_gpu_idx["${MinerFullName}#${gidx}"]=${gidx}
-			echo "gidx=${gidx}, bus[${gidx}]=${bus[${gidx}]}, ${miner_gpu_idx["${MinerFullName}#${gidx}"]}"
-                    done
-                    ;;
-
-            esac
-        done
-    fi
-#function  _set_Miner_Device_to_Nvidia_GpuIdx_maps () ENDE
+cat $(ls .bc_result_GPUs_*) \
+    | tee >(grep -E -e '#TOTAL ' | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER; \
+            rm -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock) \
+    | grep -E -v -e '^#|^$' \
+    | tee >(grep -e '^MAX_PROFIT:'   | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_PROFIT.in; \
+            rm -f .MAX_PROFIT.in.lock) \
+          >(grep -e '^FP_M:' | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_FP_MINES.in; \
+            rm -f .MAX_FP_MINES.in.lock) \
+          >/dev/null
 
 exit
 

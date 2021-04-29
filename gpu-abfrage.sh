@@ -158,7 +158,7 @@ if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index(
 
         if [ ! -f "${UUID}/gpu-bENCH.sh"   ]; then
             cp -f GPU-skeleton/gpu-bENCH.sh ${UUID}/
-        elif [ $(stat -c %Y GPU-skeleton/gpu-bENCH.sh) -gt $(stat -c %Y ${UUID}/gpu-bENCH.sh) ]; then
+        elif [ $(date --utc --reference=GPU-skeleton/gpu-bENCH.sh +%s) -gt $(date --utc --reference=${UUID}/gpu-bENCH.sh +%s) ]; then
             cp -f GPU-skeleton/gpu-bENCH.sh ${UUID}/
         fi
 

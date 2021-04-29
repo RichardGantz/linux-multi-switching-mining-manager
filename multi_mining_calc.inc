@@ -271,6 +271,10 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members_bash () {
 if [ 1 -eq 1 ]; then
         if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
             MAX_PROFIT_GPU_Algo_Combination=${algosCombinationKey}
+	    if [ ${debug} -eq 1 ]; then
+		echo "Innerhalb von 1 -eq 1"
+		declare -p MAX_PROFIT_GPU_Algo_Combination
+	    fi
             # Hier könnten wir eigentlich schon ausgeben, welche GPU mit welchem Algo
             msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
             MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
@@ -566,7 +570,7 @@ function _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES () {
     fi
 }
 
-_notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING ()
+function _notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING ()
 {
     # Tja, was machen wir in dem Fall also?
     # Wir setzen eine Desktopmeldung ab... undd machen einen Eintrag
@@ -595,7 +599,7 @@ _notify_about_GPU_INDEX_CHANGED_WHILE_RUNNING ()
     fi
 }
 
-_read_in_kWhMin_kWhMax_kWhAkk () {
+function _read_in_kWhMin_kWhMax_kWhAkk () {
     ###############################################################################################
     #
     #     EINLESEN der STROMPREISE in BTC
@@ -618,7 +622,7 @@ _read_in_kWhMin_kWhMax_kWhAkk () {
     kWhAkk=${kwh_BTC["solar_akku"]}
 }
 
-_read_in_All_ALGO_WATTS_MINESin () {
+function _read_in_All_ALGO_WATTS_MINESin () {
     ###############################################################################################
     #
     #    EINLESEN ALLER ALGORITHMEN, WATTS und MINES, AUF DIE WIR GERADE GEWARTET HABEN
@@ -668,7 +672,7 @@ _read_in_All_ALGO_WATTS_MINESin () {
     done
 }
 
-_read_in_Validated_ALGO_WATTS_MINESin () {
+function _read_in_Validated_ALGO_WATTS_MINESin () {
     ###############################################################################################
     #
     #    EINLESEN ALLER ALGORITHMEN, WATTS und MINES, AUF DIE WIR GERADE GEWARTET HABEN

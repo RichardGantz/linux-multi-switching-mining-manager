@@ -445,8 +445,12 @@ function _terminate_Miner () {
         MINER_pid=$(< ${MINER}.pid)
         if [ -n "${MINER_pid}" ]; then
             printf "Beenden des Miners alias ${coin_algorithm} mit PID ${MINER_pid} ... "
-            REGEXPAT="${minerstart//\//\\/}"
-            REGEXPAT="${REGEXPAT//\+/\\+}"
+	    if [ ${ScreenTest} -eq 1 ]; then
+		REGEXPAT="${find_and_kill_this_pseudo_miner_cmd}"
+	    else
+		REGEXPAT="${minerstart//\//\\/}"
+		REGEXPAT="${REGEXPAT//\+/\\+}"
+	    fi
             kill_pid=$(ps -ef | gawk -e '$2 == '${MINER_pid}' && /'"${REGEXPAT}"'/ {print $2; exit }')
             if [ -n "$kill_pid" ]; then
                 kill $kill_pid
@@ -479,7 +483,7 @@ Es folgt ein kill -9... "
                     printf "no longer there.\n"
                 fi
             else
-                printf "–––> KILL_PANIC: GPU #${gpu_idx}: $(basename $0):
+                printf "\n–––> KILL_PANIC: GPU #${gpu_idx}: $(basename $0):
 PID ${MINER_pid} of Miner ${MINER} NOT FOUND IN PROCESS TABLE after the following search:
 awk -e \"\$2 == \${MINER_pid} && /\${REGEXPAT}/ {print $2; exit }\"
 awk -e \"\$2 == ${MINER_pid} && /${REGEXPAT}/ {print $2; exit }\"\n" | tee -a ${ERRLOG}

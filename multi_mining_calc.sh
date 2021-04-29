@@ -11,11 +11,15 @@
 #
 ###############################################################################
 
+# GLOBALE VARIABLEN, nützliche Funktionen
+[[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
+[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+
 ### SCREEN ADDITIONS: ###
 # Die folgende Variable wird auch in der globals.inc gesetzt (0 bis zum Ende der Tests) und kann hier überschrieben werden.
 # 0 ist der frühere Betrieb an einem graphischen Desktop mit mehreren hochpoppenden Terminals
 # 1 ist der Betrieb unter GNU screen
-UseScreen=1
+#UseScreen=1
 #[[ ${#GPU_gv_Title} -eq 0 ]] && GPU_gv_Title=MAIN
 #[[ ${#BencherTitle} -eq 0 ]] && BencherTitle=BENCHMARKER
 #export BencherTitle
@@ -24,15 +28,20 @@ UseScreen=1
 #     beendet das Programm, falls automatische Benchmarks wegen unbehandelter .json durchgeführt wurden.
 # 0 bedutet normaler Betrieb mit Miner-Start
 # 1 bedeutet "Trockenbetrieb" ohne Minerstart
-ScreenTest=1
-
-# GLOBALE VARIABLEN, nützliche Funktionen
-[[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
-[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+#ScreenTest=1
+if [ ${UseScreen} -eq 1 ]; then
+    [ ${#STY} -eq 0 ] && { echo "Bitte den Multi-Miner in einer Screen-Session startet, bis er selbst tut."; exit 1 ; }
+    # Es muss eine .screenrc mit diesem Namen geben, die am Ende einen detach macht.
+    [ ! -s ${LINUX_MULTI_MINING_ROOT}/screen/screenrc.${BG_SESS%%.*} ] && {
+	echo ${BG_SESS}
+	echo "Bitte die Datei ${LINUX_MULTI_MINING_ROOT}/screen/screenrc.${BG_SESS%%.*} zur Verfügung stellen."
+	exit 1
+    }
+fi
 
 # Für die Ausgabe von mehr Zwischeninformationen auf 1 setzen.
 # Null, Empty String, oder irgendetwas andere bedeutet AUS.
-verbose=0
+verbose=1
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
 debug=1
@@ -77,8 +86,8 @@ echo $$ >${This}.pid
 
 
 # Die folgenden Kommandos sind als root in der MM-Root auszuführen, damit der MM sich auf RealTime Priority setzen kann:
-_RTPRIO_=$(ls -la .#rtprio#)
 REGEXPAT="^-rwsr-xr-x"
+_RTPRIO_=$(ls -la .#rtprio#)
 if [[ ! "${_RTPRIO_}" =~ ${REGEXPAT} ]]; then
     echo "
 Damit der MultiMiner überhaupt vernünftig arbeiten kann, bitte als Kenner des root-Passworts die folgenden Kommandos in der MM-Root ausführen:
@@ -106,13 +115,28 @@ Danach den MultiMiner neu starten.
     exit 3 # No Nice-Command
 fi
 
+_SMI_=$(ls -l benchmarking/nvidia-befehle/smi)
+if [[ ! "${_SMI_}" =~ ${REGEXPAT} ]]; then
+    echo "
+Damit die Power-Limits der NVIDIA-Karten erfolgreich abgesetzt werden können, bitte als Kenner des root-Passworts die folgenden Kommandos in der MM-Root ausführen:
+$ su
+# cp /usr/bin/nvidia-smi benchmarking/nvidia-befehle/smi
+# chmod 4755 benchmarking/nvidia-befehle/smi
+# exit
 
+Danach den MultiMiner neu starten.
+"
+    exit 4 # No acceptable nvidia-smi command
+fi
+
+
+export BC_LINE_LENGTH=0
 export MULTI_MINERS_PID=$$
 export ERRLOG=${LINUX_MULTI_MINING_ROOT}/${This}.err
 mv -f ${ERRLOG} ${ERRLOG}.BAK
 
 function _delete_temporary_files () {
-    rm -f ${SYNCFILE} ${SYSTEM_STATE}.lock .bc_result_GPUs_* .bc_prog_GPUs_* ._reserve_and_lock_counter.* \
+    rm -f ${SYNCFILE} ${SYSTEM_STATE}.lock .bc_result_GPUs_* .bc_results_all .bc_prog_GPUs_* ._reserve_and_lock_counter.* \
        I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 _delete_temporary_files
@@ -150,12 +174,6 @@ function _terminate_all_processes_of_script () {
     fi
 }
 
-### SCREEN ADDITIONS: ###
-# Das war nur, um den Namen der .pid-datei zu verifizieren
-if [ ${ScreenTest} -eq 1 ]; then
-    #exit
-fi
-
 function _On_Exit () {
     broken_pipe_text="MultiMiner: _On_EXIT() ENTRY, CLEANING UP RESOURCES NOW...\n"
     _terminate_all_processes_of_script "gpu_gv-algo.sh"
@@ -166,6 +184,13 @@ function _On_Exit () {
     # Temporäre Dateien löschen
     [[ $debug -eq 0 ]] && _delete_temporary_files
     _terminate_all_log_ptys
+
+    ### SCREEN ADDITIONS: ###
+    if [ ${UseScreen} -eq 1 ]; then
+	# Die Background-Session entfernen durch Abmeldung von der Shell, in der das Window immer noch steht
+	screen -drx ${BG_SESS} -p "BG-Procs" -X stuff "exit\n"
+	rm -f ${LINUX_MULTI_MINING_ROOT}/screen/.screenrc.${BG_SESS}
+    fi
 
     # Das sollte eigentlich sowieso alles erledigen?
     # Aber wir wollen lieber kein gleichzeitiges kill -15 an alle, sondern versuchen es vorher geregelt, damit alles sauber bereinigt wird.
@@ -206,6 +231,23 @@ rm -f ${RUNNING_STATE}
 # gpu_gv-algos's zu starten, die erst mal auf SYNCFILE warten
 # und dann algo_multi_abfrage.sh
 
+# Startet eine Session ${BG_SESS} und eine shell, aus der heraus nvidia-settings laufen,
+# sofern sie aus einem mate-terminal-Child gerufen werden, das eine screen-Session für dem MM-Start erstellt hat.
+# !!! GANZ WICHTIG: Die angegebene screenrc muss mit einem "detach" enden !!!
+#     Sonst kommt er nicht nach hierher zurück und überlager den ${MAINSCREEN}
+if [ ${UseScreen} -eq 1 ]; then
+    if [ $(screen -ls|grep -c ${BG_SESS}) -eq 0 ]; then
+	cp ${LINUX_MULTI_MINING_ROOT}/screen/screenrc.${BG_SESS%%.*} ${LINUX_MULTI_MINING_ROOT}/screen/.screenrc.${BG_SESS}
+	screen -c ${LINUX_MULTI_MINING_ROOT}/screen/.screenrc.${BG_SESS} -S ${BG_SESS}
+    fi
+fi
+#screen -rx ${BG_SESS} -p + -t "ERRLOG" -X eval detach
+#screen -d
+
+#echo "where I'm now? PID: $$"
+#read -p "Press ENTER to continue after Screens have built up..." xyz
+#exit
+
 MultiMining_log=${LINUX_MULTI_MINING_ROOT}/${This}.log
 exec 9>&1
 #mv -f ${MultiMining_log} ${MultiMining_log}.BAK
@@ -217,14 +259,23 @@ exec 2>>${ERRLOG}
 unset ii; declare -i ii=0
 unset LOG_PTY_CMD; declare -ag LOG_PTY_CMD
 LOG_PTY_CMD[999]="tail -f ${ERRLOG}"
-ofsX=$((ii*60+50))
-ofsY=$((ii*30+50))
-let ii++
-${_TERMINAL_} --hide-menubar \
-              --title="MultiMining Error Channel Output" \
-              --geometry="100x24+${ofsX}+${ofsY}" \
-              -e "${LOG_PTY_CMD[999]}"
-#              -x bash -c "${LOG_PTY_CMD[999]}"
+
+### SCREEN ADDITIONS: ###
+# Das war nur, um den Namen der .pid-datei zu verifizieren
+if [ ${UseScreen} -eq 0 ]; then
+    ofsX=$((ii*60+50))
+    ofsY=$((ii*30+50))
+    let ii++
+    ${_TERMINAL_} --hide-menubar \
+		  --title="MultiMining Error Channel Output" \
+		  --geometry="100x24+${ofsX}+${ofsY}" \
+		  -e "${LOG_PTY_CMD[999]}"
+#                 -x bash -c "${LOG_PTY_CMD[999]}"
+else
+    screen -X screen -t "ERRLOG"
+    screen -p "ERRLOG" -X stuff "${LOG_PTY_CMD[999]}\nexit\n"
+    screen -X other
+fi
 
 # Besteht nun hauptsächlich aus der Funktion _func_gpu_abfrage_sh
 source ./gpu-abfrage.sh
@@ -256,6 +307,10 @@ echo "RT_PRIORITY[\"mm\"] ="${RT_PRIORITY["mm"]}
 echo "RT_POLICY[\"mm\"]   ="${RT_POLICY["mm"]}
 echo "NICE[\"mm\"]        ="${NICE["mm"]}
 
+#echo "I'm going to exit now"
+# Damit die anderen beiden Screens wirklich aufgebaut sind, künstlich warten
+#read -p "Press ENTER to continue after Screens have built up..." xyz
+#exit
 # Das gibt Informationen der gpu-abfrage.sh aus
 ATTENTION_FOR_USER_INPUT=1
 while : ; do
@@ -286,26 +341,46 @@ while : ; do
                 echo "GPU #${lfd_gpu_idx}: Starting process in the background..."
                 exec 1>&9
 
+		### SCREEN ADDITIONS: ###
                 if [ ${RT_PRIORITY[${ProC}]} -gt 0 ]; then
-                    ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]} \
-                                              ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
+		    cmd="${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]}"
                 else
-                    ${LINUX_MULTI_MINING_ROOT}/.#nice# -n ${NICE[${ProC}]} \
-                                              ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh >>${GPU_GV_LOG} &
+		    cmd="${LINUX_MULTI_MINING_ROOT}/.#nice# -n ${NICE[${ProC}]}"
                 fi
-                BG_PIDs+=( $! )
+		cmd+=" ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh &>>${GPU_GV_LOG}"
+		if [ ${UseScreen} -eq 0 ]; then
+		    "${cmd}" &
+                    BG_PIDs+=( $! )
+		else
+		    cmd+='\nexit\n'
+		    GPU_gv_Title="GV#${lfd_gpu_idx}"
+		    screen -drx ${BG_SESS} -X screen -t ${GPU_gv_Title}
+		    screen -drx ${BG_SESS} -p ${GPU_gv_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n ${cmd}"
+		    sleep .1
+		fi
 
                 exec 1>>${MultiMining_log}
                 # ${_TERMINAL_} -x ./abc.sh
                 #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
-                ofsX=$((ii*60+50))
-                ofsY=$((ii*30+50))
-                LOG_PTY_CMD[${lfd_gpu_idx}]="tail -f ${GPU_GV_LOG}"
-                ${_TERMINAL_} --hide-menubar \
-                              --title="GPU #${lfd_gpu_idx}  -  ${lfdUuid}" \
-                              --geometry="100x24+${ofsX}+${ofsY}" \
-                              -e "${LOG_PTY_CMD[${lfd_gpu_idx}]}"
-                let ii++
+                LOG_PTY_CMD[${lfd_gpu_idx}]="tail -f ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/${GPU_GV_LOG}"
+		### SCREEN ADDITIONS: ###
+		# Das war nur, um den Namen der .pid-datei zu verifizieren
+		if [ ${UseScreen} -eq 0 ]; then
+		    ofsX=$((ii*60+50))
+		    ofsY=$((ii*30+50))
+                    ${_TERMINAL_} --hide-menubar \
+				  --title="GPU #${lfd_gpu_idx}  -  ${lfdUuid}" \
+				  --geometry="100x24+${ofsX}+${ofsY}" \
+				  -e "${LOG_PTY_CMD[${lfd_gpu_idx}]}"
+                    let ii++
+		else
+		    cmd="${LOG_PTY_CMD[${lfd_gpu_idx}]}"'\nexit\n'
+		    GPU_gv_LOG_Title="GV#${lfd_gpu_idx}"
+		    screen -X screen -t ${GPU_gv_LOG_Title}
+		    screen -p ${GPU_gv_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n ${cmd}"
+		    sleep .1
+		    screen -X select ${MAINSCREEN}
+		fi
 
                 cd ${_WORKDIR_} >/dev/null
             fi
@@ -319,27 +394,69 @@ while : ; do
         # Das lohnt sich erst, wenn wir den curl dazu gebracht haben, ebenfalls umzuleiten...
         # ${_TERMINAL_} -x ./abc.sh
         #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
-        ofsX=$((ii*60+50))
-        ofsY=$((ii*30+50))
         mv -f algo_multi_abfrage.log algo_multi_abfrage.log.BAK
         echo "Starting algo_multi_abfrage.sh in the background..."
-        exec 1>&9
-        ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.sh &>>algo_multi_abfrage.log &
-        BG_PIDs+=( $! )
-        exec 1>>${MultiMining_log}
+	cmd="${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.sh &>>algo_multi_abfrage.log"
         LOG_PTY_CMD[998]="tail -f ${LINUX_MULTI_MINING_ROOT}/algo_multi_abfrage.log"
-        ${_TERMINAL_} --hide-menubar \
-                      --title="\"RealTime\" Algos und Kurse aus dem Web" \
-                      --geometry="100x24+${ofsX}+${ofsY}" \
-                      -e "${LOG_PTY_CMD[998]}"
+        exec 1>&9
+
+	### SCREEN ADDITIONS: ###
+	if [ ${UseScreen} -eq 0 ]; then
+            "${cmd}" &
+            BG_PIDs+=( $! )
+            exec 1>>${MultiMining_log}
+
+            ofsX=$((ii*60+50))
+            ofsY=$((ii*30+50))
+            ${_TERMINAL_} --hide-menubar \
+			  --title="\"RealTime\" Algos und Kurse aus dem Web" \
+			  --geometry="100x24+${ofsX}+${ofsY}" \
+			  -e "${LOG_PTY_CMD[998]}"
+            exec 1>>${MultiMining_log}
+	else
+#	    screen -X eval detach
+	    PREISE_Title="PREISE"
+	    # Das erzeugt einen neuen Prozess und der ursprüngliche ist überdeckt und unzugänglich!
+	    # ... bis wir uns davon detached haben...
+	    #screen -S Web-Session -t ${PREISE_Title} ${BASH} -c "${cmd}"
+	    #screen -drx -X eval detach
+
+	    #screen -p + -t ${PREISE_Title} ${BASH} -c "${cmd}"
+	    cmd+='\nexit\n'
+	    screen -drx ${BG_SESS} -X screen -t ${PREISE_Title}
+	    screen -drx ${BG_SESS} -p ${PREISE_Title} -X chdir "${LINUX_MULTI_MINING_ROOT}" # nicht sicher, ob dieses Kommando einen Effekt hat...
+	    screen -drx ${BG_SESS} -p ${PREISE_Title} -X stuff "${cmd}"
+#	    sleep .2
+            exec 1>>${MultiMining_log}
+
+            ##LOG_PTY_CMD[998]="${LOG_PTY_CMD[998]} &; screen -X eval detach"
+	    cmd="${LOG_PTY_CMD[998]}"'\nexit\n'
+	    PREISE_LOG_Title="PREISE-LOG"
+	    #screen -rx ${BG_SESS} -p + -t ${PREISE_LOG_Title} ${BASH} -c "${LOG_PTY_CMD[998]}"
+	    screen -X screen -t ${PREISE_LOG_Title}
+#	    screen -p ${PREISE_LOG_Title} -X eval "chdir ${LINUX_MULTI_MINING_ROOT}"
+	    screen -p ${PREISE_LOG_Title} -X stuff "${cmd}"
+	    screen -X select ${MAINSCREEN}
+	fi
     fi
 
-    if [ ${debug} -eq 1 ]; then
-        if [ ${#BG_PIDs[@]} -gt 0 ]; then
-            echo "Process-IDs from Processes in the Background:" ${BG_PIDs[@]}
-        else
-            echo "Keine Background-PIDs gesammelt. Komisch. ???"
-        fi
+    ### SCREEN ADDITIONS: ###
+    if [ ${UseScreen} -eq 0 ]; then
+	if [ ${debug} -eq 1 ]; then
+            if [ ${#BG_PIDs[@]} -gt 0 ]; then
+		echo "Process-IDs from Processes in the Background:" ${BG_PIDs[@]}
+            else
+		echo "Keine Background-PIDs gesammelt. Komisch. ???"
+            fi
+	fi
+    else
+	# Das funktioniert einfach nicht. Keine Ahnung, warum nicht. Schaltet nicht auf LMMS um
+	#screen -p ${MAINSCREEN} -X "select ${MAINSCREEN}"
+	#screen -p "ERRLOG"      -X "select ${MAINSCREEN}"
+	screen -X select ${MAINSCREEN}
+
+	# Regionen-Einteilungen, Layouts
+	#	screen -X eval split "resize -v 8" "select ${PREISE_LOG_Title}" focus "select 0" "focus top" "resize -v 8" focus "resize -v 8" "focus bottom"
     fi
 
     ###############################################################################################
@@ -438,7 +555,7 @@ while : ; do
     declare -Ag ALGO_WATTS_MINES_delivering_GPUs validation_time
     if [ ${NumEnabledGPUs} -gt 0 ]; then
 
-        # Warten bis zu 5 Sekunden, bis wenigstens 1 GPU gültige Werte signalisiert hat.
+        # Warten bis zu maximal 15 Sekunden (${MM_validating_delay}), bis wenigstens 1 GPU gültige Werte signalisiert hat.
         touch .now_$$
         read nowSecs nowFrac <<<$(_get_file_modified_time_ .now_$$)
         until (( ${nowSecs} > ${SynSecs} || ( ${nowSecs} == ${SynSecs} && ${nowFrac} > ${SynFrac} ) )); do
@@ -459,7 +576,7 @@ while : ; do
 
             sleep .1
             touch .now_$$
-            read nowSecs            nowFrac <<<$(_get_file_modified_time_ .now_$$)
+            read nowSecs nowFrac <<<$(_get_file_modified_time_ .now_$$)
             #read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
             #SynSecs=$((${new_Data_available} + ${MM_validating_delay}))
         done
@@ -703,6 +820,9 @@ while : ; do
         declare -n actSortedProfits="SORTED${gpu_idx}PROFITs"
 
         numAlgos=${#actGPUAlgos[@]}
+	if [ 1 -eq 0 -a ${verbose} -eq 1 ]; then
+	    echo "Anzahl aktueller Algos von GPU#${gpu_idx}: ${numAlgos}" 
+	fi
         # Wenn die GPU seit neuestem generell DISABLED ist, pushen wir sie hier auf den
         # SwitchOffGPUs Stack, indem wir die numAlgos künslich auf 0 setzen:
         if [[ "${uuidEnabledSOLL[${uuid[${gpu_idx}]}]}" == "0" ]]; then
@@ -741,6 +861,8 @@ while : ; do
 
                         _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT \
                             ${SolarWattAvailable} ${actAlgoWatt[$algoIdx]} "${actAlgoMines[$algoIdx]}"
+			[ "${MAX_PROFIT}"   == "0" ] && MAX_PROFIT=".0"
+			[ "${MAX_FP_MINES}" == "0" ] && MAX_FP_MINES=".0"
 
                         # Wenn das NEGATIV ist, muss der Algo dieser Karte übergangen werden. Uns interessieren nur diejenigen,
                         # die POSITIV sind und später in Kombinationen miteinander verglichen werden müssen.
@@ -748,6 +870,9 @@ while : ; do
                         # Punkt raus und gucken, ob > 0, sonst interessiert uns das ebenfalls nicht
                         _octal_=${ACTUAL_REAL_PROFIT//\.}
                         _octal_=${_octal_//0}
+			if [ 1 -eq 0 -a ${debug} -eq 1 ]; then
+			    echo "\${ACTUAL_REAL_PROFIT}: ${ACTUAL_REAL_PROFIT}"
+			fi
                         if [[ "${ACTUAL_REAL_PROFIT:0:1}" != "-" && ${#_octal_} -gt 0 ]]; then
                             profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
                             actAlgoProfit[${algoIdx}]=${ACTUAL_REAL_PROFIT}
@@ -829,7 +954,7 @@ while : ; do
         esac
     done
 
-    if [ ${verbose} == 1 ]; then
+    if [ ${verbose} -eq 1 ]; then
         # Auswertung zur Analyse
         if [[ ${#PossibleCandidateGPUidx[@]} -gt 0 ]]; then
             unset gpu_string
@@ -861,7 +986,7 @@ while : ; do
     [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >6.< Beginn mit der Gesamtsystemberechnung" >>perfmon.log
     
     # Sind überhaupt irgendwelche Date eingelesen worden und prüfbare GPU's ermittelt worden?
-    # Wenn nicht, gabe es keine Einzelberechnung und dann ist auch keine Gesamtberechnung nötig.
+    # Wenn nicht, gab es keine Einzelberechnung und dann ist auch keine Gesamtberechnung nötig.
     if [[ ${#PossibleCandidateGPUidx[@]} -gt 0 ]]; then
 
         echo "=========  Gesamtsystemberechnung  ========="
@@ -901,7 +1026,7 @@ while : ; do
             #
             # numGPUs:        Anzahl zu berechnender GPU-Kombinationen mit numGPUs GPU's
             #
-            rm -f .bc_result_GPUs_* .bc_prog_GPUs_*
+            rm -f .bc_result_GPUs_* .bc_prog_GPUs_* .bc_results_all 
             start[$c]=$(date +%s)
             echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
             for (( numGPUs=2; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
@@ -949,22 +1074,54 @@ while : ; do
             echo "$(date -d "@${ende[$c]}" "+%Y-%m-%d %H:%M:%S" ) ${ende[$c]} Ergebnis des \"wait \${!bc_THREAD_PIDS[@]}\": ->$RC<-" >>${ERRLOG}
             echo "Benötigte Zeit zur parallelen Berechnung aller Kombinationen:" $(( ${ende[$c]} - ${start[$c]} )) Sekunden
 
-            touch .MAX_PROFIT.in.lock .MAX_FP_MINES.in.lock .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock
-            cat $(ls .bc_result_GPUs_*) \
-                | tee >(grep -E -e '#TOTAL ' | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER; \
-                        rm -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock) \
-                | grep -E -v -e '^#|^$' \
-                | tee >(grep -e '^MAX_PROFIT:'   | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_PROFIT.in; \
-                        rm -f .MAX_PROFIT.in.lock) \
-                      >(grep -e '^FP_M:' | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_FP_MINES.in; \
-                        rm -f .MAX_FP_MINES.in.lock) \
-                      >/dev/null
-            while [[ -f .MAX_PROFIT.in.lock || -f .MAX_FP_MINES.in.lock || -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock ]]; do sleep .01; done
+	    # GEWALTIGES Timing-Problem entdeckt, das nicht anders gelöst werden konnte, als die Pieline aufzugeben...
+	    if [ 1 -eq 1 ]; then
+		cat $(ls .bc_result_GPUs_*) \
+		    | tee .bc_results_all \
+		    | grep -E -e '^#TOTAL ' \
+		    | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' \
+			  >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER
+		cat .bc_results_all \
+		    | grep -e '^MAX_PROFIT:' \
+		    | sort -g -k2 \
+		    | tail -n 1 \
+			   >.MAX_PROFIT.in
+		cat .bc_results_all \
+		    | grep -e '^FP_M:' \
+		    | sort -g -k2 \
+		    | tail -n 1 \
+			   >.MAX_FP_MINES.in
+		until [[ -s .MAX_PROFIT.in || -s .MAX_FP_MINES.in || -s .GLOBAL_GPU_COMBINATION_LOOP_COUNTER ]]; do sleep .01; done
+	    elif [ 1 -eq 0 ]; then
+		# Die pipeline hängt irgendwo, die .lock Dateien werden nicht gelöscht.
+		touch .MAX_PROFIT.in.lock .MAX_FP_MINES.in.lock .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock
+		cat $(ls .bc_result_GPUs_*) \
+                    | tee >(grep -E -e '#TOTAL ' | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER; \
+                            rm -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock) \
+                    | grep -E -v -e '^#|^$' \
+                    | tee >(grep -e '^MAX_PROFIT:'   | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_PROFIT.in; \
+                            rm -f .MAX_PROFIT.in.lock) \
+			  >(grep -e '^FP_M:' | sort -g -r -k2 | grep -E -m1 '.*' >.MAX_FP_MINES.in; \
+                            rm -f .MAX_FP_MINES.in.lock) \
+			  >/dev/null
+		while [[ -f .MAX_PROFIT.in.lock || -f .MAX_FP_MINES.in.lock || -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock ]]; do sleep .01; done
+	    else
+		# Die pipeline hängt immer noch. Die daten sind durch, aber die greps/awk/sorts/tail warten immer noch auf input. Komisch... $$$$$$$$$$$$$$$$$$$$
+		# cat $(ls .bc_result_GPUs_*) \
+		cat $(ls .bc_result_GPUs_*) >.bc_results_all
+		cat .bc_results_all \
+		    | tee >(grep -E -e '^#TOTAL '  | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER) \
+			  >(grep -e '^MAX_PROFIT:' | sort -g -k2 | tail -n 1 >.MAX_PROFIT.in) \
+			  >(grep -e '^FP_M:'       | sort -g -k2 | tail -n 1 >.MAX_FP_MINES.in) \
+			  >.bc_results_all_out
+		until [[ -s .MAX_PROFIT.in || -s .MAX_FP_MINES.in || -s .GLOBAL_GPU_COMBINATION_LOOP_COUNTER ]]; do sleep .01; done
+	    fi
 
             # Das stand bei dem ersten exit 77 in .MAX_PROFIT.in:
             # MAX_PROFIT:   .00190162 1:0,2:0,3:0,4:0,6:0,7:0
             #
             read muck MAX_PROFIT   MAX_PROFIT_GPU_Algo_Combination <<<$(< .MAX_PROFIT.in)   #${_MAX_PROFIT_in}
+            echo -e "\$muck: $muck\n \$MAX_PROFIT: $MAX_PROFIT\n \$MAX_PROFIT_GPU_Algo_Combination: $MAX_PROFIT_GPU_Algo_Combination"
             if [ ${#MAX_PROFIT} -eq 0 ]; then
                 echo "${ende[$c]}: Stopping MultiMiner because of no MAX_PROFIT with exit code 77" | tee -a ${ERRLOG} .MM_STOPPED_INTERALLY
                 exit 77
@@ -1005,7 +1162,7 @@ while : ; do
             fi
         fi
     else
-        echo "ACHTUNG: Keine Berechnungsdaten verfügbar oder alle GPU's Disabled. Es finden im Moment keine Berechnungen statt."
+        echo "ACHTUNG: Keine Berechnungsdaten verfügbar oder alle negativ oder alle GPU's Disabled. Es finden im Moment keine Berechnungen statt."
         echo "ACHTUNG: GPU's, die sich selbst für ein Benchmarking aus dem System genommen haben, kommen auch von selbst wieder zurück"
         echo "ACHTUNG: und beginnen damit, wieder Daten zu liefern."
     fi

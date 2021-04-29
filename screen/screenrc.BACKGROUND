@@ -1,0 +1,49 @@
+# Diese Datei ist für die Eröffnung einer Screen-SESSION aus einer Screen-Session heraus, die von einem Desktop-${_TERMINAL_} initiiert wurde.
+# Desktop-${_TERMINAL_} (z.B. mate-termial) erzeugt über...
+#     /usr/bin/mate-terminal --hide-menubar --full-screen -e "cd $LMMS_SRC_ROOT; /usr/bin/screen -c ~/.screenrc.LMMS -S LMMS"
+#     eine Screen-SESSION LMMS, in der die multi_mining_calc.sh gestartet wird und die ihrerseits...
+#          diese Screen-SESSION "BACKGROUND" erzeugt.
+# In die BACKGROUND Session werden alle Prozesse geschickt, die im normalen Desktop-Betrieb auch in den Hintergrund geschickt werden.
+
+backtick 1 0 0 sh -c 'echo "^"'
+hardstatus alwayslastline
+hardstatus string '%{= kG}[%{G}%1`A%{g}][%= %{= kw}%-w%{+b yk} *%t%?(%u)%? %{-}%+w %=%{g}][%{B}%d.%m. %{W}%c%{g}]'
+#caption always "%{kw} %c %{b}%H%{k}  < %-w%{wb} %n  %t %{-}%+w >"
+
+# huge scrollback buffer
+defscrollback 5000
+
+# no welcome message
+startup_message off
+
+# 256 colors
+attrcolor b ".I"
+termcapinfo xterm 'Co#256:AB=\E[48;5;%dm:AF=\E[38;5;%dm'
+defbce on
+
+# mouse tracking allows to switch region focus by clicking
+mousetrack on
+
+# default windows
+screen -t "BG-Procs"
+
+## Zwischen den mittels des layout erstellten "Regionen" mit den CTRL + Pfeiltasten navigieren
+bindkey "^[[1;5D" focus left
+bindkey "^[[1;5C" focus right
+bindkey "^[[1;5A" focus up
+bindkey "^[[1;5B" focus down
+
+# switch windows with F3 (prev) and F4 (next)
+bindkey "^[OR" prev
+bindkey "^[OS" next
+
+# switch layouts with Ctrl+F3 (prev layout) and Ctrl+F4 (next)
+bindkey "^[O1;5R" layout prev
+bindkey "^[O1;5S" layout next
+
+# F2 puts Screen into resize mode. Resize regions using hjkl keys.
+#bindkey "^[OQ" eval "command -c rsz" # enter resize mode
+# F2 macht ein "C-a F", falls nicht der ganze Platz im Window genutzt wird
+bindkey "^[OQ" fit
+
+detach

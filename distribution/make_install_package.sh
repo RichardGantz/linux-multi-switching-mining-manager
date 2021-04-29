@@ -26,6 +26,7 @@ ARCHIVE_NAME=lmms.tar.gz
 #             wegen der minerfolder, etc.
 # globals.inc ist kritisch wegen des CUDAExport-Pfades
 
+rm -r ../miners/*~ ../screen/.*~
 tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/algo_infos.inc \
     ${SRC_DIR}/algo_multi_abfrage.sh \
@@ -68,6 +69,9 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/estimate_delays.sh \
     ${SRC_DIR}/estimate_delays.inc \
     ${SRC_DIR}/diagramm_validate_mm_GPU.php \
+    ${SRC_DIR}/screen/screenrc.* \
+    ${SRC_DIR}/screen/.screenrc.* \
+    ${SRC_DIR}/GPU-[^s]*/benchmark_GPU*.json \
     ${SRC_DIR}/tar_logs.sh
 
 #    ${SRC_DIR}/benchmarking/nvidia-befehle/nvidia-settings \

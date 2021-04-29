@@ -100,7 +100,9 @@
 SRC_DIR=GPU-skeleton
 GPU_DIR=$(pwd)
 GPU_DIR=${GPU_DIR##*/}
+
 #  3. Definiert _update_SELF_if_necessary()
+#     Das exec hier drin veranlasst das Script NICHT durch die _On_Exit Routine zu laufen!
 _update_SELF_if_necessary()
 {
     ###
@@ -118,7 +120,7 @@ _update_SELF_if_necessary()
                   exec ./${SRC_FILE}" \
                  >$UPD_FILE
             chmod +x $UPD_FILE
-            echo "GPU #$(< gpu_index.in): ###---> Updating the GPU-UUID-directory from $SRC_DIR"
+            echo "GPU #$(< gpu_index.in): ###---> Updating the GPU-UUID-directory from $SRC_DIR" # | tee .going-to-exec
             exec ./$UPD_FILE
         fi
     else
@@ -131,21 +133,6 @@ _update_SELF_if_necessary()
 # und mit der neuen Version neu starten.
 #  4. Ruft update_SELF_if_necessary()
 _update_SELF_if_necessary
-
-### SCREEN ADDITIONS: ###
-# Die folgende Variable wird auch in der globals.inc gesetzt (0 bis zum Ende der Tests) und kann hier überschrieben werden.
-# 0 ist der frühere Betrieb an einem graphischen Desktop mit mehreren hochpoppenden Terminals
-# 1 ist der Betrieb unter GNU screen
-UseScreen=1
-[[ ${#GPU_gv_Title} -eq 0 ]] && GPU_gv_Title=MAIN
-[[ ${#BencherTitle} -eq 0 ]] && BencherTitle=BENCHMARKER
-# Die folgende Variable verhindert ...
-#     ...
-#     beendet das Programm, falls automatische Benchmarks wegen unbehandelter .json durchgeführt wurden.
-# 0 bedutet normaler Betrieb mit Miner-Start
-# 1 bedeutet "Trockenbetrieb" ohne Minerstart
-# (Hier drin im Moment nicht verwendet
-ScreenTest=1
 
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED} -eq 0 ]] && source ../globals.inc
@@ -171,6 +158,127 @@ if [ ${#gpu_idx} -eq 0 ]; then
     done
     exit 1
 fi
+
+# Das Prioritätenkürzel für die MinerShell's
+# Kann hier global gesetzt werden, weil nur die MinerShell aus diesem Skript gestartet wird
+ProC="ms"
+
+### SCREEN ADDITIONS: ###
+# Die folgende Variable wird auch in der globals.inc gesetzt (0 bis zum Ende der Tests) und kann hier überschrieben werden.
+# 0 ist der frühere Betrieb an einem graphischen Desktop mit mehreren hochpoppenden Terminals
+# 1 ist der Betrieb unter GNU screen
+#UseScreen=1
+[[ ${#GPU_gv_Title} -eq 0 ]] && GPU_gv_Title="GPU#${gpu_idx}_GV"
+[[ ${#BencherTitle} -eq 0 ]] && BencherTitle="GPU#${gpu_idx}_BENCH_RUN"
+export MinerShell_RUN_title MinerShell_LOG_title
+
+# Bei einem Update dieses Scripts in der Endlosschleife des produktiven Betriebes
+# werden alle Speichervariablen gelöscht und müssen neu aufgebaut werden.
+# Vor allem die Information über gestartete und noch laufende MinerShells...
+# Hier sollte alles Wesentliche erneut aufgebaut werden:
+# 1. Variable "MinerShell" <--- muss noch verifiziert werden, wie lange die überhaupt gültig ist
+#    Gibt es immer eine MinerShell und ab und an eine StopShell ?
+if [ -f MinerShell_STARTS_HISTORY ]; then
+    read _epoch_ msh_pid _bash_ MinerShell Parameters <<<$(tail -1 MinerShell_STARTS_HISTORY)
+    MinerShell=$(basename ${MinerShell} .sh)
+    if [ ${msh_pid} -eq $(< ${MinerShell}.ppid) ]; then
+	echo "Ran MinerShell \"${MinerShell}\" before _update_SELF_if_necessary() with PID ${msh_pid}"
+    else
+        echo "--->INKONSISTENZ ENTDECKT: Alles deutet darauf, dass die MinerShell ${MinerShell}.sh noch läuft."
+        echo "--->Die PID aus der Datei Datei ${MinerShell}.ppid ($(< ${MinerShell}.ppid)) sowie die PID aus der Datei MinerShell_STARTS_HISTORY (${msh_pid}) sind aber UNTERSCHIEDLICH???"
+        echo "--->Dem muss DRINGEND nachgegangen werden, weil das nicht passieren darf!!!"
+    fi	
+fi
+
+function _terminate_screen_logger_terminal {
+    # Beenden des Logger-Terminals, das eventuell im Screen-Modus gestartet wurde
+    if [ -s MinerShell_LOG_PTY_CMD ]; then
+	printf "Beenden des MinerShell Logger-Terminals ... "
+	read _epoch_ log_pid LOG_PTY_CMD <<<$(tail -1 MinerShell_LOG_PTY_CMD)
+	kill_pid=$(pgrep -f "${LOG_PTY_CMD}")
+	if [ "${kill_pid}" == "${log_pid}" ]; then
+            kill $kill_pid >/dev/null
+            printf "done.\n"
+	else
+            printf "\n–––> KILL_PANIC: Logger-Terminal \"${LOG_PTY_CMD}\"\n"
+            printf "                 Konnte nicht mehr gefunden werden. PID der Startdatei: ${log_pid}, PID in Prozesstabelle: ${kill_pid}\n"
+	fi
+	mv -f MinerShell_LOG_PTY_CMD MinerShell_LOG_PTY_CMD.BAK &>/dev/null
+    fi
+}
+
+function _terminate_MinerShell_and_logger_terminal {
+    if [ -s MinerShell_STARTS_HISTORY ]; then
+	printf "Beenden der MinerShell ${MinerShell}.sh mit PID ${MinerShell_pid} ... "
+	read _epoch_ msh_pid _bash_ MinerShell_CMD <<<$(tail -1 MinerShell_STARTS_HISTORY)
+	CMD="${MinerShell_CMD//[/\\[}"
+	CMD="${CMD//]/\\]}"
+	kill_pid=$(pgrep -f "${CMD}")
+	if [ "${kill_pid}" == "${msh_pid}" ]; then
+            kill $kill_pid >/dev/null
+            printf "done.\n"
+	else
+            printf "\n–––> KILL_PANIC: MinerShell \"${MinerShell_CMD}\"\n"
+            printf "                 Konnte nicht mehr gefunden werden. PID der Startdatei: \"${msh_pid}\", PID in Prozesstabelle: \"${kill_pid}\"\n"
+	fi
+	mv -f MinerShell_STARTS_HISTORY MinerShell_STARTS_HISTORY.BAK &>/dev/null
+
+	read StopShell Paremeters <<<"${MinerShell_CMD}"
+	StopShell=$(basename ${StopShell} .sh)
+	rm -f ${StopShell}.ppid &>/dev/null
+    fi
+
+    # Beenden des Logger-Terminals, das im Screen-Modus gestartet wurde
+    _terminate_screen_logger_terminal
+}
+
+#
+# Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
+#
+function _On_Exit () {
+    [ ${debug} -eq 1 ] && echo "_On_Exit() entered..."
+
+    if [ -n "${DoAutoBenchmark}" ] && [ ${DoAutoBenchmark} -eq 1 ]; then
+        echo "Prozess wurde aus dem Auto-Benchmarking gerissen... GPU #${gpu_idx} wird wieder global Enabled."
+        _enable_GPU_UUID_GLOBALLY ${gpu_uuid}
+    fi
+
+    # Die MinerShell muss beendet werden, wenn sie noch laufen sollte.
+    if [ ${UseScreen} -eq 1 ]; then
+	_terminate_MinerShell_and_logger_terminal
+    else   # Diese Methode kann und sollte komplett entfernt werden, wenn das mit der Befehls-Historie klappt
+	unset MinerShell_pid
+	[ -s ${MinerShell}.ppid -a -s ${MinerShell}.pid ] && MinerShell_pid=$(< ${MinerShell}.ppid)
+	if [ -n "${MinerShell_pid}" ]; then
+            printf "Beenden der MinerShell ${MinerShell}.sh mit PID ${MinerShell_pid} ... "
+            minershell_REGEXPAT="${MinerShell//\./\\.}\.sh"
+            kill_pid=$(ps -ef | gawk -e '$2 == '${MinerShell_pid}' && /'${minershell_REGEXPAT}'/ {print $2; exit }')
+            if [ -n "$kill_pid" ]; then
+		kill $kill_pid
+		[[ $? -eq 0 ]] && printf "KILL SIGNAL SUCCESSFULLY SENT.\n" || printf "KILL SIGNAL COULD NOT BE SENT SUCCESSFULLY.\n"
+            else
+		printf "PID ${MinerShell_pid} NOT FOUND IN PROCESS TABLE!!!\n"
+            fi
+	elif [ -s ${MinerShell}.ppid ]; then
+            MinerShell_pid=$(< ${MinerShell}.ppid)
+            printf "MinerShell ${MinerShell}.sh mit PID ${MinerShell_pid} wurde bereits beendet. Nur noch Datei .ppid übrig geblieben."
+	fi
+    fi
+
+    rm -f .DO_AUTO_BENCHMARK_FOR
+    for algorithm in ${!DO_AUTO_BENCHMARK_FOR[@]}; do
+        echo ${algorithm} >>.DO_AUTO_BENCHMARK_FOR
+    done
+    [ $debug -eq 1 -a -s .DO_AUTO_BENCHMARK_FOR ] && cat .DO_AUTO_BENCHMARK_FOR
+
+    # Diese beiden Dateien müssen unbedingt weg bei einem geordneten Abbruch, da sie Informationen über laufende Prozesse enthalten,
+    #       die benötigt werden, falls gpu_gv-algo.sh "zwischendurch" neu reinkommt (_update_SELF_if_necessary)
+    rm -f ${MinerShell}.ppid ${MinerShell}.sh .now_[0-9]* *.lock \
+       ${This}.pid &>/dev/null
+    [ ${debug} -eq 1 ] && echo "... leaving _On_Exit()"
+}
+trap _On_Exit EXIT # == SIGTERM == TERM == -15
+
 # Diese Prozess-ID ändert sich durch den Selbst-Update NICHT!!!
 # Sie ist auch nach dem Selbst-Update noch die Selbe.
 # Es ist immer noch der selbe Prozess.
@@ -188,49 +296,6 @@ echo $$ >${This}.pid
 #echo "GPU #${gpu_idx} gehört zu folgender Prozess-Gruppe:"
 #ps -j --pid $$
 #echo "Die Prozessgruppe, die der MULTI_MINER eröffnet hat, hat die PID == PGID == ${MULTI_MINERS_PID}"
-
-# Das Prioritätenkürzel für die MinerShell's
-# Kann hier global gesetzt werden, weil nur die MinerShell aus diesem Skript gestartet wird
-ProC="ms"
-
-#
-# Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
-#
-function _On_Exit () {
-    if [ -n "${DoAutoBenchmark}" ] && [ ${DoAutoBenchmark} -eq 1 ]; then
-        echo "Prozess wurde aus dem Auto-Benchmarking gerissen... GPU #${gpu_idx} wird wieder global Enabled."
-        _enable_GPU_UUID_GLOBALLY ${gpu_uuid}
-    fi
-
-    # Die MinerShell muss beendet werden, wenn sie noch laufen sollte.
-    unset MinerShell_pid
-    [ -s ${MinerShell}.ppid -a -s ${MinerShell}.pid ] && MinerShell_pid=$(< ${MinerShell}.ppid)
-    if [ -n "${MinerShell_pid}" ]; then
-        printf "Beenden der MinerShell ${MinerShell}.sh mit PID ${MinerShell_pid} ... "
-        minershell_REGEXPAT="${MinerShell//\./\\.}\.sh"
-        kill_pid=$(ps -ef | gawk -e '$2 == '${MinerShell_pid}' && /'${minershell_REGEXPAT}'/ {print $2; exit }')
-        if [ -n "$kill_pid" ]; then
-            kill $kill_pid
-            [[ $? -eq 0 ]] && printf "KILL SIGNAL SUCCESSFULLY SENT.\n" || printf "KILL SIGNAL COULD NOT BE SENT SUCCESSFULLY.\n"
-        else
-            printf "PID ${MinerShell_pid} NOT FOUND IN PROCESS TABLE!!!\n"
-        fi
-    elif [ -s ${MinerShell}.ppid ]; then
-        MinerShell_pid=$(< ${MinerShell}.ppid)
-        printf "MinerShell ${MinerShell}.sh mit PID ${MinerShell_pid} wurde bereits beendet. Nur noch Datei .ppid übrig geblieben."
-    fi
-
-    rm -f .DO_AUTO_BENCHMARK_FOR
-    for algorithm in ${!DO_AUTO_BENCHMARK_FOR[@]}; do
-        echo ${algorithm} >>.DO_AUTO_BENCHMARK_FOR
-    done
-    [ $debug -eq 1 ] && [ -s .DO_AUTO_BENCHMARK_FOR ] && cat .DO_AUTO_BENCHMARK_FOR
-    
-    rm -f ${MinerShell}.ppid ${MinerShell}.sh .now_$$ *.lock \
-       ${This}.pid
-
-}
-trap _On_Exit EXIT # == SIGTERM == TERM == -15
 
 gpu_uuid="${GPU_DIR}"
 IMPORTANT_BENCHMARK_JSON="benchmark_${gpu_uuid}.json"
@@ -343,8 +408,8 @@ _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
 # 2020-04-16:
 #  9. Prüft hier, ob Algorithms zu benchmarken sind (pleaseBenchmarkAlgorithm[])...
 #     zieht die GLOBAL_ALGO_DISABLED davon ab...
+#     zieht die BENCH_ALGO_DISABLED davon ab...
 #     [SOLL:] zieht die temporär disableten davon ab... $$$$$$$$$$$$$$$$$$$$
-#     und nimmt sich bei Bedarf aus dem System, die Benchmarks durchzuführen
 #
 #     Die Definition dieser Funktion kann in eine .inc verlegt werden $$$$$$$$$$$$$$$$$$$$
 
@@ -397,10 +462,47 @@ function _find_algorithms_to_benchmark {
 	[ ${gpuIdx#0} -eq ${gpu_idx} ] && MyDisabledAlgorithms[${#MyDisabledAlgorithms[@]}]=${lfdAlgorithm}
     done
 
-    declare -p MyDisabledAlgorithms
-    declare -p MyDisabledAlgos
+    # 3. Dann die vorübergehend disabled ebenfalls feststellen und herausnehmen
+    # Diese Untersuchung dazu zu benutzen, den algorithm vom benchmarking auszunehmen, ist ein bisschen hart.
+    # Eiegntlich muss noch berücksichtigt werden, welcher POOL da beteiligt ist.
+    # Denn vielleicht ist nur der Coin eines bestimmten Pools im Moment nicht verfügbar, der Algorithm aber bei anderen Pools durchaus problemlos laufen könnte.
+    unset MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
+    declare -Ag MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
+    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
+    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+    declare -i nowSecs=$(date +%s)
+    if [ -s ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ]; then
+	if [ $debug -eq 1 ]; then echo "Reading ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ..."; fi
+	declare -i timestamp
+	unset READARR
+	readarray -n 0 -O 0 -t READARR <${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
+	for ((i=0; $i<${#READARR[@]}; i++)) ; do
+            read _date_ _oclock_ timestamp coin_algorithm <<<${READARR[$i]}
+            MINER_ALGO_DISABLED_ARR[${coin_algorithm}]=${timestamp}
+            MINER_ALGO_DISABLED_DAT[${coin_algorithm}]="${_date_} ${_oclock_}"
+	done
+	# Jetzt sind die Algorithm's unique und wir prüfen nun, ob welche dabei sind,
+	# die wieder zu ENABLEN sind, bzw. die aus dem Disabled_ARR verschwinden müssen,
+	# bevor wir die Datei neu schreiben.
+	for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
+            if [ ${nowSecs} -gt $(( ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} + 300 )) ]; then
+		# Der Algo ist wieder einzuschalten
+		unset MINER_ALGO_DISABLED_ARR[${coin_algorithm}]
+		unset MINER_ALGO_DISABLED_DAT[${coin_algorithm}]
+		printf "ENABLED ${nowDate} ${nowSecs} ${coin_algorithm}\n" | tee -a ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
+            fi
+	done
+	# Weg mit dem bisherigen File...
+	mv -f ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED.BAK
+	# ... und anlegen eines Neuen, wenn noch Algos im Array sind
+	for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
+            # Die eingelesenen Werte wieder ausgeben
+            printf "${MINER_ALGO_DISABLED_DAT[${coin_algorithm}]} ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} ${coin_algorithm}\n" >>${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
+	done
+    fi
+    _remove_lock                                     # ... und wieder freigeben
 
-    # 3. Die Erstellung des Arrays der zu benchmarkenden Algorithms
+    # 4. Die Erstellung des Arrays der zu benchmarkenden Algorithms
     for lfdAlgorithm in ${pleaseBenchmarkAlgorithm[@]}; do
 	for disabledAlgo in ${MyDisabledAlgorithms[@]}; do
 	    [ "${lfdAlgorithm}" == "${disabledAlgo}" ] && continue 2
@@ -410,13 +512,19 @@ function _find_algorithms_to_benchmark {
 	for disabledAlgo in ${MyDisabledAlgos[@]}; do
 	    [ "${lfdAlgo}" == "${disabledAlgo}" ] && continue 2
 	done
+	for coin_algorithm in ${!MINER_ALGO_DISABLED_ARR[@]}; do
+	    read _coin_ _pool_ _algo_ _mNam_ _mVer_ <<<"${coin_algorithm//#/ }"
+	    [ "${lfdAlgorithm}" == "${_algo_}#${_mNam_}#${_mVer_}" ] && continue 2
+	done
 	WillBenchmarkAlgorithm[${#WillBenchmarkAlgorithm[@]}]=${lfdAlgorithm}
     done
 }
 # Danach steht das Array WillBenchmarkAlgorithm mit den zu benchmarkenden Algorithms
 _find_algorithms_to_benchmark
 
+### SCREEN ADDITIONS: ###
 if [ ${ScreenTest} -eq 0 ]; then
+    #     ... und nimmt sich bei Bedarf aus dem System, um die Benchmarks durchzuführen
     if [ ${#WillBenchmarkAlgorithm[@]} -gt 0 ]; then
         # Eigene gpu_uuid disablen.
         # Kann sehr gefahrlos gemacht werden, weil der multi_miner diesen Prozess gerade erst gestartet hat oder gar nicht läuft.
@@ -424,7 +532,7 @@ if [ ${ScreenTest} -eq 0 ]; then
         _disable_GPU_UUID_GLOBALLY ${gpu_uuid}
         printf " done\n"
 
-        # ALL_MISSING_ALGORITHMs abarbeiten
+        # WillBenchmarkAlgorithm abarbeiten
         cd ${LINUX_MULTI_MINING_ROOT}/benchmarking
         mkdir -p autobenchlogs
 
@@ -433,10 +541,11 @@ if [ ${ScreenTest} -eq 0 ]; then
 
 	    parameters="-d"
 	    [ -n "${parameters}" ] && echo "        ###---> HardCoded additional Parameters for bench_30s_2.sh: \"${parameters}\""
-	    cmd="export BencherTitle=${BencherTitle}; ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_GPU#${gpu_idx}_${algorithm}.log"
+	    cmd="./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_GPU#${gpu_idx}_${algorithm}.log"
 
 	    ### SCREEN ADDITIONS: ###
 	    if [ ${UseScreen} -eq 1 ]; then
+		cmd="export BencherTitle=${BencherTitle}; ${cmd}"
 		screen -X eval split "resize -v 10" focus
 		screen -p + -t ${BencherTitle} ${BASH} -c "${cmd}"
 		# Warten, bis der Benchmarker gestartet ist...
@@ -478,8 +587,16 @@ if [ ${ScreenTest} -eq 0 ]; then
     fi
 fi
 
+### SCREEN ADDITIONS: ###
 # Momentane Notbremse:
-exit
+# Damit die anderen beiden Screens wirklich aufgebaut sind, künstlich warten
+if [ 1 -eq 0 -a ${ScreenTest} -eq 1 ]; then
+    while :; do
+	echo "$(date --utc +%s) - ScreenTest Notbremse... vor dem Eintritt in die Endlosschleife..."
+	#read -p "I'm going to exit after Keypress..." xyz
+	sleep 1
+    done
+fi
 
 ###############################################################################
 #
@@ -554,6 +671,7 @@ while :; do
         # Ist die Benchmarkdatei mit einer aktuellen Version überschrieben worden?
         #  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
         #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
+	#  2021-04-19:                => Array pleaseBenchmarkAlgorithm[]
         if [[ $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds < $(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s) ]]; then
             echo "GPU #${gpu_idx}: ###---> Updating Arrays bENCH[] and WATTs[] (and more) from $IMPORTANT_BENCHMARK_JSON"
             _read_IMPORTANT_BENCHMARK_JSON_in # without_miners
@@ -657,89 +775,20 @@ while :; do
         #
         #    Ermittlung aller Algos, die zu Enablen sind und die Algos, die Disabled sind.
         #
-        ######################################
+        ###############################################################################
+	# Diese Funktion prüft die über die Dateien GLOBAL_, BENCH_ und MINER_ALGO_DISABLED disabled Coins/Algos/Algorithms
+	# gegen das Array pleaseBenchmarkAlgorithm[], woars das Array WillBenchmarkAlgorithm[] hervorgeht.
+	# Und das Array MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} für temporär in den Berechnungen nicht zu beachtende coin_algorithm's
+	_find_algorithms_to_benchmark
 
-        unset MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
-        declare -Ag MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
-        _reserve_and_lock_file ../MINER_ALGO_DISABLED_HISTORY
-        nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-        declare -i nowSecs=$(date +%s)
-        if [ -s ../MINER_ALGO_DISABLED ]; then
-            if [ $debug -eq 1 ]; then echo "Reading ../MINER_ALGO_DISABLED ..."; fi
-            declare -i timestamp
-            unset READARR
-            readarray -n 0 -O 0 -t READARR <../MINER_ALGO_DISABLED
-            for ((i=0; $i<${#READARR[@]}; i++)) ; do
-                read _date_ _oclock_ timestamp coin_algorithm <<<${READARR[$i]}
-                MINER_ALGO_DISABLED_ARR[${coin_algorithm}]=${timestamp}
-                MINER_ALGO_DISABLED_DAT[${coin_algorithm}]="${_date_} ${_oclock_}"
-            done
-            # Jetzt sind die Algorithm's unique und wir prüfen nun, ob welche dabei sind,
-            # die wieder zu ENABLEN sind, bzw. die aus dem Disabled_ARR verschwinden müssen,
-            # bevor wir die Datei neu schreiben.
-            for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
-                if [ ${nowSecs} -gt $(( ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} + 300 )) ]; then
-                    # Der Algo ist wieder einzuschalten
-                    unset MINER_ALGO_DISABLED_ARR[${coin_algorithm}]
-                    unset MINER_ALGO_DISABLED_DAT[${coin_algorithm}]
-                    printf "ENABLED ${nowDate} ${nowSecs} ${coin_algorithm}\n" | tee -a ../MINER_ALGO_DISABLED_HISTORY
-                fi
-            done
-            # Weg mit dem bisherigen File...
-            mv -f ../MINER_ALGO_DISABLED ../MINER_ALGO_DISABLED.BAK
-            # ... und anlegen eines Neuen, wenn noch Algos im Array sind
-            for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
-                # Die eingelesenen Werte wieder ausgeben
-                printf "${MINER_ALGO_DISABLED_DAT[${coin_algorithm}]} ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} ${coin_algorithm}\n" >>../MINER_ALGO_DISABLED
-            done
-        fi
-        _remove_lock                                     # ... und wieder freigeben
-
-        #    Zusätzlich die über BENCH_ALGO_DISABLED Algos rausnehmen...
-        unset BENCH_ALGO_DISABLED_ARR BENCH_ALGO_DISABLED_ARR_in
-        declare -a BENCH_ALGO_DISABLED_ARR
-        _reserve_and_lock_file ../BENCH_ALGO_DISABLED
-        if [ -s ../BENCH_ALGO_DISABLED ]; then
-            cat ../BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR_in
-
-            # Erwartet werden weiter unten nur die $algorithm's in diesem Array, das wir jetzt neu erstellen
-            for actRow in "${BENCH_ALGO_DISABLED_ARR_in[@]}"; do
-                read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
-                [ ${gpuIdx#0} -eq ${gpu_idx} ] && BENCH_ALGO_DISABLED_ARR+=( ${lfdAlgorithm} )
-            done
-        fi
-        _remove_lock                                     # ... und wieder freigeben
-        [ $debug -eq 1 -a ${#BENCH_ALGO_DISABLED_ARR[@]} -gt 0 ] && declare -p BENCH_ALGO_DISABLED_ARR
-
-        #    Zusätzlich die über GLOBAL_ALGO_DISABLED Algos rausnehmen...
-        unset GLOBAL_ALGO_DISABLED_ARR
-        _reserve_and_lock_file ../GLOBAL_ALGO_DISABLED
-        if [ -s ../GLOBAL_ALGO_DISABLED ]; then
-            cat ../GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
-
-            if [ $debug -eq 1 ]; then
-                echo "GPU #${gpu_idx}: Vor  der Prüfung: GLOBAL_ALGO_DISABLED_ARRAY hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"
-                declare -p GLOBAL_ALGO_DISABLED_ARR
-            fi
-            for ((i=0; $i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
-                unset disabled_algos_GPUs
-                read -a disabled_algos_GPUs <<<${GLOBAL_ALGO_DISABLED_ARR[$i]//:/ }
-                if [ ${#disabled_algos_GPUs[@]} -gt 1 ]; then
-                    # Nur für bestimmte GPUs disabled. Wenn die eigene GPU nicht aufgeführt ist, übergehen
-                    REGEXPAT="^.*:${gpu_uuid}\b"
-                    if [[ ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ${REGEXPAT} ]]; then
-                        GLOBAL_ALGO_DISABLED_ARR[$i]=${disabled_algos_GPUs[0]}
-                    else
-                        unset GLOBAL_ALGO_DISABLED_ARR[$i]
-                    fi
-                fi
-            done
-            if [ $debug -eq 1 ]; then
-                echo "GPU #${gpu_idx}: Nach der Prüfung: GLOBAL_ALGO_DISABLED_ARRAY hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"
-                declare -p GLOBAL_ALGO_DISABLED_ARR
+	#[ ${debug} -ge 1 ] && echo "\${#WillBenchmarkAlgorithm[@]} == ${#WillBenchmarkAlgorithm[@]}: ${WillBenchmarkAlgorithm[@]}"
+        if [ ${#WillBenchmarkAlgorithm[@]} -gt 0 ]; then
+            I_want_to_Disable_myself_for_AutoBenchmarking=1
+            if [ ${debug} -eq 1 ]; then
+                echo "GPU #${gpu_idx}: Anzahl vermisster Algos: ${#WillBenchmarkAlgorithm[@]} DisableMyself: ->$I_want_to_Disable_myself_for_AutoBenchmarking<-"
+                declare -p WillBenchmarkAlgorithm
             fi
         fi
-        _remove_lock                                     # ... und wieder freigeben
 
         # Mal sehen, ob es überhaupt schon Benchmarkwerte gibt oder ob Benchmarks nachzuholen sind.
         # Erst mal alle MiningAlgos ermitteln, die möglich sind und gegen die vorhandenen JSON Einträge checken.
@@ -747,39 +796,6 @@ while :; do
         _set_ALLE_LIVE_MINER
         _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
         _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
-
-        # Gibt es MissingAlgos, ziehen wir die Disabled Algos noch davon ab
-        unset ALL_MISSING_ALGORITHMs I_want_to_Disable_myself_for_AutoBenchmarking
-        declare -a ALL_MISSING_ALGORITHMs
-        for minerName in "${ALLE_MINER[@]}"; do
-	    #[ ${debug} -ge 1 ] && echo "Durchgehen des Arrays ALLE_MINER, welches folgende Werte hat: ${ALLE_MINER[@]} "
-            read m_name m_version <<<"${minerName//#/ }"
-            declare -n   actMissingAlgos="Missing_${m_name//-/_}_${m_version//\./_}_Algos"
-            #echo ${!actMissingAlgos}
-
-            for actAlgo in ${!actMissingAlgos[@]}; do
-                miningAlgo=${actMissingAlgos[$actAlgo]}
-                algorithm="${miningAlgo}#${m_name}#${m_version}"
-                if [[ "${#GLOBAL_ALGO_DISABLED_ARR[@]}" -gt 0 ]]; then
-                    REGEXPAT="\b${miningAlgo}\b"
-                    [[ "${GLOBAL_ALGO_DISABLED_ARR[@]}" =~ ${REGEXPAT}  ]] && continue
-                fi
-                if [[ "${#BENCH_ALGO_DISABLED_ARR[@]}" -gt 0 ]]; then
-                    REGEXPAT="\b${algorithm}\b"
-                    [[ "${BENCH_ALGO_DISABLED_ARR[@]}"  =~ ${REGEXPAT} ]] && continue
-                fi
-                ALL_MISSING_ALGORITHMs+=( ${algorithm} )
-            done
-        done
-
-	#[ ${debug} -ge 1 ] && echo "\${#ALL_MISSING_ALGORITHMs[@]} == ${#ALL_MISSING_ALGORITHMs[@]}: ${ALL_MISSING_ALGORITHMs[@]}"
-        if [ ${#ALL_MISSING_ALGORITHMs[@]} -gt 0 ]; then
-            I_want_to_Disable_myself_for_AutoBenchmarking=1
-            if [ ${debug} -eq 1 ]; then
-                echo "GPU #${gpu_idx}: Anzahl vermisster Algos: ${#ALL_MISSING_ALGORITHMs[@]} DisableMyself: ->$I_want_to_Disable_myself_for_AutoBenchmarking<-"
-                declare -p ALL_MISSING_ALGORITHMs
-            fi
-        fi
 
         ###############################################################################
         #
@@ -848,19 +864,27 @@ while :; do
                                 [[ "${KURSE[${coin}]}" == "0" ]] && continue
 
                                 if [[          ${#bENCH[${algorithm}]}  -gt    0 \
+                                            && ${#SPEED[${coin}]}       -gt    0 \
                                             && ${#KURSE[${coin}]}       -gt    0 \
                                             && ${#PoolFee[${pool}]}     -gt    0 \
                                             && ${WATTS[${algorithm}]}   -lt 1000 \
                                     ]]; then
+
                                     # "Mines" in BTC berechnen
-                                    algoMines=$(echo "scale=20;   ${bENCH[${algorithm}]}  \
+				    # Diese Zahl 100000000, durch die hier geteilt wird oder mit dessen Kehrwert 0.00000001 multipliert werden muss...
+				    # ... diese Zahl ist dem Sourcecode eines Windows-Switscher entnommen UND ANGEPASST WORDEN.
+				    # Denn die Zahl im Windows-Switcher-Sourcecode ist um eine 10er-Potenz höher, also 1000000000 bzw. 0.000000001
+				    # Das liegt möglicherweise daran, dass der Switcher dseine Daten von einer ANDEREN Nicehash-Seite abruft.
+				    # Mehr Details dazu in der README_GER.md
+				    algoMines=$(echo "scale=20;   ${bENCH[${algorithm}]}  \
                                                            * ${KURSE[${coin}]}  \
-                                                           / ${k_base}^3  \
+                                                           / 100000000  \
                                                            * ( 100 - "${PoolFee[${pool}]}" )     \
                                                            * ( 100 - "${miner_fee}" ) \
                                                            / 10000
                                              " \
-                                                       | bc )
+						    | bc )
+
                                     # Wenn gerade nichts für den Algo bezahlt wird, übergehen:
                                     _octal_=${algoMines//\.}
                                     _octal_=${_octal_//0}
@@ -869,6 +893,16 @@ while :; do
                                 else
                                     echo "GPU #${gpu_idx}: KEINE BTC \"Mines\" BERECHNUNG möglich bei \"nh\" ${coin_algorithm} !!! \<---------------"
                                     DO_AUTO_BENCHMARK_FOR["${algorithm}"]=1
+
+				    if [ ${debug} -eq 1 ]; then
+					echo "\${bENCH[${algorithm}]}: ${bENCH[${algorithm}]}"
+					echo "\${coin}: ${coin}"
+					echo "\${SPEED[${coin}]}: ${SPEED[${coin}]}"
+					echo "\${KURSE[${coin}]}: ${KURSE[${coin}]}"
+                                        echo "\${PoolFee[${pool}]}: ${PoolFee[${pool}]}"
+                                        echo "\${miner_fee}: ${miner_fee}"
+				    fi
+
                                 fi
                             fi
                         fi
@@ -1028,7 +1062,16 @@ while :; do
 
                         if [ -f ${StopShell}.ppid ]; then
                             if [ -f ${StopShell}.pid ]; then
-                                kill $(< ${StopShell}.ppid)
+				if [ ${UseScreen} -eq 1 ]; then
+				    #trap '' EXIT # == SIGTERM == TERM == -15
+				    _terminate_MinerShell_and_logger_terminal
+				    # Beide Historien-Dateien jetzt löschen, damit beim nächsten Wiedereintritt
+				    #       keine falsche Vorstellung über noch laufende MinerShells erzeugt werden
+				    #kill -15 $$
+				    #trap _On_Exit EXIT # == SIGTERM == TERM == -15
+				else   # Diese Methode kann und sollte komplett entfernt werden, wenn das mit der Befehls-Historie klappt
+                                    kill $(< ${StopShell}.ppid)
+				fi
                                 sleep $Erholung                                           # Damit sich die Karte "erholen" kann.
                                 printf "done.\n"
                             else
@@ -1055,7 +1098,7 @@ while :; do
                             echo "Beide Dateien ${MinerShell}.p?id sind noch vorhanden, Miner müsste noch laufen."
                             if [ "$(< ${MinerShell}.ppid)" != "$(< ${MinerShell}.pid)" ]; then
                                 echo "--->INKONSISTENZ ENTDECKT: Alles deutet darauf, dass die MinerShell ${MinerShell}.sh noch läuft."
-                                echo "--->Die Datei ${MinerShell}.ppid sowie ${MinerShell}.pid enthalten aber UNTERSCHIEDLICHE PIDs ???"
+                                echo "--->Die Datei ${MinerShell}.ppid ($(< ${MinerShell}.ppid)) sowie ${MinerShell}.pid ($(< ${MinerShell}.pid)) enthalten aber UNTERSCHIEDLICHE PIDs ???"
                                 echo "--->Dem sollte bei Gelegenheit nachgegangen werden, weil das eigentlich nicht sein darf."
                             fi
                         fi
@@ -1100,7 +1143,9 @@ while :; do
                                     echo "--->Datei ${MinerShell}.pid ist konsequenterweise auch nicht mehr vorhanden."
                                     echo "--->Und konsequenterweise wird jetzt auch die Datei ${MinerShell}.ppid gelöscht."
                                     echo ""
-                                    rm -f ${MinerShell}.ppid
+				    if [ ! ${ScreenTest} -eq 1 ]; then
+					rm -f ${MinerShell}.ppid
+				    fi
                                 fi
                             fi
                         else
@@ -1148,10 +1193,14 @@ while :; do
                         # wait ${StopShell_pid}
                         # RC=$?
 
+			# Beenden des Logger-Terminals, das eventuell im Screen-Modus gestartet wurde
+			_terminate_screen_logger_terminal
                         printf "done.\n"
                     elif [ -f ${StopShell}.pid ]; then
                         kill $(< ${StopShell}.pid)
                         # sleep $Erholung wegen Erholung ist hier nicht nötig, weil nichts neues unmittelbar gestartet wird
+			# Beenden des Logger-Terminals, das eventuell im Screen-Modus gestartet wurde
+			_terminate_screen_logger_terminal
                         printf "done.\n"
                     else
                         printf "\n\n"
@@ -1161,7 +1210,9 @@ while :; do
                         echo "--->     und können darüber die PID herausfinden. BITTE IMPLEMTIEREN! SONST LÄUFT MINER WEITER!!! <---"
                         echo ""
                     fi
-                    rm -f ${StopShell}.ppid ${StopShell}.sh
+		    if [ ! ${ScreenTest} -eq 1 ]; then
+			rm -f ${StopShell}.ppid ${StopShell}.sh
+		    fi
 
                 else
                     # Das ist ein guter Zustand, um Autozubenchmarken, aber der könnte zusätzlich genutzt werden.
@@ -1240,7 +1291,7 @@ while :; do
             # Wir müssen auf jeden Fall im Fall StartMiner=0 prüfen, ob der Miner noch läuft UND IHN DANN WEITERLAUFEN LASSEN.
             # Und es ist nichts weiter zu schreiben.
             # Wir müssen das nur überleben und wieder hier rein kommen... oder eben nicht mehr. Dann hat es sich von selbst erledigt,
-            # weil keine Elemente in der Liste/Array ALL_MISSING_ALGORITHMs[@] mehr drin sind.
+            # weil keine Elemente in der Liste/Array WillBenchmarkAlgorithm[@] mehr drin sind.
             #
             # Wenn kein Miner läuft, war keiner gestartet oder wurde gestoppt und es ist kein Neuer zu starten.
             # Das ist der Fall, in dem wir die GPU rausnehmen und das Benchmarking machen.
@@ -1270,16 +1321,25 @@ while :; do
             printf " done\n"
 
 
-            # ALL_MISSING_ALGORITHMs abarbeiten
+            # WillBenchmarkAlgorithm abarbeiten
             cd ../benchmarking
             mkdir -p autobenchlogs
-            for algorithm in ${ALL_MISSING_ALGORITHMs[@]}; do
+            for algorithm in ${WillBenchmarkAlgorithm[@]}; do
 
                 echo "GPU #${gpu_idx}: ###---> Going to Auto-Benchmark Algorithm/Miner ${algorithm}, trying to produce some Coins on the fly..."
                 parameters="-d"
                 [ -n "${parameters}" ] && echo "        ###---> HardCoded additional Parameters for bench_30s_2.sh: \"${parameters}\""
-                #echo cmd == './bench_30s_2.sh -a '${gpu_idx} ${algorithm} ${parameters} '| tee autobenchlogs/bench_GPU#'${gpu_idx}_${algorithm}.log
-                ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_GPU#${gpu_idx}_${algorithm}.log
+
+		if [ ${ScreenTest} -eq 1 ]; then
+		    echo '---> Im Normalbetrieb würde jetzt mit folgendem Kommando ein Benchmark dürchgeführt werden.'
+		    echo '---> Stattdessen folgen 10s Pause...'
+                    echo "cmd == "'./bench_30s_2.sh -a '${gpu_idx} ${algorithm} ${parameters} '| tee autobenchlogs/bench_GPU#'${gpu_idx}_${algorithm}.log
+		    sleep 10
+		    echo '---> Vom Benchmarking wieder zurück...'
+		    echo '---> Und den richtigen Zeitpunkt zum Enablen der GPU abwarten...'
+		else
+		    ./bench_30s_2.sh -a ${gpu_idx} ${algorithm} ${parameters} | tee autobenchlogs/bench_GPU#${gpu_idx}_${algorithm}.log
+		fi
 
                 case $? in
                     94) # Internet Connection lost detected
@@ -1346,8 +1406,8 @@ while :; do
             # Ein letzter Blick in die MINER_ALGO_DISABLED Datei, weil der Algo während der Wartezeit von einem
             # laufenden Miner disabled geworden sein könnte und deshalb nicht mehr laufen darf.
             declare -i suddenly_disabled=0
-            [[ -f ../MINER_ALGO_DISABLED ]] \
-                && suddenly_disabled=$(grep -E -c -m1 -e "\b${coin_algorithm%#888}([^.\W]|$)" ../MINER_ALGO_DISABLED)
+            [[ -f ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ]] \
+                && suddenly_disabled=$(grep -E -c -m1 -e "\b${coin_algorithm%#888}([^.\W]|$)" ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED)
             if [ ${suddenly_disabled} -gt 0 ]; then
                 echo ""
                 echo "GPU #${gpu_idx}: MinerShell ${MinerShell}.sh sollte gestartet werden, IST ABER MITTLERWEILE DISABLED."
@@ -1359,7 +1419,7 @@ while :; do
                 declare -Ag MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
                 declare -i  nowSecs=$(date +%s) timestamp
                 unset READARR
-                readarray -n 0 -O 0 -t READARR <../MINER_ALGO_DISABLED
+                readarray -n 0 -O 0 -t READARR <${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
                 for ((i=0; $i<${#READARR[@]}; i++)) ; do
                     read _date_ _oclock_ timestamp disd_coin_algorithm <<<${READARR[$i]}
                     MINER_ALGO_DISABLED_ARR[${disd_coin_algorithm}]=${timestamp}
@@ -1387,7 +1447,9 @@ while :; do
                 # Nur um sicherzustellen, dass wirklich keine solche Datei existiert.
                 # Er dürfte hier nämlich gar nicht reinkommen, wenn diese Datei existiert.
                 # Denn das würde bedeuten, dass die Anweisung gegeben wurde, einen Miner zu starten, obwohl noch einer läuft!
-                rm -f ${MinerShell}.ppid
+		if [ ! ${ScreenTest} -eq 1 ]; then
+		    rm -f ${MinerShell}.ppid
+		fi
             else
                 # EINSCHALTEN
 
@@ -1430,56 +1492,90 @@ while :; do
                 esac
 
                 continent="SelbstWahl"
-                [[ "${miner_name}" == "zm" && $((gpu_idx%2)) -eq 0 ]] && continent="br"
+                #[[ "${miner_name}" == "zm" && $((gpu_idx%2)) -eq 0 ]] && continent="br"
 
                 printf -v worker "%02i${gpu_uuid:4:6}" ${gpu_idx}
 
                 _setup_Nvidia_Default_Tuning_CmdStack
                 cmdParameterString=""
                 for ((cmd=0; cmd<${#CmdStack[@]}; cmd++)); do
-                    cmdParameterString+="${CmdStack[${cmd}]// /;} "
+                    cmdParameterString+="${CmdStack[${cmd}]// /°} "
                 done
+		cmdParameterString="${cmdParameterString% }"
                 
                 echo "GPU #${gpu_idx}: STARTE Miner Shell ${MinerShell}.sh und übergebe Algorithm ${coin_algorithm} und mehr..."
                 cp -f ../GPU-skeleton/MinerShell.sh ${MinerShell}.sh
 
-		if [ ${RT_PRIORITY[${ProC}]} -gt 0 ]; then
-		    ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]} \
-					      ./${MinerShell}.sh    \
-					      ${coin_algorithm}   \
-					      ${gpu_idx}          \
-					      ${continent}        \
-					      ${algo_port}        \
-					      ${worker}           \
-					      ${gpu_uuid}         \
-					      ${domain}           \
-					      ${server_name}      \
-					      ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
-					      $cmdParameterString \
-					      >>${MinerShell}.log &
-		else
-		    echo "Starting ${MinerShell}.sh with Nice-Value" ${NICE[${ProC}]} | tee -a ${ERRLOG}
-		    ${LINUX_MULTI_MINING_ROOT}/.#nice# --adjustment=${NICE[${ProC}]} \
-					      ./${MinerShell}.sh    \
-					      ${coin_algorithm}   \
-					      ${gpu_idx}          \
-					      ${continent}        \
-					      ${algo_port}        \
-					      ${worker}           \
-					      ${gpu_uuid}         \
-					      ${domain}           \
-					      ${server_name}      \
-					      ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
-					      $cmdParameterString \
-					      >>${MinerShell}.log &
-		fi
-                echo $! >${MinerShell}.ppid
 
-                # Falls es bei einer Verzögerung zu keiner Neuberechnung kommt, wird im bisherigen Code auch die "alte" RUNNING_STATE nicht eingelesen.
-                # Deshalb setzen wir hier mal - und das dürfte an dieser Stelle allein NICHT genügen - die späteren "alten" Werte
-                IamEnabled=${WasItEnabled[${gpu_uuid}]}
-                MyActWatts=${RunningWatts[${gpu_uuid}]}
-                RuningAlgo=${WhatsRunning[${gpu_uuid}]}
+		# Die Umleitungen sind NICHT Bestandteil des Kommandos in der Prozesstabelle
+		p_cmd="./${MinerShell}.sh \
+${coin_algorithm} \
+${gpu_idx} \
+${continent} \
+${algo_port} \
+${worker} \
+${gpu_uuid} \
+${domain} \
+${server_name} \
+${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
+$cmdParameterString"
+
+		m_cmd="${p_cmd} >>${MinerShell}.log"
+
+		# Das Kommando p_cmd, wie es in der Prozesstabelle stehen wird, muss hier festgehalten werden, damit wir es mit pgrep finden können.
+		#     Leider wird es, bis in der Prozesstabelle landet, noch ein bisschen durch die Shell verändert.
+		#     Das muss hier vorhergesehen werden, damit der String p_cmd als Regexp-Pattern für das Kommando pgrep dienen kann.
+		# Die "[]" kommen in den nvidia-commands vor und müssen in einem Regex-Pattern escaped werden
+		p_cmd="${p_cmd//[/\\[}"
+		p_cmd="${p_cmd//]/\\]}"
+		# Beschissene Ausnahme wegen des "nh" Pools, in dem $continent drin steht, obwohl es nicht gebraucht wird,
+		# da der server_name durch die Funktion PREP_LIVE_PARAMETERSTACK ()
+		p_cmd="${p_cmd//\$continent/}"
+
+		if [ ${RT_PRIORITY[${ProC}]} -gt 0 ]; then
+		    cmd="${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]}"
+		else
+		    echo "Starting soon ${MinerShell}.sh with Nice-Value" ${NICE[${ProC}]} | tee -a ${ERRLOG}
+		    cmd="${LINUX_MULTI_MINING_ROOT}/.#nice# --adjustment=${NICE[${ProC}]}"
+		fi
+
+		### SCREEN ADDITIONS: ###
+		if [ ${UseScreen} -eq 1 ]; then
+		    if [ ${ScreenTest} -eq 1 ]; then
+			cmd="${cmd} ${m_cmd}"'\nexit\n'
+			echo "cmd == ${cmd}"
+			MinerShell_RUN_title="MSh#${gpu_idx}"
+			screen -drx ${BG_SESS} -X screen -t ${MinerShell_RUN_title}
+			screen -drx ${BG_SESS} -p ${MinerShell_RUN_title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
+			screen -drx ${BG_SESS} -p ${MinerShell_RUN_title} -X stuff "${cmd}"
+			until [ -s ${MinerShell}.pid ]; do sleep .02; done
+			read _ppid_ _p_cmd_ <<<$(pgrep -f -a "${p_cmd}")
+			_epoch_=$(date --utc +%s)
+			printf -v to_cmd_history "%s %5d %s" ${_epoch_} ${_ppid_} "${_p_cmd_}"
+			echo ${_ppid_} >>${MinerShell}.ppid
+			echo "${to_cmd_history}" >>MinerShell_STARTS_HISTORY
+
+			# Jetzt noch das Logfile im Vordergrund anzeigen
+			LOG_PTY_CMD="tail -f ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/${MinerShell}.log"
+			cmd="${LOG_PTY_CMD}"'\nexit\n'
+			MinerShell_LOG_title="MShLOG#${gpu_idx}"
+			screen -X screen -t ${MinerShell_LOG_title}
+			screen -p ${MinerShell_LOG_title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
+			screen -p ${MinerShell_LOG_title} -X stuff "${cmd}"
+			screen -X other
+			#echo "${LOG_PTY_CMD}" >.pgrep.pattern
+			#pgrep -f -a "${LOG_PTY_CMD}" | tee .pgrep.out
+			log_pid=$(pgrep -f "${LOG_PTY_CMD}")
+			until [[ -n "${log_pid}" && ${log_pid} > 1 ]]; do sleep .02; log_pid=$(pgrep -f "${LOG_PTY_CMD}"); done
+			printf -v to_pty_log "%s %5d %s" ${_epoch_} ${log_pid} "${LOG_PTY_CMD}"
+			echo "${to_pty_log}" >>MinerShell_LOG_PTY_CMD
+
+#			sleep 3600
+		    fi
+		else
+		    "${cmd} ${m_cmd}" &
+                    echo $! >${MinerShell}.ppid
+		fi
             fi
         fi
     fi
@@ -1497,7 +1593,7 @@ while :; do
     #                         mit der Meldung "Waiting for new actual Pricing Data from the Web..."
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
     echo "GPU #${gpu_idx}: Waiting for SYNCFILE and therefore for new actual Pricing Data from the Web..."
-    while (( ${new_Data_available} == $(stat -c "%Y" ${SYNCFILE}) )) ; do
+    while (( ${new_Data_available} == $(date --utc --reference=${SYNCFILE} +%s) )) ; do
         sleep 1
     done
     #  9. Merkt sich das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available}

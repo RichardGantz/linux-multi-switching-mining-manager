@@ -20,7 +20,14 @@ _TERMINAL_="mate-terminal"
 #  2021-04-08: Wir lassen das hier erst mal aus, bis alle Tests unter GNU screen abgeschlossen sind,
 #              was NICHT heisst, dass der "alte" Betrieb schon getestet ist!!!
 #              Tatsächlich ist er bis zum o.g. Zeitpunkt NOCH NICHT GETESTET WORDEN !!!
-[[ ${#UseScreen} -eq 0 ]] && UseScreen=0
+#[[ ${#UseScreen} -eq 0 ]] && UseScreen=0
+export UseScreen=1
+export ScreenTest=1
+if [ ${UseScreen} -eq 1 ]; then
+    export MAINSCREEN=LMMS
+    [ ${#FG_SESS} -eq 0 ] && export FG_SESS=${STY}
+    [ ${#BG_SESS} -eq 0 ] && export BG_SESS=BACKGROUND.$$
+fi
 
 # Wir verwenden oft "readarray" am Ende einer Pipe. Deshalb wollen wir, dass diese Option global verfügbar ist.
 # An jeder Stelle im Source-Code, wo diese Zeile gefunden wird, kann sie also entfernt werden.
@@ -56,7 +63,7 @@ OfflineInfo["sn"]="all.suprnova"
 OfflineInfo["mh"]="all.miningpoolhub"
 BOERSE["bittrex"]=0.25
 BOERSE["cryptopia"]=0.2
-POOLS["nh"]="nicehash.com";             PoolFee["nh"]=3.5      PoolActive["nh"]=1
+POOLS["nh"]="nicehash.com";             PoolFee["nh"]=2        PoolActive["nh"]=1
 #      sn = 0 + BOERSE["bittrex"]  0,25 oder BOERSE["cryptopia"] 0.2
 POOLS["sn"]="suprnova.cc";              PoolFee["sn"]=0.25     PoolActive["sn"]=0
 #      mh= 0,9 + BOERSE["bittrex"] 0,25 oder BOERSE["cryptopia"] 0.2
@@ -104,6 +111,7 @@ SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
 # Wie rechnet NiceHash und die Miner, wenn sie sagen GH/s?
 # Mit 1000 oder mit 1024 als Basis?
 declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu rechnen
+#declare -i k_base=1000
 
 # Welche Strompreis... -Kategorien/-Arten mag es geben?
 GRID[0]="netz"
@@ -114,7 +122,7 @@ declare -Ag DO_AUTO_BENCHMARK_FOR
 TWEAK_CMD_START_PARAMS="${LINUX_MULTI_MINING_ROOT}/benchmarking/.start_params_for_tweak_commands_sh"
 
 GPU_alive_delay=6
-GPU_ALIVE_FLAG=.willing_to_deliver_data
+GPU_ALIVE_FLAG=.willing_to_deliver_data     # Not used since 2021-04-24 and beyond. Remove comment, if used again.
 GPU_VALID_FLAG=.valid_data_delivered
 MM_validating_delay=15
 RUN_SYNC_delay=5
@@ -144,7 +152,7 @@ NICE["mm"]=-20
 # UND: Wenn die Funktion OFT gerufen wird, dann ebenfalls lieber eine for-Schleife schreiben.
 # Der "echo" macht aus mehrfachen Spaces ein einzelnes!
 #pos_join () { local IFS="$1"; shift; echo "$*"; }
-pos_join () {
+function pos_join () {
     local SEP="$1"; shift
     local OUT=""
     for STR in "$@"; do
@@ -154,14 +162,14 @@ pos_join () {
     printf "${OUT}"
 }
 
-_remove_lock () {
+function _remove_lock () {
     flock -u 999                                     # ... und wieder freigeben
     [[ "$1" != "--do_not_log" ]] && \
         echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Released the exclusive Lock now" \
              >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.${LockBase}
 }
 
-_reserve_and_lock_file () {
+function _reserve_and_lock_file () {
 
     LockBase=$(basename ${1})
     LockFile="${1%${LockBase}}.${LockBase}.lock"
@@ -177,7 +185,7 @@ _reserve_and_lock_file () {
              >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.${LockBase}
 }
 
-_get_file_modified_time_ () {
+function _get_file_modified_time_ () {
     # 0.1 deshalb, weil führende Nullen bei Dezimalzahlen als Oktalzahlen interpretiert werden, die dann zu gross für die "aktuelle Basis" sind.
     # Bei den Ziffern hinter dem Komma müssen wir also immer die führenden Nullen wegnehmen.
     # Und wenn hier "0.0" stehen würde, würde die Fraction hinter dem Komma komplett entfernt und die entsprechende Variable wäre leer,
@@ -187,12 +195,11 @@ _get_file_modified_time_ () {
 
     _reserve_and_lock_file "$1" "--do_not_log"
     if [ -f ${1} ]; then
-        _modified_time_=$(stat -c "%Y" ${1}) #.${_fraction_}
-        _fraction_=$(find ${1} -printf "%TS" )
-        _fraction_=${_fraction_#*\.}
-        REGEXPAT="^0+([[:digit:]]*)"
-        [[ "${_fraction_}" =~ ${REGEXPAT} ]] && _fraction_=${BASH_REMATCH[1]}
-        [[ "${_fraction_}" == ""          ]] && _fraction_="1"
+        m_time=$(stat -c "%Y.%y" ${1})
+        _modified_time_=${m_time%%.*}
+        _fraction_=${m_time##*.}
+        [[ "${_fraction_}" =~ ^0*([[:digit:]]*) ]] && _fraction_=${BASH_REMATCH[1]}
+        [  "${_fraction_}" == ""                 ] && _fraction_="1"
     fi
     _remove_lock "--do_not_log"
     echo "${_modified_time_} ${_fraction_}"
@@ -201,7 +208,7 @@ _get_file_modified_time_ () {
 #####################################################
 # Einlesen des bisherigen Status laufender GPUs
 ####################################################
-_read_in_actual_RUNNING_STATE () {
+function _read_in_actual_RUNNING_STATE () {
     if [ -f ${RUNNING_STATE} ]; then
         unset RUNNING_STATE_CONTENT
         unset RunningGPUid; declare -Ag RunningGPUid

@@ -1,28 +1,5 @@
 ### NiceHash
 #### Im Arbeitsspeicher nach Webabruf gespeichert im Assoziativen Array ALGOs[@]
-#x11:x11:x11.$continent.nicehash.com:
-#x13:x13:x13.$continent.nicehash.com:
-#keccak:keccak:keccak.$continent.nicehash.com:
-#x15:x15:x15.$continent.nicehash.com:
-#nist5:nist5:nist5.$continent.nicehash.com:
-#neoscrypt:neoscrypt:neoscrypt.$continent.nicehash.com:
-#lyra2re:lyra2re:lyra2re.$continent.nicehash.com:
-#whirlpoolx:whirlpool:whirlpoolx.$continent.nicehash.com:
-#qubit:qubit:qubit.$continent.nicehash.com:
-#quark:quark:quark.$continent.nicehash.com:
-#sha256:sha256d:sha256.$continent.nicehash.com:
-#lyra2rev2:lyra2v2:lyra2rev2.$continent.nicehash.com:
-#scryptjanenf16:scrypt-jane:scryptjanenf16.$continent.nicehash.com:
-#blake256r8:blakecoin:blake256r8.$continent.nicehash.com:
-#blake256r14:blake:blake256r14.$continent.nicehash.com:
-#blake256r8vnl:vanilla:blake256r8vnl.$continent.nicehash.com:
-#decred:decred:decred.$continent.nicehash.com:
-#cryptonight:cryptonight:cryptonight.$continent.nicehash.com:
-#lbry:lbry:lbry.$continent.nicehash.com:
-#x11gost:sib:x11gost.$continent.nicehash.com:
-#sia:sia:sia.$continent.nicehash.com:
-#blake2s:blake2s:blake2s.$continent.nicehash.com:
-#skunk:skunk:skunk.$continent.nicehash.com:
 daggerhashimoto:ethash:daggerhashimoto.$continent.nicehash.com:
 octopus:octopus:octopus.$continent.nicehash.com:
 zhash:zhash:zhash.$continent.nicehash.com:

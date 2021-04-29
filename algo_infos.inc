@@ -103,6 +103,8 @@ function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
     gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"} \
           match( $0, /"algorithm":"[[:alnum:]]*/ )\
                { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
+          match( $0, /"speed":[.[:digit:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) } \
           match( $0, /"paying":[.[:digit:]E\-]*/ )\
                { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
          ${algoID_KURSE__PAY__WEB} 2>/dev/null \
@@ -128,11 +130,13 @@ function _read_in_ALGO_PORTS_KURSE () {
         ALGO_IDs[${READARR[$i]}]=${READARR[$i+2]}
     done
 
+    unset SPEED;    declare -Ag SPEED
     unset KURSE;    declare -Ag KURSE
     unset READARR
     readarray -n 0 -O 0 -t READARR <${algoID_KURSE_PORTS_PAY}
-    for ((i=0; $i<${#READARR[@]}; i+=2)) ; do
-        KURSE[${READARR[$i]}]="("${READARR[$i+1]/E/\*10\^}")"
+    for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
+        SPEED[${READARR[$i]}]=${READARR[$i+1]}
+        KURSE[${READARR[$i]}]="("${READARR[$i+2]/E/\*10\^}")"
     done
 
     if [ 1 -eq 0 ]; then
@@ -178,7 +182,7 @@ function _prepare_Strompreise_in_BTC_from_the_Web () {
         # Kosten in EUR
         kwh_EUR=$(< kwh_${GRID[$grid]}_kosten.in)
         # Kosten Umrechnung in BTC
-        echo $(echo "scale=8; ${kwh_EUR}/${btcEUR}" | bc) >kWh_${GRID[$grid]}_Kosten_BTC.in
+        echo $(echo "scale=20; ${kwh_EUR}/${btcEUR}" | bc) >kWh_${GRID[$grid]}_Kosten_BTC.in
     done
 }
 

@@ -17,30 +17,6 @@ beamv3              beamhash
 grincuckatoo31      cuckatoo31
 grincuckatoo32      cuckatoo32
 
-#x11
-#x13
-#keccak
-#x15
-#nist5
-#neoscrypt
-#lyra2re
-#whirlpoolx        whirlpool
-#qubit
-#quark
-#sha256            sha256d
-#lyra2rev2         lyra2v2
-#scryptjanenf16    scrypt-jane
-#blake256r8        blakecoin
-#blake256r14       blake
-#blake256r8vnl     vanilla
-#decred
-#cryptonight
-#lbry
-#equihash
-#x11gost           sib
-#sia
-#blake2s
-#skunk
 ### suprnova: Im Arbeitsspeicher gespeichert im Assoziativen Array COINS[@]
 ### suprnova COIN   CCminer Algo Name
 #zen               equihash

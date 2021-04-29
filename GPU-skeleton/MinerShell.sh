@@ -29,6 +29,10 @@
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
 
+# Aktuelle eigene PID merken
+This=$(basename $0 .sh)
+echo $$ >${This}.pid
+
 # Das Prioritätenkürzel für die MINER.
 # Kann hier global gesetzt werden, weil nur der Miner aus diesem Skript gestartet wird
 ProC="mi"
@@ -61,6 +65,16 @@ gpu_uuid=$6
 domain=$7
 server_name=$8
 miner_device=$9
+
+if [ ${debug} -eq 1 ]; then
+    echo "Anzahl Parameter: $#" | tee .positionals.last
+    for positional in "$@"; do
+	echo ${positional} | tee -a .positionals.last
+    done
+    echo "--------------------"
+    echo "$coin $pool $miningAlgo $miner_name $miner_version muck:$muck888" | tee -a .positionals.last
+fi
+
 # Rest ist Nvidia GPU Default Tuning CmdStack
 shift 9
 # So funktioniert das vielleicht nicht, weil Spaces im Command-String sind.
@@ -69,7 +83,7 @@ command_string="$*"
 read -a CmdStack <<<"${command_string}"
 declare -i i
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
-    CmdStack[$i]=${CmdStack[$i]//;/ }
+    CmdStack[$i]=${CmdStack[$i]//°/ }
 done
 
 [[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu-bENCH.inc
@@ -98,7 +112,6 @@ LOGPATH="live/${MINER}/${miningAlgo}"
 BENCHLOGFILE="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/live/${MINER}_${miningAlgo}_mining.log"
 # Einer der letzten zu setzenden Parameter für den Parameterstack des equihash "miner"
 LIVE_LOGFILE=${BENCHLOGFILE}
-
 
 _build_minerstart_commandline () {
     # ---> Die folgenden Variablen müssen noch vollständig implementiert werden! <---
@@ -134,9 +147,9 @@ _build_minerstart_commandline () {
 
 _delete_temporary_files () {
     [[ -n "${MINER}" ]] && rm -f ${MINER}.retry ${MINER}.booos
+    rm -f ${BENCHLOGFILE} .positionals.last
 }
 _delete_temporary_files
-rm -f ${BENCHLOGFILE}
 
 
 _On_Exit () {
@@ -149,16 +162,12 @@ _On_Exit () {
     # Auf jeden Fall das LOGFILE aufheben... nach möglichen anderen Abgebrochenen als ULTIMATIVES dieses Zyklus
     cp -f ${BENCHLOGFILE} ${LOGPATH}/$(date "+%Y%m%d_%H%M%S")_mining.log
 
-    if [ $debug -eq 0 ]; then
+    if [ ${debug} -eq 0 ]; then
         _delete_temporary_files
     fi
     rm -f ${This}.pid
 }
 trap _On_Exit EXIT
-
-# Aktuelle eigene PID merken
-This=$(basename $0 .sh)
-echo $$ >${This}.pid
 
 
 declare -i secs=0
@@ -193,14 +202,17 @@ done
 touch .now_$$
 read NOWSECS nowFrac <<<$(_get_file_modified_time_ .now_$$)
 #rm -f .now_$$ ..now_$$.lock
-printFrac="0000000000"${nowFrac}
-zeitstempel_t0=${NOWSECS}.${printFrac:$((${#printFrac}-10))}
+printFrac="000000000"${nowFrac}
+zeitstempel_t0=${NOWSECS}.${printFrac:$((${#printFrac}-9))}
 echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t0} \
      "GPU #${gpu_idx}: ZEITMARKE t0: Absetzen der NVIDIA-Commands" | tee -a ${ERRLOG} ${BENCHLOGFILE}
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
-    ${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
+    if [ ${ScreenTest} -eq 0 ]; then
+	${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
+    else
+	echo ${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
+    fi
 done
-
 
 ####################################################################################
 ################################################################################
@@ -232,39 +244,80 @@ while :; do
         touch .now_$$
         read NOWSECS nowFrac <<<$(_get_file_modified_time_ .now_$$)
         rm -f .now_$$ ..now_$$.lock
-        printFrac="0000000000"${nowFrac}
-        zeitstempel_t1=${NOWSECS}.${printFrac:$((${#printFrac}-10))}
+        printFrac="000000000"${nowFrac}
+        zeitstempel_t1=${NOWSECS}.${printFrac:$((${#printFrac}-9))}
         echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t1} \
              "GPU #${gpu_idx}: ZEITMARKE t1: Starting Miner alias ${coin_algorithm} with the following command line:" \
             | tee -a ${ERRLOG} ${BENCHLOGFILE}
         echo ${minerstart}
 
+	m_cmd="${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2)"
         if [ ${RT_PRIORITY[${ProC}]} -gt 0 ]; then
-            ${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]} \
-                                      ${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2) &
+	    cmd="${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]}"
         else
-            ${LINUX_MULTI_MINING_ROOT}/.#nice# -n ${NICE[${ProC}]} \
-                                      ${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2) &
+	    cmd="${LINUX_MULTI_MINING_ROOT}/.#nice# --adjustment=${NICE[${ProC}]}"
         fi
-        echo $! | tee ${MINER}.pid
-        MINER_pid=$(< ${MINER}.pid)
-        Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
-        ${_TERMINAL_} --hide-menubar \
-                      --title="GPU #${gpu_idx}  -  Mining ${coin_algorithm}" \
-                      -e "${Bench_Log_PTY_Cmd}"
+
+	### SCREEN ADDITIONS: ###
+	if [ ${UseScreen} -eq 1 ]; then
+	    if [ ${ScreenTest} -eq 1 ]; then
+		echo '---> Im Normalbetrieb würde jetzt mit folgendem Kommando der binäre Miner im Hintergrund gestartet werden:'
+		echo "cmd == ${cmd} ${m_cmd} &"
+		echo '---> Stattdessen beobachten wir nur das Logfile des bereits laufenden t-rex-miners in der AlleMinerRunning Screen-Session'
+		NORMAL_BENCHLOGFILE=${BENCHLOGFILE}
+		BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-${miner_device}-daggerhashimoto.log"
+		echo "BENCHLOGFILE von Nvidia GPU#${gpu_idx}: ${BENCHLOGFILE}"
+
+		# Pseudo MINER.pid, damit die MinerShell überhaupt einen angeblichen "Miner" in _terminate_Miner() killen kann:
+		rm -f .FAKE_MINER_PID_NOTICE
+		echo "Nur im ScreenTest. Dieser Prozess ist der Platzhalter für die echte ${MINER}.pid Datei" >.FAKE_MINER_PID_NOTICE_GPU#${gpu_idx}
+		find_and_kill_this_pseudo_miner_cmd="tail -f .FAKE_MINER_PID_NOTICE_GPU#${gpu_idx}"
+		${find_and_kill_this_pseudo_miner_cmd} &
+		echo $! | tee ${MINER}.pid
+	    else
+		# $$$$$$$$$$$$$$$$$$$$
+		# Warum nicht tatsächlich im eigenen Hintergrund statt in der BACKGROUND-Session laufen lassen?
+		# Wir probieren das mal aus. Können es aber auch ändern, wenn wir doch noch ein kleines bisschen mehr sehen wollen.
+		# Zumindest sieht man in der BACKGROUND-Session ja ein eigens Screen-Fenster und das Aufruf-Kommando.
+		# Für den Fall  mit der BG_SESS, muss auch noch das Problem mit der Datei ${MINER}.pid anders gelöst werden!
+		if [ 1 -eq 1 ]; then
+		    "${cmd} ${m_cmd}" &
+		    echo $! | tee ${MINER}.pid
+		else
+		    # Wenn wir den Prozess in der BG_SESS laufen lassen, müssen wir noch testen, ob das mit der ${MINER}.pid wirklich hinhaut!
+		    cmd+='\nexit\n'
+		    Miner_RUN_Title="M#${gpu_idx}"
+		    screen -drx ${BG_SESS} -X screen -t ${Miner_RUN_Title}
+		    screen -drx ${BG_SESS} -p ${Miner_RUN_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
+		    screen -drx ${BG_SESS} -p ${Miner_RUN_Title} -X stuff 'echo $$ | tee '${MINER}".pid\n"
+		    screen -drx ${BG_SESS} -p ${Miner_RUN_Title} -X stuff "${cmd}"
+		fi
+	    fi
+
+	    MINER_pid=$(< ${MINER}.pid)
+	    # Erzeugen des Logger-Terminals
+	    # (Die function _terminate_Logger_Terminal in gpu-bENCH.inc beendet genau den Prozess ${Bench_Log_PTY_Cmd})
+	    Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
+	    cmd="${Bench_Log_PTY_Cmd}"'\nexit\n'
+	    Miner_LOG_Title="M#${gpu_idx}"
+	    screen -drx ${FG_SESS} -X screen -t ${Miner_LOG_Title}
+	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
+	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "${cmd}"
+
+	    # Im Testmodus gleich wieder auf den originalen Wert zurücksetzen
+	    [ -n "${NORMAL_BENCHLOGFILE}" ] && BENCHLOGFILE=${NORMAL_BENCHLOGFILE}
+	else
+	    "${cmd} ${m_cmd}" &
+	    echo $! | tee ${MINER}.pid
+
+            MINER_pid=$(< ${MINER}.pid)
+            Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
+            ${_TERMINAL_} --hide-menubar \
+			  --title="GPU #${gpu_idx}  -  Mining ${coin_algorithm}" \
+			  -e "${Bench_Log_PTY_Cmd}"
+	fi
+
         echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "Miner and Logging ${_TERMINAL_} are running since here."
-        if [ $debug -eq 1 ]; then
-	    ### SCREEN ADDITIONS: ###
-	    # Wennn man mit Screen arbeitet, sollte man vorher oder nachher die Region "killen",
-	    # damit die Aufteilung am Bildschirm für den Logger wieder verschwindet.
-            REGEXPAT="${Bench_Log_PTY_Cmd//\//\\/}"
-            REGEXPAT="${REGEXPAT//\+/\\+}"
-            kill_pids=$(ps -ef \
-                       | grep -E -e "${REGEXPAT}" \
-                       | grep -v 'grep -E -e ' \
-                       | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-            echo "Terminal PID: $kill_pids"
-        fi
     fi
 
     ################################################################################
@@ -489,7 +542,7 @@ while :; do
     ###
     ################################################################################
 
-    if [[ ${hashCount} -eq 0 ]] && [[ ${secs} -ge 320 ]]; then
+    if [[ 1 == 0 && ${hashCount} -eq 0 ]] && [[ ${secs} -ge 320 ]]; then
         nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
         nowSecs=$(date +%s)
 

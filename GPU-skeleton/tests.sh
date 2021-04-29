@@ -3,6 +3,110 @@
 #[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.sh
 #[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
 
+
+<<PERFORMANCE_VERGLEICHE
+SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
+
+durchgaenge=10
+while ((durchgaenge--)); do
+    COUNT=100000 #0000
+
+    count=${COUNT}
+    rm -f .test.out
+    { time while ((count--)); do
+
+	# Put your code to test BELOW this line
+
+#	m_time=$(find ${SYNCFILE} -printf "%T@")
+#	m_time="1619158785.0992098300"
+#	_modified_time_=${m_time%.*}
+#	_fraction_=${m_time#*.}
+	_fraction_=0992098300
+	REGEXPAT="^0+([[:digit:]]*)"
+	[[ "${_fraction_}" =~ ${REGEXPAT} ]] && _fraction_=${BASH_REMATCH[1]}
+#	[  "${_fraction_}" = ""            ] && _fraction_="1"
+
+	# Put your code to test ABOVE this line
+
+    done ; } >.test.out 2>&1
+    until [ -s .test.out ]; do sleep .01; done
+
+    read muck good rest <<<$(cat .test.out | grep -m1 "^real")
+    good=${good//,/.}
+    minutes=${good%m*}
+    seconds=${good#*m}
+    seconds=${seconds%s}
+    echo "scale=4; sekunden=${minutes}*60 + ${seconds}; print sekunden, \"\n\"" | bc | tee .test.1
+
+    count=${COUNT}
+    rm -f .test.out
+    { time while ((count--)); do
+
+	# Put your code to test BELOW this line
+
+#	m_time=$(stat -c "%Y.%y" ${SYNCFILE})
+#	m_time="1619158785.2021-04-23 08:19:45.099209830 +0200"
+#	_modified_time_=${m_time%%.*}
+#	_fraction_=${m_time##*.}
+	_fraction_=0992098300
+	[[ "${_fraction_}" =~ ^0+([[:digit:]]*) ]] && _fraction_=${BASH_REMATCH[1]}
+#	[  "${_fraction_}" = ""            ] && _fraction_="1"
+
+	# Put your code to test ABOVE this line
+
+    done ; } >.test.out 2>&1
+    until [ -s .test.out ]; do sleep .01; done
+
+    read muck good rest <<<$(cat .test.out | grep -m1 "^real")
+    good=${good//,/.}
+    minutes=${good%m*}
+    seconds=${good#*m}
+    seconds=${seconds%s}
+    echo "scale=4; sekunden=${minutes}*60 + ${seconds}; print sekunden, \"\n\"" | bc | tee .test.2
+
+    echo 'scale=2; print "Das Verhältnis von Test1 zu Test2 beträgt ", '$(< .test.1)'/'$(< .test.2)'*100, " %\n"' | bc
+
+    sleep 1
+done
+
+rm -f .test.*
+exit
+
+PERFORMANCE_VERGLEICHE
+
+miner_name=t-rex
+miner_version=0.19.12
+
+gpu_uuid=GPU-c6467c28-be24-03ad-e7ea-9bc0e989488f
+gpu_idx=$(< ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu_index.in)
+
+MinerShell=MinerShell
+coin_algorithm=coin_algorithm
+continent=continent
+algo_port=algo_port
+worker=worker
+domain=domain
+server_name=server_name
+declare -A miner_gpu_idx
+miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]=miner_gpu_idx
+cmdParameterString=cmdParameterString
+
+m_cmd="./${MinerShell}.sh\
+	${coin_algorithm}\
+	${gpu_idx}\
+	${continent}\
+	${algo_port}\
+	${worker}\
+	${gpu_uuid}\
+	${domain}\
+	${server_name}\
+	${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]}\
+	$cmdParameterString\
+	>>${MinerShell}.log"
+
+echo "${m_cmd}"
+exit
+
 debug=1
 
 gpu_uuid=GPU-000bdf4a-1a2c-db4d-5486-585548cd33cb
@@ -12,7 +116,7 @@ gpu_uuid=GPU-50b643a5-f671-3b26-0381-2adea74a7103
 gpu_uuid=GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd
 gpu_uuid=GPU-bd3cdf4a-e1b0-59ef-5dd1-b20e2a43256b
 gpu_uuid=GPU-c6467c28-be24-03ad-e7ea-9bc0e989488f
-gpu_uuid=GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d
+#gpu_uuid=GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d
 gpu_idx=$(< ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu_index.in)
 IMPORTANT_BENCHMARK_JSON="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/benchmark_${gpu_uuid}.json"
 IMPORTANT_BENCHMARK_JSON="${LINUX_MULTI_MINING_ROOT}/GPU-skeleton/benchmark_skeleton.json"
@@ -28,99 +132,142 @@ IMPORTANT_BENCHMARK_JSON="${LINUX_MULTI_MINING_ROOT}/GPU-skeleton/benchmark_skel
 
 _read_IMPORTANT_BENCHMARK_JSON_in
 
+echo "Die folgenden beiden Arrays wurden von _read_IMPORTANT_BENCHMARK_JSON_in() gesetzt:"
 declare -p algo_checked
-#declare -p pleaseBenchmarkAlgorithm
+declare -p pleaseBenchmarkAlgorithm
 
-unset WillBenchmarkAlgorithm
-declare -a WillBenchmarkAlgorithm
+if [ 1 -eq 1 ]; then
+    # Eintrag in Datei ../MINER_ALGO_DISABLED machen
+    _set_Miner_Device_to_Nvidia_GpuIdx_maps
+    _set_ALLE_LIVE_MINER
+    _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
+    _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
 
-shopt -s lastpipe
-unset GLOBAL_ALGO_DISABLED_ARR
+    MINER=t-rex#0.19.14
+    miningAlgo=ethash
+    algorithm=${miningAlgo}#${MINER}
+    coin=daggerhashimoto
+    pool=nh
+    coin_algorithm=${coin}#${pool}#${algorithm}
 
-_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
-if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
-    cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+    nowSecs=$(date +%s)
+#    _disable_algo_for_5_minutes
 fi
-_remove_lock
 
-#declare -p GLOBAL_ALGO_DISABLED_ARR
-unset MyDisabledAlgos
-declare -a MyDisabledAlgos
-for algo_GPU in ${GLOBAL_ALGO_DISABLED_ARR[@]}; do
-    read disabledAlgo GPUs <<<"${algo_GPU//:/ }"
-    if [ ${#GPUs} -gt 1 ]; then
-	for lfdGPU in ${GPUs}; do
-	    if [ "${lfdGPU}" == "${gpu_uuid}" ]; then
-		MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
-		break
-	    fi
+function _find_algorithms_to_benchmark {
+    # local algo_GPU disabledAlgo GPUs lfdGPU lfdAlgorithm mName mVer muck888 
+
+    unset WillBenchmarkAlgorithm
+    declare -ag WillBenchmarkAlgorithm
+    unset GLOBAL_ALGO_DISABLED_ARR
+
+    # 1. Zuerst die GLOBAL_ALGO_DISABLED Algos
+    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
+    if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
+	cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+    fi
+    _remove_lock
+
+    unset MyDisabledAlgos
+    declare -a MyDisabledAlgos
+    for algo_GPU in ${GLOBAL_ALGO_DISABLED_ARR[@]}; do
+	read disabledAlgo GPUs <<<"${algo_GPU//:/ }"
+	if [ ${#GPUs} -gt 1 ]; then
+	    for lfdGPU in ${GPUs}; do
+		if [ "${lfdGPU}" == "${gpu_uuid}" ]; then
+		    MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
+		    break
+		fi
+	    done
+	else
+	    # Zeile gilt für ALLE GPUs
+	    MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
+	fi
+    done
+    #declare -p MyDisabledAlgos
+
+    # 2. Dann die BENCH_ALGO_DISABLED Algos
+    # ...
+    unset MyDisabledAlgorithms MyDisabledAlgorithms_in
+    declare -a MyDisabledAlgorithms
+    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED
+    if [ -s ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED ]; then
+	cat ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t MyDisabledAlgorithms_in
+    fi
+    _remove_lock                                     # ... und wieder freigeben
+
+    for actRow in "${MyDisabledAlgorithms_in[@]}"; do
+	read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
+	[ ${gpuIdx#0} -eq ${gpu_idx} ] && MyDisabledAlgorithms[${#MyDisabledAlgorithms[@]}]=${lfdAlgorithm}
+    done
+
+    declare -p MyDisabledAlgorithms
+    declare -p MyDisabledAlgos
+
+    # 3. Dann die vorübergehend disabled ebenfalls feststellen und herausnehmen
+    # Diese Untersuchung dazu zu benutzen, den algorithm vom benchmarking auszunehmen, ist ein bisschen hart.
+    # Eiegntlich muss noch berücksichtigt werden, welcher POOL da beteiligt ist.
+    # Denn vielleicht ist nur der Coin eines bestimmten Pools im Moment nicht verfügbar, der Algorithm aber bei anderen Pools durchaus problemlos laufen könnte.
+    unset MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
+    declare -Ag MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
+    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
+    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+    declare -i nowSecs=$(date +%s)
+    if [ -s ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ]; then
+	if [ $debug -eq 1 ]; then echo "Reading ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ..."; fi
+	declare -i timestamp
+	unset READARR
+	readarray -n 0 -O 0 -t READARR <${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
+	for ((i=0; $i<${#READARR[@]}; i++)) ; do
+            read _date_ _oclock_ timestamp coin_algorithm <<<${READARR[$i]}
+            MINER_ALGO_DISABLED_ARR[${coin_algorithm}]=${timestamp}
+            MINER_ALGO_DISABLED_DAT[${coin_algorithm}]="${_date_} ${_oclock_}"
 	done
-    else
-	MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
-    fi
-done
-
-unset MyDisabledAlgorithms MyDisabledAlgorithms_in
-declare -a MyDisabledAlgorithms
-_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED
-if [ -s ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED ]; then
-    cat ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t MyDisabledAlgorithms_in
-fi
-_remove_lock                                     # ... und wieder freigeben
-
-for actRow in "${MyDisabledAlgorithms_in[@]}"; do
-    read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
-    [ ${gpuIdx#0} -eq ${gpu_idx} ] && MyDisabledAlgorithms[${#MyDisabledAlgorithms[@]}]=${lfdAlgorithm}
-done
-
-declare -p MyDisabledAlgorithms
-declare -p MyDisabledAlgos
-
-for lfdAlgorithm in ${pleaseBenchmarkAlgorithm[@]}; do
-    for disabledAlgo in ${MyDisabledAlgorithms[@]}; do
-	[ "${lfdAlgorithm}" == "${disabledAlgo}" ] && continue 2
-    done
-    read lfdAlgo mName mVer muck888 <<<${lfdAlgorithm//#/ }
-    echo "checking $lfdAlgo..."
-    for disabledAlgo in ${MyDisabledAlgos[@]}; do
-	[ "${lfdAlgo}" == "${disabledAlgo}" ] && continue 2
-    done
-    WillBenchmarkAlgorithm[${#WillBenchmarkAlgorithm[@]}]=${lfdAlgorithm}
-done
-declare -p WillBenchmarkAlgorithm
-exit
-
-#    Zusätzlich die über GLOBAL_ALGO_DISABLED Algos rausnehmen...
-unset GLOBAL_ALGO_DISABLED_ARR
-_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
-if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
-    cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
-
-    if [ $debug -eq 1 ]; then
-        echo "GPU #${gpu_idx}: Vor  der Prüfung: GLOBAL_ALGO_DISABLED_ARRAY hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"
-        declare -p GLOBAL_ALGO_DISABLED_ARR
-    fi
-    for ((i=0; $i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
-        unset disabled_algos_GPUs
-        read -a disabled_algos_GPUs <<<${GLOBAL_ALGO_DISABLED_ARR[$i]//:/ }
-        if [ ${#disabled_algos_GPUs[@]} -gt 1 ]; then
-            # Nur für bestimmte GPUs disabled. Wenn die eigene GPU nicht aufgeführt ist, übergehen
-            REGEXPAT="^.*:${gpu_uuid}\b"
-            if [[ ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ${REGEXPAT} ]]; then
-                GLOBAL_ALGO_DISABLED_ARR[$i]=${disabled_algos_GPUs[0]}
-            else
-                unset GLOBAL_ALGO_DISABLED_ARR[$i]
+	# Jetzt sind die Algorithm's unique und wir prüfen nun, ob welche dabei sind,
+	# die wieder zu ENABLEN sind, bzw. die aus dem Disabled_ARR verschwinden müssen,
+	# bevor wir die Datei neu schreiben.
+	for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
+            if [ ${nowSecs} -gt $(( ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} + 300 )) ]; then
+		# Der Algo ist wieder einzuschalten
+		unset MINER_ALGO_DISABLED_ARR[${coin_algorithm}]
+		unset MINER_ALGO_DISABLED_DAT[${coin_algorithm}]
+		printf "ENABLED ${nowDate} ${nowSecs} ${coin_algorithm}\n" | tee -a ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
             fi
-        fi
-    done
-    if [ $debug -eq 1 ]; then
-        echo "GPU #${gpu_idx}: Nach der Prüfung: GLOBAL_ALGO_DISABLED_ARRAY hat ${#GLOBAL_ALGO_DISABLED_ARR[@]} Einträge"
-        declare -p GLOBAL_ALGO_DISABLED_ARR
+	done
+	# Weg mit dem bisherigen File...
+	mv -f ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED.BAK
+	# ... und anlegen eines Neuen, wenn noch Algos im Array sind
+	for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
+            # Die eingelesenen Werte wieder ausgeben
+            printf "${MINER_ALGO_DISABLED_DAT[${coin_algorithm}]} ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} ${coin_algorithm}\n" >>${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
+	done
     fi
-fi
-_remove_lock                                     # ... und wieder freigeben
-# ----------------------------------------------------------
+    _remove_lock                                     # ... und wieder freigeben
 
+    declare -p MINER_ALGO_DISABLED_ARR
+    
+    # 4. Die Erstellung des Arrays der zu benchmarkenden Algorithms
+    for lfdAlgorithm in ${pleaseBenchmarkAlgorithm[@]}; do
+	for disabledAlgo in ${MyDisabledAlgorithms[@]}; do
+	    [ "${lfdAlgorithm}" == "${disabledAlgo}" ] && continue 2
+	done
+	read lfdAlgo mName mVer muck888 <<<${lfdAlgorithm//#/ }
+	echo "checking $lfdAlgo..."
+	for disabledAlgo in ${MyDisabledAlgos[@]}; do
+	    [ "${lfdAlgo}" == "${disabledAlgo}" ] && continue 2
+	done
+	for coin_algorithm in ${!MINER_ALGO_DISABLED_ARR[@]}; do
+	    read _coin_ _pool_ _algo_ _mNam_ _mVer_ <<<"${coin_algorithm//#/ }"
+	    [ "${lfdAlgorithm}" == "${_algo_}#${_mNam_}#${_mVer_}" ] && continue 2
+	done
+	WillBenchmarkAlgorithm[${#WillBenchmarkAlgorithm[@]}]=${lfdAlgorithm}
+    done
+}
+# Danach steht das Array WillBenchmarkAlgorithm mit den zu benchmarkenden Algorithms
+_find_algorithms_to_benchmark
+
+declare -p WillBenchmarkAlgorithm
 exit
 
 # Mal sehen, ob es überhaupt schon Benchmarkwerte gibt oder ob Benchmarks nachzuholen sind.
@@ -287,3 +434,37 @@ gpu_idx=0 #$(< gpu_index.in)
 gpu_uuid=GPU-c6467c28-be24-03ad-e7ea-9bc0e989488f
 printf -v worker "%02i${gpu_uuid:4:6}" ${gpu_idx}
 echo $worker
+
+# ----------------------------------------------------------
+# Test zur Überprüfung, ob durch das in _update_SELF_if_necessary enthaltene EXEC
+# die _On_Exit() Routine durchläuft, oder nicht.
+
+# 1.
+# _update_SELF_if_necessary wurde so erweitert, dass es die Datei .going-to-exec erzeugt
+
+# 2.
+# Dieser Teil war in _On_Exit() eingebaut:
+if [ -s .going-to-exec ]; then
+    mv -f .going-to-exec .going-to-exec-moved-by_On_Exit
+else
+    echo "Nothing to move from _update_SELF_if_necessary()"
+fi
+
+# 3.
+# Eingebaut bald nach dem TRAP Kommando...
+
+touch ../${SRC_DIR}/${SRC_FILE}
+echo "Calling _update_SELF_if_necessary() the second time after TRAP is active and after touching ../${SRC_DIR}/${SRC_FILE}"
+_update_SELF_if_necessary
+if [ -s .going-to-exec ]; then
+    echo ".going-to-exec is still there..."
+else
+    echo ".going-to-exec GONE... which means: _On_Exit() WAS called by exec!"
+fi
+
+echo "Now exiting for real... which should ultimately remove .going-to-exec ..."
+exit
+
+# ERGEBNIS: Die TRAP Routine _On_Exit wird NICHT durchlaufen...
+# Es erfolgt also KEIN SIGTERM durch das EXEC
+# ----------------------------------------------------------

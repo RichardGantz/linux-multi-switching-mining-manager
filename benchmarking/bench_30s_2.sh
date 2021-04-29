@@ -28,15 +28,19 @@
 # Die folgende Variable wird auch in der globals.inc gesetzt (0 bis zum Ende der Tests) und kann hier überschrieben werden.
 # 0 ist der frühere Betrieb an einem graphischen Desktop mit mehreren hochpoppenden Terminals
 # 1 ist der Betrieb unter GNU screen
-UseScreen=1
-[[ ${#BencherTitle} -eq 0 ]] && BencherTitle=MAIN
+# 2021-04-17:
+# UseScreen wird jetzt in globals.inc definiert
+#UseScreen=1
+[[ ${#BencherTitle}  -eq 0 ]] && BencherTitle=MAIN
+[[ ${#BenchLogTitle} -eq 0 ]] && BenchLogTitle=BENCHLOGFILE
 # Die folgende Variable verhindert das Absetzen der nvidia-Befehle vor dem und den echten Start des ausgewählten Miners...
 #     statt des dadurch entfallenden BENCHLOGs und des nicht funktionierenden "tail -f BENCHLOG" wird ein less -Kommando abgesetzt, um screen layouts zu testen...
 #     verhindert, dass beim Beenden in die entsprechende bench...json geschrieben wird (durch NICHT Ausführen von BENCHMARKING_WAS_STARTED=1)
 #     verhindert den Eintritt in die Endlosschleife, die Hash- und Wattwerte sekündlich ausgibt und wartet stattdessen auf eine Eingabe, die den BENCHER BEENDET
 # 0 bedutet normaler Betrieb mit Miner-Start
 # 1 bedeutet "Trockenbetrieb" ohne Minerstart
-ScreenTest=0
+# ScreenTest wird jetzt in globals.inc definiert
+#ScreenTest=0
 
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
@@ -2184,7 +2188,7 @@ if [ ${STOP_AFTER_MIN_REACHED} -eq 0 ]; then
                         ${BENCHLOGFILE} \
                         ${LOGPATH} \
                         ${READY_FOR_SIGNALS}"
-    tweak_start_cmd="export UseScreen=${UseScreen}; ${LINUX_MULTI_MINING_ROOT}/benchmarking/tweak_commands.sh ${tweak_start_params}"
+    tweak_start_cmd="${LINUX_MULTI_MINING_ROOT}/benchmarking/tweak_commands.sh ${tweak_start_params}"
 
     ### SCREEN ADDITIONS: ###
     if [ ${UseScreen} -eq 0 ]; then
@@ -2214,11 +2218,10 @@ fi
 if [ ${UseScreen} -eq 1 ]; then
     # ... wählt in der aktuellen Region den Bencher (select ${BencherTitle})...
     # ... splittet den Bildschirm vertikal (split -v), springt nach rechts (focus)...
-    echo "${BencherTitle}" >.BencherTitle
     screen -X eval "select ${BencherTitle}" "split -v" focus
     # ... erzeugt ein neues (Screen)-Window in der aktuellen Region und startet den BENCHLOGGER (screen -t... $BASH ...)
     #     und zeigt das Benchmark-Log an...
-    screen -p + -t BENCHLOGFILE ${BASH} -c "${Bench_Log_PTY_Cmd}"
+    screen -p + -t ${BenchLogTitle} ${BASH} -c "${Bench_Log_PTY_Cmd}"
     # ... wechselt nach oben zum Tweaker oder zurück zum Bencher, je nachdem, ob Bencher mit -t gestartet wurde (focus).
     #     oder zurück zum gpu_gv-algo.sh, falls er von diesem gerufen wurde. gpu_gv-algo.sh und tweaker schließen sich gegenseitig aus.
     screen -X eval focus

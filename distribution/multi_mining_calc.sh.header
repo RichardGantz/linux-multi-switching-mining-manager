@@ -51,9 +51,21 @@ ARCHIVE=$(awk '/^__ARCHIVE_BELOW__/ {print NR + 1; exit 0; }' $0)
 
 mkdir -vp ${DST_DIR}
 
-tail -n+$ARCHIVE $0 | tar xvz -C ${DST_DIR}
-touch ${DST_DIR}/GPU-skeleton/benchmark_skeleton.json
-touch -r ${DST_DIR}/GPU-skeleton/benchmark_skeleton.json ${DST_DIR}/GPU-skeleton/gpu-bENCH.inc
+# 2021-04-19:
+# 1. Die folgenden beiden Zeilen setzen die benchmark_skeleton.json und gpu-bENCH.inc auf das gleiche Dateum.
+#    Das bedeutet, dass eine Strukturänderungsfunktion gerufen wird, falls sich die GPU- gpu-bENCH.inc und die Skeleton gpu-bENCH.inc unterscheiden.
+#    Wir wollen das im momentanen Test-Lauf nicht, da es noch keine Strukturänderungen gibt.
+#    Die vorhandene und veraltete Funktion soll nicht ausgeführt werden.
+# 2. GPU- benchmark_...json sollen nicht mehr überschrieben werden, wenn sie im RUN-Verzeichnis aktualisiert/getweaked wurden.
+#    Sonst gehen diese Änderungen verloren.
+# Wir nehmen daher zwei Änderungen vor:
+# Die Option --keep-newer-files und das unterlassen der Gleichsetzung der unter Punkt 1. erwähnten Dateien
+tar_opts="--keep-newer-files"
+tail -n+$ARCHIVE $0 | tar xvz ${tar_opts} -C ${DST_DIR}
+if [ 1 -eq 0 ]; then
+    touch ${DST_DIR}/GPU-skeleton/benchmark_skeleton.json
+    touch -r ${DST_DIR}/GPU-skeleton/benchmark_skeleton.json ${DST_DIR}/GPU-skeleton/gpu-bENCH.inc
+fi
 
 # Abfragen:
 # 1. CUDA-Version Verwendung? => Exportpath

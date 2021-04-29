@@ -85,3 +85,31 @@ Script 4#
 Dies Script holt sämtliche best_algo*.out dateien aus den GPU Verzeichnissen und Sortiert diese welche GPU
 die beste ist und stellt diese nach oben mit der "GPU_index NR" welche nicht im negativen bereich sind.
 Alle welche im Negativen bereich sind fallen weg.
+
+PAYINGS:
+--------
+Die Umrechnungsformel für die Bezahlung der minings lautet:
+
+BenchmarkSpeed * payings(web) / 100 000 000 * FEES
+
+ACHTUNG: Diese Zahl 100000000 haben wir aus dem SourceCode eines Windows-Miners:
+https://github.com/nicehash/NiceHashMiner/blob/edc6a78141d896bd6296009b0ad426e27d0d6063/src/NHMCore/Mining/MiningDataStats.cs:
+
+// update stat
+            stat.PowerUsageAPI = (double)apiData.PowerUsageTotal / 1000d;
+     foreach (var speedInfo in apiData.AlgorithmSpeedsTotal())
+           {
+           stat.Speeds.Add(speedInfo);
+           if (payingRates.TryGetValue(speedInfo.type, out var paying) == false) continue;
+           var payingRate = paying * speedInfo.speed * 0.000000001;
+           stat.Rates.Add((speedInfo.type, payingRate));
+    }
+
+Der rechnet allerdings mit 9 Stellen, also mit 1 000 000 000 bzw. 0.000000001 !!!
+
+Keiner weiß im Moment warum, aber mit 8 Stellen scheint alles zu passen.
+Der Switcher verwendet allerdings auch NICHT dieselbe API, von der wir abrufen:
+
+var response = await client.PostAsync("https://api2.nicehash.com/api/v2/organization/nhmqr", content);
+var resp = await client.GetAsync($"https://api2.nicehash.com/api/v2/organization/nhmqr/{_uuid}");
+
