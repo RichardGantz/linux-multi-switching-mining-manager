@@ -8,7 +8,7 @@ TREXLOGPATH="/home/avalon/miner/t-rex"
 #-rw-r--r-- 1 avalon avalon 2758402 Apr 26 09:04 t-rex-0-daggerhashimoto-[1619420865].log
 #-rw-r--r-- 1 avalon avalon 3765183 Apr 28 18:39 t-rex-0-daggerhashimoto-[1619678217]-Startschwierigkeiten.log
 
-epochs=(
+done_epochs=(
     1619107726
     1619196773
     1619264974

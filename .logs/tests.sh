@@ -15,8 +15,8 @@ coin=daggerhashimoto
 rm t-rex-012345679-${coin}-[1619420865].log.diffs
 for miner_device in 0 1 2 3 4 5 6 7 9; do
 #for miner_device in 9; do
-BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
-DiffCheckFILE="/home/avalon/miner/t-rex/t-rex-"${miner_device}"-"${coin}"-[1619420865].log.diffs"
+BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+DiffCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log.diffs"
 
 [ "${coin}" == "daggerhashimoto" ] \
     && \
@@ -89,7 +89,7 @@ exit
 
 # Die Entwicklung der "Shares/min"
 #for miner_device in 0 1 2 3 4 5 6 7 9; do
-    BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
     echo ${BENCHLOGFILE}
     grep "^Shares/min:" ${BENCHLOGFILE}
 #done
@@ -98,14 +98,14 @@ exit
 
 # Erstes Auftreten von "Uptime:"
 for miner_device in 0 1 2 3 4 5 6 7 9; do
-    BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
     echo ${BENCHLOGFILE}
     grep -B20 -m1 "^Uptime: " ${BENCHLOGFILE}
 done
 
 exit
 
-BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
 grep -A1 "^Uptime: " ${BENCHLOGFILE}
 
 exit
@@ -115,14 +115,14 @@ exit
 # Das "WD" wird erst nach wenigstens einem erfolgreichen [ OK ] ausgegeben.
 # Das kan uns etwas über die Initialisierungszeit sagen.
 for miner_device in 0 1 2 3 4 5 6 7 9; do
-    BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
     echo ${BENCHLOGFILE}
     diff <(grep -A1 "^Uptime: " ${BENCHLOGFILE}) <(grep -B1 "^WD: " ${BENCHLOGFILE})
 done
 
 exit
 
-BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-0-daggerhashimoto-[1619420865].log"
+BENCHLOGFILE="${TREXLOGPATH}/t-rex-0-daggerhashimoto-[1619420865].log"
 <<COMMENT
 Diff: 851.74, 22 Umschaltungen
 Diff: 425.87, 27 Umschaltungen
@@ -131,7 +131,7 @@ Diff: 429.50, 658 Umschaltungen
 Diff: 214.75, 33 Umschaltungen
 Bei 1222 Zeilen
 COMMENT
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-1-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-1-daggerhashimoto-[1619420865].log"
 <<COMMENT
 Diff: 851.74, 159 Umschaltungen
 Diff: 1.72, 1 Umschaltungen
@@ -141,7 +141,7 @@ Diff: 429.50, 300 Umschaltungen
 Diff: 214.75, 29 Umschaltungen
 Bei 903 Zeilen
 COMMENT
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-2-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-2-daggerhashimoto-[1619420865].log"
 <<COMMENT
 Diff: 851.74, 112 Umschaltungen
 Diff: 425.87, 144 Umschaltungen
@@ -150,7 +150,7 @@ Diff: 429.50, 520 Umschaltungen
 Diff: 214.75, 38 Umschaltungen
 Bei 1225 Zeilen
 COMMENT
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-3-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-3-daggerhashimoto-[1619420865].log"
 <<COMMENT
 Diff: 851.74, 152 Umschaltungen
 Diff: 1.72, 1 Umschaltungen
@@ -160,8 +160,8 @@ Diff: 429.50, 368 Umschaltungen
 Diff: 214.75, 43 Umschaltungen
 Bei 1046 Zeilen
 COMMENT
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-4-daggerhashimoto-[1619420865].log"
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-5-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-4-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-5-daggerhashimoto-[1619420865].log"
 <<COMMENT
 Diff: 851.74, 152 Umschaltungen
 Diff: 1.72, 1 Umschaltungen
@@ -171,7 +171,7 @@ Diff: 429.50, 368 Umschaltungen
 Diff: 214.75, 43 Umschaltungen
 Bei 1046 Zeilen
 COMMENT
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-6-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-6-daggerhashimoto-[1619420865].log"
 <<COMMENT
 Diff: 851.74, 41 Umschaltungen
 Diff: 1.72, 6 Umschaltungen
@@ -181,7 +181,7 @@ Diff: 429.50, 544 Umschaltungen
 Diff: 214.75, 35 Umschaltungen
 Bei 1137 Zeilen
 COMMENT
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-7-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-7-daggerhashimoto-[1619420865].log"
 <<COMMENT
 Diff: 851.74, 53 Umschaltungen
 Diff: 1.72, 4 Umschaltungen
@@ -191,8 +191,8 @@ Diff: 429.50, 648 Umschaltungen
 Diff: 214.75, 52 Umschaltungen
 Bei 1292 Zeilen
 COMMENT
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-8-octopus-[1619420865].log"
-#BENCHLOGFILE="/home/avalon/miner/t-rex/t-rex-9-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-8-octopus-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-9-daggerhashimoto-[1619420865].log"
 <<COMMENT
 Diff: 851.74, 10 Umschaltungen
 Diff: 425.87, 17 Umschaltungen
