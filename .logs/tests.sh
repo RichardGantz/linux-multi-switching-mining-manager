@@ -12,7 +12,65 @@ gpu_idx=9
 miner_device=7
 coin=daggerhashimoto
 
-rm t-rex-012345679-${coin}-[1619420865].log.diffs
+# Erstellung der Grafik aus der erstellten .csv Datei
+# Gibt es momentan nur EINE für m_dev 9 und Logfile-Timestamp 1619420865 !!!
+for miner_device in 0 1 2 3 4 5 6 7 9; do
+#for miner_device in 9; do
+    for MAX_VALUES_FROM_CSV in 50 100 250 500 1000 2500 6000; do
+	php diagramm_avgs.php ${miner_device} ${MAX_VALUES_FROM_CSV}
+    done
+done
+
+exit
+
+# Zur Ermittlung, wie die Durchschnittszeiten ansteigen
+for miner_device in 0 1 2 3 4 5 6 7 9; do
+#for miner_device in 9; do
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    CSV=1
+    EXT=csv
+    [ $CSV -eq 0 ] && EXT=avgs
+    AvgCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log.${EXT}"
+
+    [ "${coin}" == "daggerhashimoto" ] \
+	&& \
+	cat ${BENCHLOGFILE} \
+	    | gawk -v CSV="${CSV}" -e 'BEGIN { OKs=0; ShAvg=0; seconds=0; }
+/Shares\/min:.*Avr\./ {
+	if (CSV==0) print $0 ", " OKs " OKs"
+	ShAvg = substr( $NF, 1, length($NF)-1 )
+	next
+    }
+match( $0, /Uptime: [[:digit:]]+ [^|]*\|/ ) \
+    {  M=substr($0, RSTART+8, RLENGTH-10);
+       seconds = 0;
+       if ( match( M, /([[:digit:]]+) days?/,  d ) ) { seconds += d[1]*86400 }
+       if ( match( M, /([[:digit:]]+) hours?/, h ) ) { seconds += h[1]*3600 }
+       if ( match( M, /([[:digit:]]+) mins?/,  m ) ) { seconds += m[1]*60 }
+       if ( match( M, /([[:digit:]]+) secs?/,  s ) ) { seconds += s[1] }
+       if (CSV==0) {
+       	  print  "Uptime: " seconds " Sekunden, " ShAvg " OKs/min"
+	  printf "EigenD: %i Sekunden, %7.3f OKs/min, (%i OKs)\n", seconds, OKs/seconds*60, OKs
+       } else {
+       	  print seconds ";" ShAvg ";" OKs/seconds*60
+       }
+       next
+    }
+/\[ OK \] / {
+       ++OKs
+       if (CSV==0) printf "%6i OKs, Durchschnitt (Uptime): %7.3f\n", OKs, OKs/seconds*60
+    }
+END {
+    if (CSV==0) print "Vom Miner ermittelter und regelmäßig ausgegebener Gesamtdurchschnitt: " seconds " Sekunden, " ShAvg " OKs/min"
+    }
+' | tee ${AvgCheckFILE} \
+	    || echo "${coin} not yet implented."
+
+done
+
+exit
+
+#rm t-rex-012345679-${coin}-[1619420865].log.diffs
 for miner_device in 0 1 2 3 4 5 6 7 9; do
 #for miner_device in 9; do
 BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
@@ -23,7 +81,7 @@ DiffCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log
     cat ${BENCHLOGFILE} \
 	| gawk -e 'BEGIN { lastDiff=0; OKs=0; ShAvg=0; seconds=0; wdseconds=0; last_up_sec=0; last_wd_sec=0; }
 /ethash epoch:/ {
-	actDiff=$(NF-1); if ($NF=="G") { actDiff*=1000 }
+	actDiff=$(NF-1); if ($NF=="G") { actDiff *= 1000 }
 	if (actDiff != lastDiff ) {
 	   if ( lastDiff > 0 ) {
 	      print "WDtime: " wdseconds " Sekunden, " ShAvg " OKs/min"
@@ -42,6 +100,7 @@ DiffCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log
 	next
     }
 /Shares\/min:.*Avr\./ {
+	# print $0 ", " OKs " OKs"
 	ShAvg = substr( $NF, 1, length($NF)-1 )
 	next
     }
@@ -52,7 +111,8 @@ match( $0, /Uptime: [[:digit:]]+ [^|]*\|/ ) \
        if ( match( M, /([[:digit:]]+) hours?/, h ) ) { seconds += h[1]*3600 }
        if ( match( M, /([[:digit:]]+) mins?/,  m ) ) { seconds += m[1]*60 }
        if ( match( M, /([[:digit:]]+) secs?/,  s ) ) { seconds += s[1] }
-       #       print "Uptime: " seconds " Sekunden, " ShAvg " OKs/min"
+       print  "Uptime: " seconds " Sekunden, " ShAvg " OKs/min"
+       printf "EigenD: %i Sekunden, %7.3f OKs/min, (%i OKs)\n", seconds, OKs/seconds*60, OKs
        getline
        if (match( $0, /^WD: [[:digit:]]+ [^,]*,/ )) {
        	      M=substr($0, RSTART+3, RLENGTH-4);
@@ -61,14 +121,17 @@ match( $0, /Uptime: [[:digit:]]+ [^|]*\|/ ) \
 	      if ( match( M, / ([[:digit:]]+) hours?/, h ) ) { wdseconds += h[1]*3600 }
 	      if ( match( M, / ([[:digit:]]+) mins?/,  m ) ) { wdseconds += m[1]*60 }
 	      if ( match( M, / ([[:digit:]]+) secs?/,  s ) ) { wdseconds += s[1] }
-	      #	      print "WDtime: " wdseconds " Sekunden, " ShAvg " OKs/min"
+	      print  "WDtime: " wdseconds " Sekunden, " ShAvg " OKs/min"
+       	      printf "EigenD: %i Sekunden, %7.3f OKs/min, (%i OKs)\n", wdseconds, OKs/wdseconds*60, OKs
 	      }
        next
     }
 /\[ OK \] / {
        ++allOKs[ actDiff ]
        ++OKs
-       # print actDiff ": " allOKs[ actDiff ] " OKs von insgesamt " OKs " OKs"
+       printf "%6i OKs, Durchschnitt (Uptime): %7.3f\n", OKs, OKs/seconds*60
+       if (wdseconds > 0) printf "%6i OKs, Durchschnitt (WDtime): %7.3f\n", OKs, OKs/wdseconds*60
+       print actDiff ": " allOKs[ actDiff ] " OKs von insgesamt " OKs " OKs"
     }
 END {
     print "Vom Miner ermittelter und regelmäßig ausgegebener Gesamtdurchschnitt: " wdseconds " Sekunden, " ShAvg " OKs/min"
@@ -78,7 +141,7 @@ END {
 	        diff, allOKs[diff], OKs, secs[diff], allOKs[diff]/secs[diff]*60
     }
 }
-' > ${DiffCheckFILE} \
+' | tee ${DiffCheckFILE} \
 	|| echo "${coin} not yet implented."
 
 echo -e "\n"${DiffCheckFILE} | tee -a t-rex-012345679-${coin}-[1619420865].log.diffs
@@ -118,6 +181,15 @@ for miner_device in 0 1 2 3 4 5 6 7 9; do
     BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
     echo ${BENCHLOGFILE}
     diff <(grep -A1 "^Uptime: " ${BENCHLOGFILE}) <(grep -B1 "^WD: " ${BENCHLOGFILE})
+done
+
+exit
+
+# Der folgende Test zeigt, dass die beiden Zeilen "Shares/min" und "Uptime:" IMMER zusammen auftreten.
+for miner_device in 0 1 2 3 4 5 6 7 9; do
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    echo ${BENCHLOGFILE}
+    diff <(grep -A1 "^Shares/min: " ${BENCHLOGFILE} <(grep -B1 "^Uptime: " ${BENCHLOGFILE}))
 done
 
 exit
