@@ -13,23 +13,26 @@ include ("jpgraph/jpgraph_error.php");
 // ( Falls Sonderbehandlungen nötig sein sollten: if ( $_SERVER["LOGNAME"] == "richard" ) )
 
 $HOME         =getenv( "HOME" );
+$HOSTNAME     =getenv( "HOSTNAME" );
+
+$TREXLOGPATH="home/avalon/miner/t-rex";
+if ( $HOSTNAME == "mining" ) $TREXLOGPATH="/${TREXLOGPATH}";
+else $TREXLOGPATH="$HOME/git/linux-multi-switching-mining-manager/.logs/$TREXLOGPATH";
+$GRAF_DST_DIR  =".";
 
 $miner_name   ="t-rex";
 $miner_version="0.19.14";
 $miner_device ="9";
 $coin         ="daggerhashimoto";
+$epoch        ="1619420865";
 
 $MAX_VALUES_FROM_CSV=100;
 
 if ( isset( $argv[1] ) ) $miner_device="$argv[1]";
 if ( isset( $argv[2] ) ) $MAX_VALUES_FROM_CSV="$argv[2]";
+if ( isset( $argv[3] ) ) $epoch="$argv[3]";
 
-$ARCHIV_DIR    ="$HOME/git/linux-multi-switching-mining-manager/.logs/home/avalon/miner/t-rex";
-$LOGNR         ="1619420865";
-$CSV           ="t-rex-${miner_device}-${coin}-[${LOGNR}].log.csv";
-$GRAF_DST_DIR  =".";
-
-$LOGFILES_ROOT ="$ARCHIV_DIR";
+$CSV           ="t-rex-${miner_device}-${coin}-[${epoch}].log.csv";
 
 // Weil der erste Wert bisher immer bei 61s Uptime vom t-rex ausgegeben wurde, zwei Werte am Anfang,
 // damit die Verhältnisse auf der x-Achse stimmen
@@ -43,7 +46,7 @@ $dataY[] = 0;
 $dataZ[] = 0;
 
 $row = 1;
-if (($handle = fopen("$LOGFILES_ROOT/$CSV", "r")) !== FALSE) {
+if (($handle = fopen("$TREXLOGPATH/$CSV", "r")) !== FALSE) {
   # 0 bedeutet: Länge nicht begrenzt
   while (($data = fgetcsv($handle, 0, ";")) !== FALSE) {
     #    while (($data = fgetcsv($handle, 20, ";")) !== FALSE) {

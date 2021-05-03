@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Zur Ermittlung der Länge der Startzeiten.
+# Wie steigen die Durchschnittszeiten an?
+# Wie lange muss ein Miner mindestens laufen, damit er nicht nur Kosten produziert?
+# Um wieviel % muss der neue Algo besser bezahlt werden, damit nach welcher Zeit die Kosten ausgeglichen sind und ein HÖHERER Gewinn gemacht wird?
 TREXLOGPATH="home/avalon/miner/t-rex"
 [ "$(uname -n)" == "mining" ] && TREXLOGPATH="/${TREXLOGPATH}"
 
@@ -11,26 +15,19 @@ miner_version=0.19.14
 gpu_idx=9
 miner_device=7
 coin=daggerhashimoto
-
-# Erstellung der Grafik aus der erstellten .csv Datei
-# Gibt es momentan nur EINE für m_dev 9 und Logfile-Timestamp 1619420865 !!!
-for miner_device in 0 1 2 3 4 5 6 7 9; do
-#for miner_device in 9; do
-    for MAX_VALUES_FROM_CSV in 50 100 250 500 1000 2500 6000; do
-	php diagramm_avgs.php ${miner_device} ${MAX_VALUES_FROM_CSV}
-    done
-done
-
-exit
+epoch=1619678217
 
 # Zur Ermittlung, wie die Durchschnittszeiten ansteigen
-for miner_device in 0 1 2 3 4 5 6 7 9; do
 #for miner_device in 9; do
-    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+for miner_device in 0 1 2 3 4 5 6 7 9; do
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log"
+    if [ "${epoch}" == "1619678217" ]; then
+	BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}]-Startschwierigkeiten.log"
+    fi
     CSV=1
     EXT=csv
     [ $CSV -eq 0 ] && EXT=avgs
-    AvgCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log.${EXT}"
+    AvgCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log.${EXT}"
 
     [ "${coin}" == "daggerhashimoto" ] \
 	&& \
@@ -66,15 +63,34 @@ END {
 ' | tee ${AvgCheckFILE} \
 	    || echo "${coin} not yet implented."
 
+    # Gleich noch die Erstellung der Grafiken.
+    # Noch nicht am miner, weil da noch kein PHP installiert ist.
+    if [ "$(uname -n)" != "mining" ]; then
+	for MAX_VALUES_FROM_CSV in 50 100 250 500 1000 2500 6000; do
+	    php diagramm_avgs.php ${miner_device} ${MAX_VALUES_FROM_CSV} ${epoch}
+	done
+    fi
+
 done
 
 exit
 
-#rm t-rex-012345679-${coin}-[1619420865].log.diffs
+# Erstellung der Grafik aus der erstellten .csv Datei
+# Gibt es momentan nur EINE für m_dev 9 und Logfile-Timestamp 1619420865 !!!
+#for miner_device in 9; do
+for miner_device in 0 1 2 3 4 5 6 7 9; do
+    for MAX_VALUES_FROM_CSV in 50 100 250 500 1000 2500 6000; do
+	php diagramm_avgs.php ${miner_device} ${MAX_VALUES_FROM_CSV} ${epoch}
+    done
+done
+
+exit
+
+#rm t-rex-012345679-${coin}-[${epoch}].log.diffs
 for miner_device in 0 1 2 3 4 5 6 7 9; do
 #for miner_device in 9; do
-BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
-DiffCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log.diffs"
+BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log"
+DiffCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log.diffs"
 
 [ "${coin}" == "daggerhashimoto" ] \
     && \
@@ -144,15 +160,15 @@ END {
 ' | tee ${DiffCheckFILE} \
 	|| echo "${coin} not yet implented."
 
-echo -e "\n"${DiffCheckFILE} | tee -a t-rex-012345679-${coin}-[1619420865].log.diffs
-tail -10 ${DiffCheckFILE} | grep -A10 "^Vom Miner" | tee -a t-rex-012345679-${coin}-[1619420865].log.diffs
+echo -e "\n"${DiffCheckFILE} | tee -a t-rex-012345679-${coin}-[${epoch}].log.diffs
+tail -10 ${DiffCheckFILE} | grep -A10 "^Vom Miner" | tee -a t-rex-012345679-${coin}-[${epoch}].log.diffs
 done
 
 exit
 
 # Die Entwicklung der "Shares/min"
 #for miner_device in 0 1 2 3 4 5 6 7 9; do
-    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log"
     echo ${BENCHLOGFILE}
     grep "^Shares/min:" ${BENCHLOGFILE}
 #done
@@ -161,14 +177,14 @@ exit
 
 # Erstes Auftreten von "Uptime:"
 for miner_device in 0 1 2 3 4 5 6 7 9; do
-    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log"
     echo ${BENCHLOGFILE}
     grep -B20 -m1 "^Uptime: " ${BENCHLOGFILE}
 done
 
 exit
 
-BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log"
 grep -A1 "^Uptime: " ${BENCHLOGFILE}
 
 exit
@@ -178,7 +194,7 @@ exit
 # Das "WD" wird erst nach wenigstens einem erfolgreichen [ OK ] ausgegeben.
 # Das kan uns etwas über die Initialisierungszeit sagen.
 for miner_device in 0 1 2 3 4 5 6 7 9; do
-    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log"
     echo ${BENCHLOGFILE}
     diff <(grep -A1 "^Uptime: " ${BENCHLOGFILE}) <(grep -B1 "^WD: " ${BENCHLOGFILE})
 done
@@ -187,14 +203,14 @@ exit
 
 # Der folgende Test zeigt, dass die beiden Zeilen "Shares/min" und "Uptime:" IMMER zusammen auftreten.
 for miner_device in 0 1 2 3 4 5 6 7 9; do
-    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[1619420865].log"
+    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log"
     echo ${BENCHLOGFILE}
     diff <(grep -A1 "^Shares/min: " ${BENCHLOGFILE} <(grep -B1 "^Uptime: " ${BENCHLOGFILE}))
 done
 
 exit
 
-BENCHLOGFILE="${TREXLOGPATH}/t-rex-0-daggerhashimoto-[1619420865].log"
+BENCHLOGFILE="${TREXLOGPATH}/t-rex-0-daggerhashimoto-[${epoch}].log"
 <<COMMENT
 Diff: 851.74, 22 Umschaltungen
 Diff: 425.87, 27 Umschaltungen
@@ -203,7 +219,7 @@ Diff: 429.50, 658 Umschaltungen
 Diff: 214.75, 33 Umschaltungen
 Bei 1222 Zeilen
 COMMENT
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-1-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-1-daggerhashimoto-[${epoch}].log"
 <<COMMENT
 Diff: 851.74, 159 Umschaltungen
 Diff: 1.72, 1 Umschaltungen
@@ -213,7 +229,7 @@ Diff: 429.50, 300 Umschaltungen
 Diff: 214.75, 29 Umschaltungen
 Bei 903 Zeilen
 COMMENT
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-2-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-2-daggerhashimoto-[${epoch}].log"
 <<COMMENT
 Diff: 851.74, 112 Umschaltungen
 Diff: 425.87, 144 Umschaltungen
@@ -222,7 +238,7 @@ Diff: 429.50, 520 Umschaltungen
 Diff: 214.75, 38 Umschaltungen
 Bei 1225 Zeilen
 COMMENT
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-3-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-3-daggerhashimoto-[${epoch}].log"
 <<COMMENT
 Diff: 851.74, 152 Umschaltungen
 Diff: 1.72, 1 Umschaltungen
@@ -232,8 +248,8 @@ Diff: 429.50, 368 Umschaltungen
 Diff: 214.75, 43 Umschaltungen
 Bei 1046 Zeilen
 COMMENT
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-4-daggerhashimoto-[1619420865].log"
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-5-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-4-daggerhashimoto-[${epoch}].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-5-daggerhashimoto-[${epoch}].log"
 <<COMMENT
 Diff: 851.74, 152 Umschaltungen
 Diff: 1.72, 1 Umschaltungen
@@ -243,7 +259,7 @@ Diff: 429.50, 368 Umschaltungen
 Diff: 214.75, 43 Umschaltungen
 Bei 1046 Zeilen
 COMMENT
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-6-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-6-daggerhashimoto-[${epoch}].log"
 <<COMMENT
 Diff: 851.74, 41 Umschaltungen
 Diff: 1.72, 6 Umschaltungen
@@ -253,7 +269,7 @@ Diff: 429.50, 544 Umschaltungen
 Diff: 214.75, 35 Umschaltungen
 Bei 1137 Zeilen
 COMMENT
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-7-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-7-daggerhashimoto-[${epoch}].log"
 <<COMMENT
 Diff: 851.74, 53 Umschaltungen
 Diff: 1.72, 4 Umschaltungen
@@ -263,8 +279,8 @@ Diff: 429.50, 648 Umschaltungen
 Diff: 214.75, 52 Umschaltungen
 Bei 1292 Zeilen
 COMMENT
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-8-octopus-[1619420865].log"
-#BENCHLOGFILE="${TREXLOGPATH}/t-rex-9-daggerhashimoto-[1619420865].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-8-octopus-[${epoch}].log"
+#BENCHLOGFILE="${TREXLOGPATH}/t-rex-9-daggerhashimoto-[${epoch}].log"
 <<COMMENT
 Diff: 851.74, 10 Umschaltungen
 Diff: 425.87, 17 Umschaltungen
