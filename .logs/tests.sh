@@ -15,7 +15,99 @@ miner_version=0.19.14
 gpu_idx=9
 miner_device=7
 coin=daggerhashimoto
-epoch=1619678217
+epochs=(
+    1619107726
+    1619196773
+    1619264974
+    1619420865
+    1619678217
+)
+epoch=1619420865
+epoch=1619264974
+
+CSV=1
+EXT=cutted
+[ $CSV -eq 1 ] && EXT=${EXT}.csv
+
+CYCLES=3
+for CYCLES in {2..10}; do
+
+    for epoch in ${epochs[@]}; do
+
+	# Zur Ermittlung, wie die Durchschnittszeiten ansteigen
+	# Hier ohne die ersten Zyklen, um zu sehen, wie schnell sich die Durchschnittszahlen amprtisieren
+	#for miner_device in 9; do
+	for miner_device in 0 1 2 3 4 5 6 7 9; do
+	    BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log"
+	    if [ "${epoch}" == "1619678217" ]; then
+		BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}]-Startschwierigkeiten.log"
+	    fi
+	    [ ! -f $BENCHLOGFILE ] && continue
+	    CutCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log.${CYCLES}-${EXT}"
+
+	    # Die ersten beiden Zyklen (1s und 31s) werden mit 0 veranschlagt, weil die ersten Werte ab 61 Sekunden angezeigt werden.
+	    rm -f ${CutCheckFILE} &>/dev/null
+	    #echo  "1;0;0" >> ${CutCheckFILE}
+	    #echo "31;0;0" >> ${CutCheckFILE}
+
+	    [ "${coin}" == "daggerhashimoto" ] \
+		&& \
+		cat ${BENCHLOGFILE} \
+		    | gawk -v CSV="${CSV}" -e 'BEGIN { OKs=0; LostOKs=0; trashThem=1; seconds=0; to_ignore_secs='${CYCLES}'*30; }
+match( $0, /Uptime: [[:digit:]]+ [^|]*\|/ ) \
+    {  M=substr($0, RSTART+8, RLENGTH-10);
+       seconds = 0;
+       if ( match( M, /([[:digit:]]+) days?/,  d ) ) { seconds += d[1]*86400 }
+       if ( match( M, /([[:digit:]]+) hours?/, h ) ) { seconds += h[1]*3600 }
+       if ( match( M, /([[:digit:]]+) mins?/,  m ) ) { seconds += m[1]*60 }
+       if ( match( M, /([[:digit:]]+) secs?/,  s ) ) { seconds += s[1] }
+       if ( trashThem ) {
+	  if (seconds == to_ignore_secs+1) {
+	     LostOKs = OKs
+	     trashThem = 0
+	  }
+       }
+       if (CSV==0) {
+       	  print  "Uptime: " seconds " s, " OKs " OKs, Ignorierte OKs " LostOKs
+	  printf "EigenD: %i Sekunden, %7.3f OKs/min bei %i - %i OKs = %i gezählte OKs\n",
+	  	  seconds - to_ignore_secs, (OKs - LostOKs)/(seconds - to_ignore_secs)*60, OKs, LostOKs, OKs - LostOKs
+       	  if (seconds - to_ignore_secs > 0) {
+	     printf "%i;%.3f\n", seconds, (OKs - LostOKs)/(seconds - to_ignore_secs)*60
+	  }
+       } else {
+       	  if (seconds - to_ignore_secs > 0) {
+	     printf "%i;%.3f\n", seconds, (OKs - LostOKs)/(seconds - to_ignore_secs)*60
+	  }
+       }
+       next
+    }
+/\[ OK \] / {
+       ++OKs
+    }
+END {
+    }
+' | tee -a ${CutCheckFILE} \
+		    || echo "${coin} not yet implented."
+
+	    # Gleich noch die Erstellung der Grafiken.
+	    # Noch nicht am miner, weil da noch kein PHP installiert ist.
+	    if [ $CSV -eq 1 -a "$(uname -n)" != "mining" ]; then
+		for MAX_VALUES_FROM_CSV in 50 100 250 500 1000 2500 6000; do
+		    php diagramm_cuts.php ${miner_device} ${MAX_VALUES_FROM_CSV} ${epoch} ${CYCLES}
+		done
+	    fi
+
+	done
+
+    done
+
+done
+
+exit
+
+epoch=1619420865
+CSV=1
+EXT=csv
 
 # Zur Ermittlung, wie die Durchschnittszeiten ansteigen
 #for miner_device in 9; do
@@ -24,10 +116,13 @@ for miner_device in 0 1 2 3 4 5 6 7 9; do
     if [ "${epoch}" == "1619678217" ]; then
 	BENCHLOGFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}]-Startschwierigkeiten.log"
     fi
-    CSV=1
-    EXT=csv
     [ $CSV -eq 0 ] && EXT=avgs
     AvgCheckFILE="${TREXLOGPATH}/t-rex-"${miner_device}"-"${coin}"-[${epoch}].log.${EXT}"
+
+    # Die ersten beiden Zyklen (1s und 31s) werden mit 0 veranschlagt, weil die ersten Werte ab 61 Sekunden angezeigt werden.
+    rm -f ${AvgCheckFILE} &>/dev/null
+    echo  "1;0;0" >> ${AvgCheckFILE}
+    echo "31;0;0" >> ${AvgCheckFILE}
 
     [ "${coin}" == "daggerhashimoto" ] \
 	&& \
@@ -60,7 +155,7 @@ match( $0, /Uptime: [[:digit:]]+ [^|]*\|/ ) \
 END {
     if (CSV==0) print "Vom Miner ermittelter und regelmäßig ausgegebener Gesamtdurchschnitt: " seconds " Sekunden, " ShAvg " OKs/min"
     }
-' | tee ${AvgCheckFILE} \
+' | tee -a ${AvgCheckFILE} \
 	    || echo "${coin} not yet implented."
 
     # Gleich noch die Erstellung der Grafiken.

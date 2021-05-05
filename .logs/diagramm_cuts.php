@@ -27,14 +27,15 @@ $coin         ="daggerhashimoto";
 $epoch        ="1619420865";
 
 $MAX_VALUES_FROM_CSV=100;
+$CYCLES=2;
 
-if ( isset( $argv[1] ) ) $miner_device="$argv[1]";
-if ( isset( $argv[2] ) ) $MAX_VALUES_FROM_CSV="$argv[2]";
-if ( isset( $argv[3] ) ) $epoch="$argv[3]";
+if ( isset( $argv[1] ) ) $miner_device        = "$argv[1]";
+if ( isset( $argv[2] ) ) $MAX_VALUES_FROM_CSV = "$argv[2]";
+if ( isset( $argv[3] ) ) $epoch               = "$argv[3]";
+if ( isset( $argv[4] ) ) $CYCLES              = "$argv[4]";
 
-$CSV           ="t-rex-${miner_device}-${coin}-[${epoch}].log.csv";
-
-
+$CSV           = "t-rex-${miner_device}-${coin}-[${epoch}].log.${CYCLES}-cutted.csv";
+$GRAF_DST_DIR  = "${GRAF_DST_DIR}/${epoch}";
 
 /*
    // Weil der erste Wert bisher immer bei 61s Uptime vom t-rex ausgegeben wurde, zwei Werte am Anfang,
@@ -49,6 +50,7 @@ $CSV           ="t-rex-${miner_device}-${coin}-[${epoch}].log.csv";
    $dataZ[] = 0;
  */
 
+$Z=0;
 $row = 0;
 if (($handle = fopen("$TREXLOGPATH/$CSV", "r")) !== FALSE) {
   # 0 bedeutet: Länge nicht begrenzt
@@ -67,7 +69,7 @@ if (($handle = fopen("$TREXLOGPATH/$CSV", "r")) !== FALSE) {
   fclose($handle);
   $x = count( $datax );
   $Y = count( $dataY );
-  $Z = count( $dataZ );
+  if (isset( $dataZ )) $Z = count( $dataZ );
 }
 
 //Auflöhsung in pixel
@@ -79,10 +81,12 @@ $graph->SetScale("textlin");
 
 /**/
 //überschrift des diagrams.
-$Titel    = substr( $CSV, 0, -4 )." - Mittelwerte OKs seit Start";
+$FirstCycle = $CYCLES + 1;
+$Titel      = substr( $CSV, 0, -4 )." - Mittelwerte ab dem ${FirstCycle}. Zyklus";
 
-$LegendeY = "t-rex Shares/min Average";
-$LegendeZ = "Selbst errechneter Durchschnitt (OKs / Uptime * 60)";
+#$LegendeY = "t-rex Shares/min Average";
+$LegendeY = "Durchschnitt [ (OKs ab Zyklus ${FirstCycle}) / (Uptime - ${CYCLES} Zyklen) * 60 ]";
+#$LegendeZ = "Selbst errechneter Durchschnitt (OKs / Uptime * 60)";
 
 $graph->title->Set( $Titel );
 $graph->title->SetFont(FF_FONT1,FS_BOLD);
@@ -111,7 +115,7 @@ $graph->legend->SetLayout(LEGEND_HOR);
 $graph->legend->SetFont(FF_FONT1,FS_BOLD);
 
 //titel der horizentrale bestimmen
-$graph->xaxis->title->Set("Uptime in Sekunden");
+$graph->xaxis->title->Set("Uptime in Sekunden ab dem ${FirstCycle}. Zyklus");
 
 //graph hinzufügen bzw linie
 $p2 = new LinePlot( $dataY    );
@@ -120,12 +124,14 @@ $p2->SetColor(      "blue"    );
 //$p2->SetCenter();
 $graph->Add($p2);
 
-//graph hinzufügen bzw linie
-$p3 = new LinePlot( $dataZ    );
-$p3->SetLegend(     $LegendeZ );
-$p3->SetColor(      "red"     );
-//$p3->SetCenter();
-$graph->Add($p3);
+if ( $Z ) {
+  //graph hinzufügen bzw linie
+  $p3 = new LinePlot( $dataZ    );
+  $p3->SetLegend(     $LegendeZ );
+  $p3->SetColor(      "red"     );
+  //$p3->SetCenter();
+  $graph->Add($p3);
+}
 
 // Ausgabe binär
 $fileName = "$GRAF_DST_DIR/$CSV-".substr( "00000".($x-1), -5 )."-Werte.png";
