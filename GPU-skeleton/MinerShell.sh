@@ -207,10 +207,11 @@ zeitstempel_t0=${NOWSECS}.${printFrac:$((${#printFrac}-9))}
 echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t0} \
      "GPU #${gpu_idx}: ZEITMARKE t0: Absetzen der NVIDIA-Commands" | tee -a ${ERRLOG} ${BENCHLOGFILE}
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
-    if [ ${ScreenTest} -eq 0 ]; then
-	${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
-    else
+    if [ ${ScreenTest} -eq 1 ]; then
+	echo "Die folgenden Kommandos werden wegen ScreenTest=1 NICHT abgesetzt:"
 	echo ${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
+    else
+	${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
     fi
 done
 
@@ -280,18 +281,8 @@ while :; do
 		# Wir probieren das mal aus. Können es aber auch ändern, wenn wir doch noch ein kleines bisschen mehr sehen wollen.
 		# Zumindest sieht man in der BACKGROUND-Session ja ein eigens Screen-Fenster und das Aufruf-Kommando.
 		# Für den Fall  mit der BG_SESS, muss auch noch das Problem mit der Datei ${MINER}.pid anders gelöst werden!
-		if [ 1 -eq 1 ]; then
-		    "${cmd} ${m_cmd}" &
-		    echo $! | tee ${MINER}.pid
-		else
-		    # Wenn wir den Prozess in der BG_SESS laufen lassen, müssen wir noch testen, ob das mit der ${MINER}.pid wirklich hinhaut!
-		    cmd+='\nexit\n'
-		    Miner_RUN_Title="M#${gpu_idx}"
-		    screen -drx ${BG_SESS} -X screen -t ${Miner_RUN_Title}
-		    screen -drx ${BG_SESS} -p ${Miner_RUN_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
-		    screen -drx ${BG_SESS} -p ${Miner_RUN_Title} -X stuff 'echo $$ | tee '${MINER}".pid\n"
-		    screen -drx ${BG_SESS} -p ${Miner_RUN_Title} -X stuff "${cmd}"
-		fi
+		"${cmd} ${m_cmd}" &
+		echo $! | tee ${MINER}.pid
 	    fi
 
 	    MINER_pid=$(< ${MINER}.pid)
@@ -331,14 +322,25 @@ while :; do
     #      Hash/Sol/s messen (einige Werte oder eine besimmte Zeit lang) und mit dem Wert in der benchmark_JSON vergleichen.
     #      x% Abweichung sind erlaubt.
     # ---> Noch zu implementieren:
-    
+
     touch ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
-    hashCount=$(cat ${BENCHLOGFILE} \
-		    | tee >(grep -E -c -m1 -e "${ERREXPR}" >${MINER}.fatal_err; \
-			    rm -f ${MINER}.fatal_err.lock) \
-			  >(grep -E -c -m1 -e "${CONEXPR}" >${MINER}.retry; \
-                            rm -f ${MINER}.retry.lock) \
-                          >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+    case "${MINER}" in
+	miniZ#*)
+	    # Diese drei haben wir noch nicht implementiert, da sie noch nicht aufgetreten sind.
+	    echo 0 | tee ${MINER}.fatal_err ${MINER}.retry >${MINER}.overclock
+	    read hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
+		| gawk -e "${detect_miniZ_hash_count}" \
+		)
+	    rm -f ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
+	    ;;
+
+        *)
+	    hashCount=$(cat ${BENCHLOGFILE} \
+			| tee >(grep -E -c -m1 -e "${ERREXPR}" >${MINER}.fatal_err; \
+				rm -f ${MINER}.fatal_err.lock) \
+			      >(grep -E -c -m1 -e "${CONEXPR}" >${MINER}.retry; \
+				rm -f ${MINER}.retry.lock) \
+                              >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
                                    BEGIN { yeses=0; booos=0; seq_booos=0 }
                                    $0 ~ BOO { booos++; seq_booos++; next }
                                    $0 ~ YES { yeses++; seq_booos=0;
@@ -346,12 +348,14 @@ while :; do
                                                   { yeses+=(RLENGTH-1) }
                                             }
                                    END { print seq_booos " " booos " " yeses }' >${MINER}.booos; \
-			    rm -f ${MINER}.booos.lock) \
-                          >(grep -E -c -e "${OVREXPR}" >${MINER}.overclock; \
-                               rm -f ${MINER}.overclock.lock) \
-                  | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
-                  | gawk -e "${detect_zm_hash_count}" \
-                  | grep -E -c "/s\s*$")
+				       rm -f ${MINER}.booos.lock) \
+			      >(grep -E -c -e "${OVREXPR}" >${MINER}.overclock; \
+				rm -f ${MINER}.overclock.lock) \
+			| sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+			| gawk -e "${detect_zm_hash_count}" \
+			| grep -E -c "/s\s*$")
+	    ;;
+    esac
     while [[ -f ${MINER}.fatal_err.lock || -f ${MINER}.retry.lock || -f ${MINER}.booos.lock || -f ${MINER}.overclock.lock ]]; do sleep .01; done
 
     ################################################################################
@@ -542,18 +546,20 @@ while :; do
     ###
     ################################################################################
 
-    if [[ 1 == 0 && ${hashCount} -eq 0 ]] && [[ ${secs} -ge 320 ]]; then
-        nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-        nowSecs=$(date +%s)
+    if [ ! ${ScreenTest} -eq 1 ]; then
+	if [[ ${hashCount} -eq 0 ]] && [[ ${secs} -ge 320 ]]; then
+            nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+            nowSecs=$(date +%s)
 
-        # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
-        _disable_algo_for_5_minutes
+            # Algo in die 5-Minuten-Disabled Datei UND in die HISTORY/CHRONIK Datei eintragen...
+            _disable_algo_for_5_minutes
 
-        # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
-        echo ${nowDate} ${nowSecs} \
-             "GPU #${gpu_idx}: Abbruch des Miners PID ${MINER_pid} alias ${coin_algorithm} wegen 320s ohne Hashwerte." \
-            | tee -a ${LOG_NO_HASH_ALL} ${LOG_NO_HASH} ${ERRLOG} ${BENCHLOGFILE}
-        break
+            # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
+            echo ${nowDate} ${nowSecs} \
+		 "GPU #${gpu_idx}: Abbruch des Miners PID ${MINER_pid} alias ${coin_algorithm} wegen 320s ohne Hashwerte." \
+		| tee -a ${LOG_NO_HASH_ALL} ${LOG_NO_HASH} ${ERRLOG} ${BENCHLOGFILE}
+            break
+	fi
     fi
 
     # Eine Sekunde pausieren vor dem nächsten Logfile-Check.

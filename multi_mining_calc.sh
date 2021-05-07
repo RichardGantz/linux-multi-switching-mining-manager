@@ -16,19 +16,6 @@
 [[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 
 ### SCREEN ADDITIONS: ###
-# Die folgende Variable wird auch in der globals.inc gesetzt (0 bis zum Ende der Tests) und kann hier überschrieben werden.
-# 0 ist der frühere Betrieb an einem graphischen Desktop mit mehreren hochpoppenden Terminals
-# 1 ist der Betrieb unter GNU screen
-#UseScreen=1
-#[[ ${#GPU_gv_Title} -eq 0 ]] && GPU_gv_Title=MAIN
-#[[ ${#BencherTitle} -eq 0 ]] && BencherTitle=BENCHMARKER
-#export BencherTitle
-# Die folgende Variable verhindert ...
-#     ...
-#     beendet das Programm, falls automatische Benchmarks wegen unbehandelter .json durchgeführt wurden.
-# 0 bedutet normaler Betrieb mit Miner-Start
-# 1 bedeutet "Trockenbetrieb" ohne Minerstart
-#ScreenTest=1
 if [ ${UseScreen} -eq 1 ]; then
     [ ${#STY} -eq 0 ] && { echo "Bitte den Multi-Miner in einer Screen-Session startet, bis er selbst tut."; exit 1 ; }
     # Es muss eine .screenrc mit diesem Namen geben, die am Ende einen detach macht.
@@ -66,6 +53,7 @@ performanceTest=1
 # Die .pid ist in der Endlosschleife der Hinweis, dass der Prozess läuft und NICHT gestartet werden muss.
 #
 find . -name \*\.pid                 -delete
+find . -name \*\.ppid                -delete
 find . -name \*\.lock                -delete
 find . -name ALGO_WATTS_MINES\.in    -delete
 find . -name .sort_profit_algoIdx_\* -delete
@@ -84,6 +72,12 @@ echo $$ >${This}.pid
 # 9462  9462  1903 pts/0    00:00:00 multi_mining_ca
 # ps -j --pid $$ | grep $$
 
+# Der nächste Befehl stellt sicher, dass eine Datei für den Vergleich da ist, falls das System das allererste mal gestartet wird.
+# Die Funktion _set_ALLE_MINER_from_path braucht diese Datei für den ersten Vergleich.
+# Danach "veraltet" sie immer wieder und wird vollständig von der Funktion _set_ALLE_MINER_from_path gepflegt
+# Durch den Aufruf hier wird die Funktion _set_ALLE_MINER_from_path um diese Prüfung bei jedem Zyklus entlastet
+[ ! -f miners/.all_miner_algos ] && touch miners/.all_miner_algos
+[ ! -s miners/live_miners ] && echo "First Call" >miners/live_miners
 
 # Die folgenden Kommandos sind als root in der MM-Root auszuführen, damit der MM sich auf RealTime Priority setzen kann:
 REGEXPAT="^-rwsr-xr-x"
@@ -262,7 +256,11 @@ LOG_PTY_CMD[999]="tail -f ${ERRLOG}"
 
 ### SCREEN ADDITIONS: ###
 # Das war nur, um den Namen der .pid-datei zu verifizieren
-if [ ${UseScreen} -eq 0 ]; then
+if [ ${UseScreen} -eq 1 ]; then
+    screen -X screen -t "ERRLOG"
+    screen -p "ERRLOG" -X stuff "${LOG_PTY_CMD[999]}\nexit\n"
+    screen -X other
+else
     ofsX=$((ii*60+50))
     ofsY=$((ii*30+50))
     let ii++
@@ -271,10 +269,6 @@ if [ ${UseScreen} -eq 0 ]; then
 		  --geometry="100x24+${ofsX}+${ofsY}" \
 		  -e "${LOG_PTY_CMD[999]}"
 #                 -x bash -c "${LOG_PTY_CMD[999]}"
-else
-    screen -X screen -t "ERRLOG"
-    screen -p "ERRLOG" -X stuff "${LOG_PTY_CMD[999]}\nexit\n"
-    screen -X other
 fi
 
 # Besteht nun hauptsächlich aus der Funktion _func_gpu_abfrage_sh
@@ -348,15 +342,15 @@ while : ; do
 		    cmd="${LINUX_MULTI_MINING_ROOT}/.#nice# -n ${NICE[${ProC}]}"
                 fi
 		cmd+=" ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh &>>${GPU_GV_LOG}"
-		if [ ${UseScreen} -eq 0 ]; then
-		    "${cmd}" &
-                    BG_PIDs+=( $! )
-		else
+		if [ ${UseScreen} -eq 1 ]; then
 		    cmd+='\nexit\n'
 		    GPU_gv_Title="GV#${lfd_gpu_idx}"
 		    screen -drx ${BG_SESS} -X screen -t ${GPU_gv_Title}
 		    screen -drx ${BG_SESS} -p ${GPU_gv_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n ${cmd}"
 		    sleep .1
+		else
+		    "${cmd}" &
+                    BG_PIDs+=( $! )
 		fi
 
                 exec 1>>${MultiMining_log}
@@ -365,7 +359,14 @@ while : ; do
                 LOG_PTY_CMD[${lfd_gpu_idx}]="tail -f ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/${GPU_GV_LOG}"
 		### SCREEN ADDITIONS: ###
 		# Das war nur, um den Namen der .pid-datei zu verifizieren
-		if [ ${UseScreen} -eq 0 ]; then
+		if [ ${UseScreen} -eq 1 ]; then
+		    cmd="${LOG_PTY_CMD[${lfd_gpu_idx}]}"'\nexit\n'
+		    GPU_gv_LOG_Title="GV#${lfd_gpu_idx}"
+		    screen -X screen -t ${GPU_gv_LOG_Title}
+		    screen -p ${GPU_gv_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n ${cmd}"
+		    sleep .1
+		    screen -X select ${MAINSCREEN}
+		else
 		    ofsX=$((ii*60+50))
 		    ofsY=$((ii*30+50))
                     ${_TERMINAL_} --hide-menubar \
@@ -373,13 +374,6 @@ while : ; do
 				  --geometry="100x24+${ofsX}+${ofsY}" \
 				  -e "${LOG_PTY_CMD[${lfd_gpu_idx}]}"
                     let ii++
-		else
-		    cmd="${LOG_PTY_CMD[${lfd_gpu_idx}]}"'\nexit\n'
-		    GPU_gv_LOG_Title="GV#${lfd_gpu_idx}"
-		    screen -X screen -t ${GPU_gv_LOG_Title}
-		    screen -p ${GPU_gv_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n ${cmd}"
-		    sleep .1
-		    screen -X select ${MAINSCREEN}
 		fi
 
                 cd ${_WORKDIR_} >/dev/null
@@ -401,19 +395,7 @@ while : ; do
         exec 1>&9
 
 	### SCREEN ADDITIONS: ###
-	if [ ${UseScreen} -eq 0 ]; then
-            "${cmd}" &
-            BG_PIDs+=( $! )
-            exec 1>>${MultiMining_log}
-
-            ofsX=$((ii*60+50))
-            ofsY=$((ii*30+50))
-            ${_TERMINAL_} --hide-menubar \
-			  --title="\"RealTime\" Algos und Kurse aus dem Web" \
-			  --geometry="100x24+${ofsX}+${ofsY}" \
-			  -e "${LOG_PTY_CMD[998]}"
-            exec 1>>${MultiMining_log}
-	else
+	if [ ${UseScreen} -eq 1 ]; then
 #	    screen -X eval detach
 	    PREISE_Title="PREISE"
 	    # Das erzeugt einen neuen Prozess und der ursprüngliche ist überdeckt und unzugänglich!
@@ -437,6 +419,18 @@ while : ; do
 #	    screen -p ${PREISE_LOG_Title} -X eval "chdir ${LINUX_MULTI_MINING_ROOT}"
 	    screen -p ${PREISE_LOG_Title} -X stuff "${cmd}"
 	    screen -X select ${MAINSCREEN}
+	else
+            "${cmd}" &
+            BG_PIDs+=( $! )
+            exec 1>>${MultiMining_log}
+
+            ofsX=$((ii*60+50))
+            ofsY=$((ii*30+50))
+            ${_TERMINAL_} --hide-menubar \
+			  --title="\"RealTime\" Algos und Kurse aus dem Web" \
+			  --geometry="100x24+${ofsX}+${ofsY}" \
+			  -e "${LOG_PTY_CMD[998]}"
+            exec 1>>${MultiMining_log}
 	fi
     fi
 
@@ -449,14 +443,6 @@ while : ; do
 		echo "Keine Background-PIDs gesammelt. Komisch. ???"
             fi
 	fi
-    else
-	# Das funktioniert einfach nicht. Keine Ahnung, warum nicht. Schaltet nicht auf LMMS um
-	#screen -p ${MAINSCREEN} -X "select ${MAINSCREEN}"
-	#screen -p "ERRLOG"      -X "select ${MAINSCREEN}"
-	screen -X select ${MAINSCREEN}
-
-	# Regionen-Einteilungen, Layouts
-	#	screen -X eval split "resize -v 8" "select ${PREISE_LOG_Title}" focus "select 0" "focus top" "resize -v 8" focus "resize -v 8" "focus bottom"
     fi
 
     ###############################################################################################

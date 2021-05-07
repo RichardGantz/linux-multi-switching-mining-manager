@@ -2,8 +2,130 @@
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source ../globals.inc
 #[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.sh
 #[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
+#[[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu-bENCH.inc
+[[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/GPU-skeleton/gpu-bENCH.inc
+[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+[[ ${#_ALGOINFOS_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
+#[[ ${#_NVIDIACMD_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
+
+MINER=t-rex#0.19.14
+miningAlgo=ethash
+algorithm=${miningAlgo}#${MINER}
+coin=daggerhashimoto
+pool=nh
+coin_algorithm=${coin}#${pool}#${algorithm}
+
+echo $coin_algorithm
+cat ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
+grep -E -o -m1 -e "\b${coin_algorithm%#888}([^.\W]|$)" ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
+suddenly_disabled=$(grep -E -c -m1 -e "\b${coin_algorithm%#888}([^.\W]|$)" ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED)
+echo $suddenly_disabled
+
+if [ 1 -eq 0 ]; then
+    # Eintrag in Datei ../MINER_ALGO_DISABLED machen
+    _set_Miner_Device_to_Nvidia_GpuIdx_maps
+    _set_ALLE_LIVE_MINER
+    _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
+    _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
+
+    MINER=t-rex#0.19.14
+    miningAlgo=ethash
+    algorithm=${miningAlgo}#${MINER}
+    coin=daggerhashimoto
+    pool=nh
+    coin_algorithm=${coin}#${pool}#${algorithm}
+
+    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+    nowSecs=$(date +%s)
+    _disable_algo_for_5_minutes
+fi
+
+exit
+
+# -------------------------------------------------------------------------------- #
+# Auf der Suche nach pgerp-Fehlferhalten...
+
+#mv ../miners/t-rex#0.19.12.algos ../miners/t-rex#0.19.12.ALGOS
+
+GPUDIRS=(
+    ../GPU-2d93bcf7-ca3d-0ca6-7902-664c9d9557f4
+)
 
 
+    <<COMMENT
+GPUDIRS=( ../GPU-000bdf4a-1a2c-db4d-5486-585548cd33cb
+	  ../GPU-2d93bcf7-ca3d-0ca6-7902-664c9d9557f4
+	  ../GPU-3ce4f7c0-066c-38ac-2ef7-e23fef53af0f
+	  ../GPU-50b643a5-f671-3b26-0381-2adea74a7103
+	  ../GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd
+	  ../GPU-68a91f02-c7fc-f5f8-1e4c-0e3f3cfa89f1
+	  ../GPU-6c2168f5-7213-4aa2-ab77-a40760834954
+	  ../GPU-bd3cdf4a-e1b0-59ef-5dd1-b20e2a43256b
+	  ../GPU-c6467c28-be24-03ad-e7ea-9bc0e989488f
+	  ../GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d
+	)
+
+mv: der Aufruf von stat für '../miners/t-rex#0.19.12.algos' ist nicht möglich: Datei oder Verzeichnis nicht gefunden
+803
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 9 SelbstWahl 3353 095c755a GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd nicehash.com daggerhashimoto..nicehash.com 9 nvidia-settings°--assign°[gpu:9]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=9°-pl°270
+803 17028 17049 17050 17051 803
+803
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 9 SelbstWahl 3353 095c755a GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd nicehash.com daggerhashimoto..nicehash.com 9 nvidia-settings°--assign°[gpu:9]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=9°-pl°270
+803 17028 17049 17050 17051 17028
+803
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 9 SelbstWahl 3353 095c755a GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd nicehash.com daggerhashimoto..nicehash.com 9 nvidia-settings°--assign°[gpu:9]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=9°-pl°270
+803 17028 17049 17050 17051 17049
+803
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 9 SelbstWahl 3353 095c755a GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd nicehash.com daggerhashimoto..nicehash.com 9 nvidia-settings°--assign°[gpu:9]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=9°-pl°270
+803 17028 17049 17050 17051 17050
+803
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 9 SelbstWahl 3353 095c755a GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd nicehash.com daggerhashimoto..nicehash.com 9 nvidia-settings°--assign°[gpu:9]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:9]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=9°-pl°270
+803 17028 17049 17050 17051 17051
+
+
+19988
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°[gpu:2]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+18881 18902 18903 18904 18905 19988 18881
+19988
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°[gpu:2]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+18881 18902 18903 18904 18905 19988 18902
+19988
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°[gpu:2]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+18881 18902 18903 18904 18905 19988 18903
+19988
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°[gpu:2]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+18881 18902 18903 18904 18905 19988 18904
+19988
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°[gpu:2]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+18881 18902 18903 18904 18905 19988 18905
+19988
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°[gpu:2]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+18881 18902 18903 18904 18905 19988 19988
+COMMENT
+
+exit
+
+cd ../GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d
+read _epoch_ msh_pid _bash_ MinerShell_CMD <<<$(tail -1 MinerShell_STARTS_HISTORY)
+echo $_epoch_
+echo $msh_pid
+echo $_bash_
+echo $MinerShell_CMD
+CMD="${MinerShell_CMD//[/\\[}"
+CMD="${CMD//]/\\]}"
+echo "${CMD}"
+
+run_pid=$(pgrep -f -a "${CMD}")
+echo $run_pid
+exit
+1619878630
+4050
+/bin/bash
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°[gpu:2]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°\[gpu:2\]/GPUGraphicsClockOffset\[3\]=0 nvidia-settings°--assign°\[gpu:2\]/GPUMemoryTransferRateOffset\[3\]=0 nvidia-settings°--assign°\[gpu:2\]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+4050 /bin/bash ./miner_2.51_daggerhashimoto_nh_ethash.sh daggerhashimoto#nh#ethash#miner#2.51 2 SelbstWahl 3353 02d4c4b9 GPU-d4c4b983-7bad-7b90-f140-970a03a97f2d nicehash.com daggerhashimoto..nicehash.com 2 nvidia-settings°--assign°[gpu:2]/GPUGraphicsClockOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUMemoryTransferRateOffset[3]=0 nvidia-settings°--assign°[gpu:2]/GPUFanControlState=0 ../benchmarking/nvidia-befehle/smi°--id=2°-pl°270
+
+# -------------------------------------------------------------------------------- #
 <<PERFORMANCE_VERGLEICHE
 SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
 

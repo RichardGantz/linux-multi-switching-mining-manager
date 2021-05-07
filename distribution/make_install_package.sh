@@ -55,6 +55,7 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/benchmarking/nvidia-befehle/nvidia-query.inc \
     ${SRC_DIR}/benchmarking/README_BENCH_GER.md \
     ${SRC_DIR}/benchmarking/tweak_commands.sh \
+    ${SRC_DIR}/benchmarking/p_tests.sh \
     ${SRC_DIR}/GPU-skeleton/benchmark_skeleton.json \
     ${SRC_DIR}/GPU-skeleton/gpu-bENCH.inc \
     ${SRC_DIR}/GPU-skeleton/gpu-bENCH.sh \
@@ -69,6 +70,9 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/estimate_delays.sh \
     ${SRC_DIR}/estimate_delays.inc \
     ${SRC_DIR}/diagramm_validate_mm_GPU.php \
+    ${SRC_DIR}/.logs/diagramm_avgs.php \
+    ${SRC_DIR}/.logs/diagramm_cuts.php \
+    ${SRC_DIR}/.logs/tests.sh \
     ${SRC_DIR}/screen/screenrc.* \
     ${SRC_DIR}/screen/.screenrc.* \
     ${SRC_DIR}/GPU-[^s]*/benchmark_GPU*.json \

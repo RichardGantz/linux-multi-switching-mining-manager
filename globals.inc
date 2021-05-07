@@ -34,14 +34,16 @@ fi
 shopt -s lastpipe
 
 # Die Anzahl der besten Algos, die bei der globalen Berechnung pro GPU berücksichtigt werden sollen
-BEST_ALGO_CNT=5
+BEST_ALGO_CNT=5 # 2021-05-02 Mehr als 60 Mio Berechnungen bei 10 GPU's, 210 Sekunden Berechnungsdauer
+BEST_ALGO_CNT=4 # 2021-05-02 Fast     10 Mio Berechnungen bei 10 GPU's,  36 Sekunden Berechnungsdauer
+BEST_ALGO_CNT=3 # 2021-05-02 Gut       1 Mio Berechnungen bei 10 GPU's,   9 Sekunden Berechnungsdauer
 declare -Ag cycle_counter
 
 # Die SLEEP Zeit nach dem Abbruch eines Miners in Sekunden. Experimentell, .5 bis 3 ???
 Erholung=1.9
 
 # Das wäre die zu bevorzugende Reihenfolge, wenn man die losses ("usa") als ungünstigst ansieht.
-LOCATION=( "eu-west" "eu-north" "usa-west" "usa-east" )
+LOCATION=( "eu-west" "eu-north" "usa-east" "usa-west" )
 
 InetPingStack=(
     62.138.238.100   # t-online.de          antwortet als Schnellster

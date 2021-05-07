@@ -493,9 +493,126 @@ awk -e \"\$2 == ${MINER_pid} && /${REGEXPAT}/ {print $2; exit }\"\n" | tee -a ${
 –––> KILL_PANIC: Nach dem Einlesen des Dateiinhalts in die Variable \${MINER_pid} ist die aber leer \"${MINER_pid}\".\n" | tee -a ${ERRLOG}
         fi
     else
-        printf "–––> KILL_PANIC: Miner ${MINER} soll beendet werden, es gibt aber keine entsprechende .pid Datei.
+	if [ ! ${ScreenTest} -eq 1 ]; then
+            printf "–––> KILL_PANIC: Miner ${MINER} soll beendet werden, es gibt aber keine entsprechende .pid Datei.
 –––> KILL_PANIC: Möglicherweise wurde er gar nicht gestartet?\n" | tee -a ${ERRLOG}
+	fi
     fi
     rm -f ${MINER}.pid
+}
+
+# 2020-04-16:
+#  9. Prüft hier, ob Algorithms zu benchmarken sind (pleaseBenchmarkAlgorithm[])...
+#     zieht die GLOBAL_ALGO_DISABLED davon ab...
+#     zieht die BENCH_ALGO_DISABLED davon ab...
+#     [SOLL:] zieht die temporär disableten davon ab... $$$$$$$$$$$$$$$$$$$$
+#
+#     Die Definition dieser Funktion kann in eine .inc verlegt werden $$$$$$$$$$$$$$$$$$$$
+
+# Voraussetzungen.
+# - gpu_uuid
+function _find_algorithms_to_benchmark {
+    # local algo_GPU disabledAlgo GPUs lfdGPU lfdAlgorithm mName mVer muck888 
+
+    unset WillBenchmarkAlgorithm
+    declare -ag WillBenchmarkAlgorithm
+    unset GLOBAL_ALGO_DISABLED_ARR
+
+    # 1. Zuerst die GLOBAL_ALGO_DISABLED Algos
+    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
+    if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
+	cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+    fi
+    _remove_lock
+
+    unset MyDisabledAlgos
+    declare -a MyDisabledAlgos
+    for algo_GPU in ${GLOBAL_ALGO_DISABLED_ARR[@]}; do
+	read disabledAlgo GPUs <<<"${algo_GPU//:/ }"
+	if [ ${#GPUs} -gt 1 ]; then
+	    for lfdGPU in ${GPUs}; do
+		if [ "${lfdGPU}" == "${gpu_uuid}" ]; then
+		    MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
+		    break
+		fi
+	    done
+	else
+	    # Zeile gilt für ALLE GPUs
+	    MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
+	fi
+    done
+    #declare -p MyDisabledAlgos
+
+    # 2. Dann die BENCH_ALGO_DISABLED Algos
+    # ...
+    unset MyDisabledAlgorithms MyDisabledAlgorithms_in
+    declare -a MyDisabledAlgorithms
+    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED
+    if [ -s ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED ]; then
+	cat ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t MyDisabledAlgorithms_in
+    fi
+    _remove_lock                                     # ... und wieder freigeben
+
+    for actRow in "${MyDisabledAlgorithms_in[@]}"; do
+	read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
+	[ ${gpuIdx#0} -eq ${gpu_idx} ] && MyDisabledAlgorithms[${#MyDisabledAlgorithms[@]}]=${lfdAlgorithm}
+    done
+
+    # 3. Dann die vorübergehend disabled ebenfalls feststellen und herausnehmen
+    # Diese Untersuchung dazu zu benutzen, den algorithm vom benchmarking auszunehmen, ist ein bisschen hart.
+    # Eiegntlich muss noch berücksichtigt werden, welcher POOL da beteiligt ist.
+    # Denn vielleicht ist nur der Coin eines bestimmten Pools im Moment nicht verfügbar, der Algorithm aber bei anderen Pools durchaus problemlos laufen könnte.
+    unset MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
+    declare -Ag MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
+    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
+    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+    declare -i nowSecs=$(date +%s)
+    if [ -s ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ]; then
+	if [ $debug -eq 1 ]; then echo "Reading ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ..."; fi
+	declare -i timestamp
+	unset READARR
+	readarray -n 0 -O 0 -t READARR <${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
+	for ((i=0; $i<${#READARR[@]}; i++)) ; do
+            read _date_ _oclock_ timestamp coin_algorithm <<<${READARR[$i]}
+            MINER_ALGO_DISABLED_ARR[${coin_algorithm}]=${timestamp}
+            MINER_ALGO_DISABLED_DAT[${coin_algorithm}]="${_date_} ${_oclock_}"
+	done
+	# Jetzt sind die Algorithm's unique und wir prüfen nun, ob welche dabei sind,
+	# die wieder zu ENABLEN sind, bzw. die aus dem Disabled_ARR verschwinden müssen,
+	# bevor wir die Datei neu schreiben.
+	for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
+            if [ ${nowSecs} -gt $(( ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} + 300 )) ]; then
+		# Der Algo ist wieder einzuschalten
+		unset MINER_ALGO_DISABLED_ARR[${coin_algorithm}]
+		unset MINER_ALGO_DISABLED_DAT[${coin_algorithm}]
+		printf "ENABLED ${nowDate} ${nowSecs} ${coin_algorithm}\n" | tee -a ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
+            fi
+	done
+	# Weg mit dem bisherigen File...
+	mv -f ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED.BAK
+	# ... und anlegen eines Neuen, wenn noch Algos im Array sind
+	for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
+            # Die eingelesenen Werte wieder ausgeben
+            printf "${MINER_ALGO_DISABLED_DAT[${coin_algorithm}]} ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} ${coin_algorithm}\n" >>${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
+	done
+    fi
+    _remove_lock                                     # ... und wieder freigeben
+
+    # 4. Die Erstellung des Arrays der zu benchmarkenden Algorithms
+    for lfdAlgorithm in ${pleaseBenchmarkAlgorithm[@]}; do
+	for disabledAlgo in ${MyDisabledAlgorithms[@]}; do
+	    [ "${lfdAlgorithm}" == "${disabledAlgo}" ] && continue 2
+	done
+	read lfdAlgo mName mVer muck888 <<<${lfdAlgorithm//#/ }
+	echo "checking $lfdAlgo..."
+	for disabledAlgo in ${MyDisabledAlgos[@]}; do
+	    [ "${lfdAlgo}" == "${disabledAlgo}" ] && continue 2
+	done
+	for coin_algorithm in ${!MINER_ALGO_DISABLED_ARR[@]}; do
+	    read _coin_ _pool_ _algo_ _mNam_ _mVer_ <<<"${coin_algorithm//#/ }"
+	    [ "${lfdAlgorithm}" == "${_algo_}#${_mNam_}#${_mVer_}" ] && continue 2
+	done
+	WillBenchmarkAlgorithm[${#WillBenchmarkAlgorithm[@]}]=${lfdAlgorithm}
+    done
 }
 

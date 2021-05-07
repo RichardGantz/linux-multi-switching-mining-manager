@@ -33,6 +33,7 @@
 #UseScreen=1
 [[ ${#BencherTitle}  -eq 0 ]] && BencherTitle=MAIN
 [[ ${#BenchLogTitle} -eq 0 ]] && BenchLogTitle=BENCHLOGFILE
+[[ ${#TweakerTitle}  -eq 0 ]] && TweakerTitle=TWEAKER
 # Die folgende Variable verhindert das Absetzen der nvidia-Befehle vor dem und den echten Start des ausgewählten Miners...
 #     statt des dadurch entfallenden BENCHLOGs und des nicht funktionierenden "tail -f BENCHLOG" wird ein less -Kommando abgesetzt, um screen layouts zu testen...
 #     verhindert, dass beim Beenden in die entsprechende bench...json geschrieben wird (durch NICHT Ausführen von BENCHMARKING_WAS_STARTED=1)
@@ -45,6 +46,17 @@
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
+
+if [ 1 -eq 0 -a ${ScreenTest} -eq 1 ]; then
+    pwd
+    echo "\$MAINSCREEN: $MAINSCREEN"
+    echo "\$FG_SESS...: $FG_SESS"
+    echo "\$BG_SESS...: $BG_SESS"
+    echo "\$BencherTitle $BencherTitle"
+    echo "\$BenchLogTitle $BenchLogTitle"
+    echo "\$TweakerTitle $TweakerTitle"
+    echo "\$countHashes $countHashes"
+fi
 
 # Wenn debug=1 ist, werden die temporären Dateien beim Beenden nicht gelöscht.
 # Bitte diese Stelle NICHT editieren, sondern die Option -d beim Aufruf verwenden!
@@ -68,12 +80,13 @@ declare -i t_base=3             # Messintervall in Sekunden für Temperatur, Clo
 declare -i MIN_HASH_COUNT=20    # -m Anzahl         : Mindestanzahl Hashberechnungswerte, die abgewartet werden müssen
 declare -i MIN_WATT_COUNT=60    # -w Anzahl Sekunden: Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
 STOP_AFTER_MIN_REACHED=1        # -t : setzt Abbruch nach der Mindestlaufzeit- und Mindest-Hashzahleenermittlung auf 0
-                                #      Das ist der Tweak-Mode. Standard ist der Benchmark-Modus
+#      Das ist der Tweak-Mode. Standard ist der Benchmark-Modus
 bENCH_KIND=2                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; 888 == FullPowerMode
 ATTENTION_FOR_USER_INPUT=1      # -a | --auto: setzt die Attention auf 0, übergeht menschliche Eingaben
-                                #      ---------> und wird über Variablen und Dateien gesteuert  <---------
-                                #      ---------> MUSS ERST IMPLEMENTIERT WERDEN !!!!!!!!!       <---------
-                                #      ---------> IM MOMENT NUR DIE UNTERDRÜCKUNG VON AUSGABEN   <---------
+#      ---------> und wird über Variablen und Dateien gesteuert  <---------
+#      ---------> MUSS ERST IMPLEMENTIERT WERDEN !!!!!!!!!       <---------
+#      ---------> IM MOMENT NUR DIE UNTERDRÜCKUNG VON AUSGABEN   <---------
+CALLED_FROM_GPU=0               # -g | --gpu_called: Im Screen-Mode, um korrekte Screen-Steuerung mit Layout zu ermöglichen
 
 initialParameters="$*"
 POSITIONAL=()
@@ -111,13 +124,17 @@ while [[ $# -gt 0 ]]; do
             debug=1
             shift
             ;;
+	-g|--gpu_called)
+	    CALLED_FROM_GPU=1
+            shift
+            ;;
         -h|--help)
             echo $0 <<EOF '
                  [-w|--min-watt-seconds TIME] 
                  [-m|--min-hash-count HASHES] 
                  [-t|--tweak-mode] 
-                 [-p|--full-power-mode] 
-                 [-d|--debug-infos] 
+                 [-p|--full-power-mode]
+                 [-d|--debug-infos]
                  [-h|--help]'
 EOF
             echo "-w default is ${MIN_WATT_COUNT} seconds"
@@ -174,15 +191,15 @@ _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
     # Zuerst die BenchLog mit den Hashwerten...
     touch ${temp_hash_sum}.lock
     hashCount=$(cat ${BENCHLOGFILE} \
-              | tail -n +$hash_line \
-              | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
-              | gawk -e "${detect_zm_hash_count}" \
-              | grep -E -e "/s\s*$" \
-              | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
-                          | tee ${temp_hash_bc} \
-			  | bc >${temp_hash_sum}; \
-		      rm -rf ${temp_hash_sum}.lock; ) \
-              | wc -l \
+		    | tail -n +$hash_line \
+		    | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+		    | gawk -e "${detect_zm_hash_count}" \
+		    | grep -E -e "/s\s*$" \
+		    | tee >(gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
+				| tee ${temp_hash_bc} \
+				| bc >${temp_hash_sum}; \
+			    rm -rf ${temp_hash_sum}.lock; ) \
+		    | wc -l \
              )
     # Wir warten, bis die vom tee produzierten Prozesse vollständig fertig sind
     while [[ -f ${temp_hash_sum}.lock ]]; do sleep .001; done
@@ -193,13 +210,13 @@ _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
     MinusM=
     touch ${temp_watt_sum}.lock ${WATTSMAXFILE}.lock
     wattCount=$(cat "${WATTSLOGFILE}" \
-              | tail -n +$watt_line \
-              | grep -E -o -e "^[[:digit:]]+" \
-              | tee >(gawk ${MinusM} -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >${temp_watt_sum}; \
-		      rm -f ${temp_watt_sum}.lock; ) \
-                    >(gawk ${MinusM} -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print max}' >${WATTSMAXFILE}; \
-		      rm -rf ${WATTSMAXFILE}.lock; ) \
-              | wc -l \
+		    | tail -n +$watt_line \
+		    | grep -E -o -e "^[[:digit:]]+" \
+		    | tee >(gawk ${MinusM} -e 'BEGIN {sum=0} {sum+=$1} END {print sum}' >${temp_watt_sum}; \
+			    rm -f ${temp_watt_sum}.lock; ) \
+			  >(gawk ${MinusM} -e 'BEGIN {max=0} {if ($1>max) max=$1 } END {print max}' >${WATTSMAXFILE}; \
+			    rm -rf ${WATTSMAXFILE}.lock; ) \
+		    | wc -l \
              )
     # Wir warten, bis die vom tee produzierten Prozesse vollständig fertig sind
     while [[ -f ${temp_watt_sum}.lock || -f ${WATTSMAXFILE}.lock ]]; do sleep .001; done
@@ -245,19 +262,19 @@ _measure_one_whole_WattsHashes_Cycle () {
 
     ### Wenn die Minimum Wattwerte Anzahl erreicht ist, signalisiere das durch zurücksetzen der Flagge
     wattCount=$(cat "${WATTSLOGFILE}" \
-              | tail -n +$watt_line \
-              | wc -l \
+		    | tail -n +$watt_line \
+		    | wc -l \
              )
 
     ### Hashwerte aus dem Hintergrund nachsehen, nur die Zeilen zählen und Flagge setzen, sobald die Minimum Hashwerte erreicht sind.
     touch ${FATAL_ERR_CNT}.lock ${RETRIES_COUNT}.lock ${BoooooS_COUNT}.lock
     hashCount=$(cat ${BENCHLOGFILE} \
-              | tail -n +$hash_line \
-              | tee >(grep -E -c -m1 -e "${ERREXPR}" >${FATAL_ERR_CNT}; \
-                      rm -f ${FATAL_ERR_CNT}.lock) \
-		    >(grep -E -c -m1 -e "${CONEXPR}" >${RETRIES_COUNT}; \
-                      rm -f ${RETRIES_COUNT}.lock) \
-                    >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+		    | tail -n +$hash_line \
+		    | tee >(grep -E -c -m1 -e "${ERREXPR}" >${FATAL_ERR_CNT}; \
+			    rm -f ${FATAL_ERR_CNT}.lock) \
+			  >(grep -E -c -m1 -e "${CONEXPR}" >${RETRIES_COUNT}; \
+			    rm -f ${RETRIES_COUNT}.lock) \
+			  >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
                                BEGIN { yeses=0; booos=0; seq_booos=0 }
                                $0 ~ BOO { booos++; seq_booos++; next }
                                $0 ~ YES { yeses++; seq_booos=0;
@@ -267,10 +284,10 @@ _measure_one_whole_WattsHashes_Cycle () {
                                END { print seq_booos " " booos " " yeses;
 			             # zu Debugzwecken die Suchmuster, die angekommen sind, ausgeben
 			             print BOO; print YES; }' >${BoooooS_COUNT} 2>/dev/null; \
-                      rm -f ${BoooooS_COUNT}.lock) \
-              | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
-              | gawk -e "${detect_zm_hash_count}" \
-              | grep -E -c "/s\s*$"
+					 rm -f ${BoooooS_COUNT}.lock) \
+					 | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+					 | gawk -e "${detect_zm_hash_count}" \
+					 | grep -E -c "/s\s*$"
              )
     # Wir warten, bis die vom tee produzierten Prozesse vollständig fertig sind
     while [[ -f ${FATAL_ERR_CNT}.lock || -f ${RETRIES_COUNT}.lock || -f ${BoooooS_COUNT}.lock ]]; do sleep .001; done
@@ -290,36 +307,36 @@ _measure_one_whole_WattsHashes_Cycle () {
     #      Dann stimmt nämlich möglicherweise etwas nicht [seit t-rex steht fest, dass es SEHR lange dauern kann, bis ein Hashwert erscheint]
     #      Das muss nochmal durchdacht werden...)
     if [ $wattCount -ge $MIN_WATT_COUNT ]; then
-        countWatts=0
+	countWatts=0
 	# Wenn innerhalb der Mindestlaufzeit für Wattwerte kein Hashwert ermittelt wurde, wird hier abgebrochen.
 	# Diese Abfrage ist im Moment DISABLED durch den Zusatz "-a 1 -eq 0"
-        if [ $hashCount -eq 0 -a 1 -eq 0 ]; then
+	if [ $hashCount -eq 0 -a 1 -eq 0 ]; then
             # Abbruch wegen ${MIN_WATT_COUNT}s kein Hashwert
             #countHashes=0
             _disable_algorithm "${algorithm}" "Abbruch wegen ${MIN_WATT_COUNT}s nach dem Start noch kein Hashwert erhalten." "${gpu_idx}"
             BENCHMARKING_WAS_STARTED=0
             exit 95
-        fi
+	fi
     fi
 
     ###          0. ABBRUCHBEDINGUNG:       "FATALE Fehler, Miner Startet überhaupt nicht, z.B. OUT OF MEMORY"
     if [[ $(< ${FATAL_ERR_CNT}) -gt 0 ]]; then
-        echo "GPU #${gpu_idx}: FATAL ERROR detected..."
+	echo "GPU #${gpu_idx}: FATAL ERROR detected..."
 
-        # Die Minimum-Zähler auf "Minimum erreicht" einstellen
-        #countWatts=0
-        #countHashes=0
-        BENCHMARKING_WAS_STARTED=0
+	# Die Minimum-Zähler auf "Minimum erreicht" einstellen
+	#countWatts=0
+	#countHashes=0
+	BENCHMARKING_WAS_STARTED=0
 
-        nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-        nowSecs=$(date +%s)
-        # Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
-        echo ${nowDate} ${nowSecs} \
+	nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
+	nowSecs=$(date +%s)
+	# Miner-Abbrüche protokollieren nach bisher 3 Themen getrennt
+	echo ${nowDate} ${nowSecs} \
              "GPU #${gpu_idx}: BEENDEN des Miners alias ${coin_algorithm} wegen eines FATALEN ERRORS." \
             | tee -a ${LOG_FATALERROR_ALL} ${LOG_FATALERROR} ${ERRLOG} \
-                  >>${BENCHLOGFILE}
-        _disable_algorithm "${algorithm}" "Abbruch wegen eines FATALEN ERRORS (FATAL_ERR_CNT)." "${gpu_idx}"
-        exit 90
+		  >>${BENCHLOGFILE}
+	_disable_algorithm "${algorithm}" "Abbruch wegen eines FATALEN ERRORS (FATAL_ERR_CNT)." "${gpu_idx}"
+	exit 90
     fi
 
     ###          1. ABBRUCHBEDINGUNG:       "VERBINDUNG ZUM SERVER VERLOREN"
@@ -430,14 +447,14 @@ _measure_one_whole_WattsHashes_Cycle () {
                 #        gawk spaltet die Zeile am "-" auf und $1 ist die Zeilennummer des Kommandos und muss um 1 erhöht werden.
                 #
                 hash_line=$(cat ${BENCHLOGFILE} \
-                          | grep -n -e "${tweak_pat}" \
-                          | tail -n 1 \
-                          | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+				| grep -n -e "${tweak_pat}" \
+				| tail -n 1 \
+				| gawk -e 'BEGIN {FS="-"} {print $1+1}' \
                          )
                 watt_line=$(cat "${WATTSLOGFILE}" \
-                          | grep -n -e "${tweak_pat}" \
-                          | tail -n 1 \
-                          | gawk -e 'BEGIN {FS="-"} {print $1+1}' \
+				| grep -n -e "${tweak_pat}" \
+				| tail -n 1 \
+				| gawk -e 'BEGIN {FS="-"} {print $1+1}' \
                          )
                 
                 #
@@ -532,7 +549,7 @@ _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
              =;Q100}}}};                                       # (=) print line-number; Quit and set $?=100
              ${Q99}                                            # on last line Quit and set $?=99 (NOT FOUND)
              ' \
-        || sed_search='/"Name": "'${miningAlgo}'",/{           # if found ${miningAlgo}
+		 || sed_search='/"Name": "'${miningAlgo}'",/{           # if found ${miningAlgo}
                  N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 1 line;  if found ${miner_name}
                  N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
                      N;N;N;N;N;N;N;/"BENCH_KIND": 888,/d;{     # appe(N)d 7 lines; if found 888, (d)elete and continue
@@ -796,10 +813,10 @@ _On_Exit () {
         # Weil im Logfile die Einheiten gemischt sein können (kH/s bis TH/s) rechnen wir alles in H/s bzw. Sol/s um.
         #      Diese Basiseinheit merken wir uns in der Variablem $temp_einheit
         temp_einheit=$(cat ${BENCHLOGFILE} \
-                              | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
-                              | gawk -e "${detect_zm_hash_count}" \
-                              | grep -E -m1 "/s\s*$" \
-                              | gawk -e '/H\/s\s*$/ {print "H/s"; next};/G\/s\s*$/ {print "G/s"; next}{print "Sol/s"}')
+                           | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+                           | gawk -e "${detect_zm_hash_count}" \
+                           | grep -E -m1 "/s\s*$" \
+                           | gawk -e '/H\/s\s*$/ {print "H/s"; next};/G\/s\s*$/ {print "G/s"; next}{print "Sol/s"}')
 
         summary="\nZusammenfassung der ermittelten Werte:\n"
         summary+="$(printf " Summe WATT   : %18s; Messwerte: %5s\n" $wattSum $wattCount)\n"
@@ -864,7 +881,9 @@ Wenn LOGPATH nicht gesetzt ist, kann eigentlich auch nichts in BENCHLOGFILE drin
 Aus welchem Grund ist er dann bei der Prüfung auf -f ${BENCHLOGFILE} hier rein gekommen?\n"
             printf "${chaos}" >>${SYSTEM_MALFUNCTIONS_REPORT}
         else
-            cp -f ${BENCHLOGFILE} ${LOGPATH}/${LOGFILE_DATE}_benchmark.log
+	    if [ ! ${ScreenTest} -eq 1 ]; then
+		cp -f ${BENCHLOGFILE} ${LOGPATH}/${LOGFILE_DATE}_benchmark.log
+            fi
         fi
     fi
 
@@ -885,7 +904,7 @@ echo $$ >${This}.pid
 
 ### SCREEN ADDITIONS: ###
 autoThis=
-[ ${#gpu_idx} -gt 0 -a ${#algorithm} -gt 0 ] && {
+[ ${ATTENTION_FOR_USER_INPUT} -eq 0 -a ${#gpu_idx} -gt 0 -a ${#algorithm} -gt 0 ] && {
     autoThis=.${this}_GPU#${gpu_idx}
     echo $$ >${autoThis}.pid
 }
@@ -960,7 +979,7 @@ cd ${LINUX_MULTI_MINING_ROOT}
 source gpu-abfrage.sh
 
 #if [ ! -s ${SYSTEM_STATE}.in ]; then
-    _func_gpu_abfrage_sh
+_func_gpu_abfrage_sh
 #else
 #    _reserve_and_lock_file ${SYSTEM_STATE}   # Zum Lesen und Bearbeiten reservieren...
 #    _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
@@ -1052,7 +1071,7 @@ else
     #     Und das sind im Moment ${web_timeout}s
     ###############################################################################
     web_timeout=90
-    
+
     declare -i one_call_is_enough=0
     for ppool in ${!POOLS[@]}; do
         nowSecs=$(date +%s)
@@ -1591,9 +1610,9 @@ declare -a menuItems menuMines
 earnings_possible=0
 gv_calculation_possible=0
 if [[  "${Preise_Kurse_valid}" == "1" \
-    && ${#bENCH[$algorithm]} -gt 0 \
-    && ${#WATTS[$algorithm]} -gt 0 \
-    && ${WATTS[$algorithm]} -lt 1000 ]]; then
+	   && ${#bENCH[$algorithm]} -gt 0 \
+	   && ${#WATTS[$algorithm]} -gt 0 \
+	   && ${WATTS[$algorithm]} -lt 1000 ]]; then
     gv_calculation_possible=1
 fi
 
@@ -1622,8 +1641,8 @@ for pidx in ${!Products[@]}; do
                             coin_mines=".0"
                             coin_kurs=${KURSE[$ccoin]//[.0]}
                             if [[ ${gv_calculation_possible} -eq 1 \
-                                        && ${#coin_kurs}            -gt 0 \
-                                        && ${#PoolFee[${ppool}]}    -gt 0 \
+                                      && ${#coin_kurs}            -gt 0 \
+                                      && ${#PoolFee[${ppool}]}    -gt 0 \
                                 ]]; then
                                 # "Mines" in BTC berechnen
                                 algoMines=$(echo "scale=20;   ${bENCH[$algorithm]}  \
@@ -1671,11 +1690,11 @@ for pidx in ${!Products[@]}; do
                                 coin_mines=".0"
                                 coin_kurs=${BlockReward[$ccoin]//[.0]}
                                 if [[          ${gv_calculation_possible}    -eq 1   \
-                                            && ${#coin_kurs}                 -gt 0   \
-                                            && ${#BlockTime[${ccoin}]}       -gt 0   \
-                                            && ${#CoinHash[${ccoin}]}        -gt 0   \
-                                            && ${#Coin2BTC_factor[${ccoin}]} -gt 0   \
-                                            && ${#PoolFee[${ppool}]}         -gt 0   \
+						   && ${#coin_kurs}                 -gt 0   \
+						   && ${#BlockTime[${ccoin}]}       -gt 0   \
+						   && ${#CoinHash[${ccoin}]}        -gt 0   \
+						   && ${#Coin2BTC_factor[${ccoin}]} -gt 0   \
+						   && ${#PoolFee[${ppool}]}         -gt 0   \
                                     ]]; then
                                     # "Mines" in BTC berechnen
                                     algoMines=$(echo "scale=20;   86400 * ${BlockReward[${ccoin}]} * ${Coin2BTC_factor[${ccoin}]}   \
@@ -1888,11 +1907,11 @@ _ask_user_whether_to_disable_the_algorithm () {
 # Ohne die entsprechenden Startkommandos ist der Modus auch nicht möglich.
 if [ -z "${BENCH_START_CMD}" ]; then
     echo "Für den Miner ${miner_name}#${miner_version} gibt es kein OFFLINE Benchmark Startkommando."
-    live_mode=${live_mode//o/}
+    live_mode=${live_mode//o}
 fi
 if [ -z "${LIVE_START_CMD}"  ]; then
     echo "Für den Miner ${miner_name}#${miner_version} gibt es kein LIVE Startkommando."
-    live_mode=${live_mode//l/}
+    live_mode=${live_mode//l}
 fi
 
 if [ -z "$live_mode" ]; then
@@ -1985,7 +2004,7 @@ echo "DIE FOLGENDEN KOMMANDOS WERDEN NACH BESTÄTIGUNG ABGESETZT:"
 
 ###  2021-04-11 - AUSNAHME START
 ###  Die nächsten Zeilen müssen im Vollbetrieb wieder raus (1 -eq 0 ] oder ganz löschen).
-###  Wurden nur eingeführt, um die ersten automatischen Benchmarks erstellen zu lassen und einen manuell ermittelten PoerLimit-Wert zu verwenden.
+###  Wurden nur eingeführt, um die ersten automatischen Benchmarks erstellen zu lassen und einen manuell ermittelten PowerLimit-Wert zu verwenden.
 ###  In diesem Betrieb ist das der einzige nvidia-Befehl, der abgesetzt wird.
 if [ 1 -eq 1 ]; then
     if [ 1 -eq 0 ]; then
@@ -2047,9 +2066,9 @@ if  [ "${pool}" == "nh" ]; then
     [ "${Preise_Kurse_valid}" == "1" ] && algo_port=${PORTs[${coin}]} || algo_port="NotNeeded"
 elif [ "${pool}" == "sn" -o "${pool}" == "mh" ]; then
     read server_name_algo_port <<<$(cat ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$pool]} \
-                                           | grep -E -v -e '^#|^$' \
-                                           | grep -m 1 -e "^${coin}:" \
-                                           | cut -d ':' -f 3,4 )
+                                        | grep -E -v -e '^#|^$' \
+                                        | grep -m 1 -e "^${coin}:" \
+                                        | cut -d ':' -f 3,4 )
     read server_name algo_port <<<${server_name_algo_port//:/ }
 fi
 
@@ -2154,22 +2173,31 @@ bENCH_START=$(date +%s)
 
 echo $(date "+%Y-%m-%d %H:%M:%S" ) ${bENCH_START} "${This}: Starting Miner..."
 ### SCREEN ADDITIONS: ###
-if [ ${ScreenTest} -eq 0 ]; then
-    if [ 1 -eq 1 ]; then
-	${minerstart} >>${BENCHLOGFILE} &
-	echo $! >${MINER}.pid
+if [ ${UseScreen} -eq 1 ]; then
+    if [ ${ScreenTest} -eq 1 ]; then
+	# Kein Miner-Start im Testmodus. Stattdessen die Analyse des laufenden Miners
+	fake_coin=daggerhashimoto
+	fake_device=${miner_device}
+	[ "${coin}" == "octopus" -o ${miner_device} -eq 8 ] && { fake_coin=octopus; fake_device=8; }
+	BENCHLOGFILE=/home/avalon/miner/t-rex/t-rex-${fake_device}-${fake_coin}.log
+	# $PPID wird in der Screen-Session nicht aufgelöst... ist leer ???
+	# $BASHPID war auch unbekannt. Erst $$ hatte funktioniert
+	#Bench_Log_PTY_Cmd='echo $$ >.kill_this_BENCHLOGGER_screen_BASHPID_from_'$$"; less .kill_this_BENCHLOGGER_screen_BASHPID_from_"$$
     else
-	BENCHLOGFILE=/home/avalon/miner/t-rex/t-rex-5-daggerhashimoto.log
-    fi
-    Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
-else
-    # $PPID wird in der Screen-Session nicht aufgelöst... ist leer ???
-    # $BASHPID war auch unbekannt. Erst $$ hatte funktioniert
-    Bench_Log_PTY_Cmd='echo $$ >.kill_this_BENCHLOGGER_screen_BASHPID_from_'$$"; less .kill_this_BENCHLOGGER_screen_BASHPID_from_"$$
-fi
+	# $$$$$$$$$$$$$$$$$$$$
+	# Warum nicht tatsächlich im eigenen Hintergrund statt in der BACKGROUND-Session laufen lassen?
+	# Wir probieren das mal aus. Können es aber auch ändern, wenn wir doch noch ein kleines bisschen mehr sehen wollen.
+	# Zumindest sieht man in der BACKGROUND-Session ja ein eigens Screen-Fenster und das Aufruf-Kommando.
+	# Für den Fall  mit der BG_SESS, muss auch noch das Problem mit der Datei ${MINER}.pid anders gelöst werden!
 
-### SCREEN ADDITIONS: ###
-if [ ${UseScreen} -eq 0 ]; then
+	${minerstart} >>${BENCHLOGFILE} &
+	echo $! | tee ${MINER}.pid
+    fi
+else
+    ${minerstart} >>${BENCHLOGFILE} &
+    echo $! >${MINER}.pid
+
+    Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
     ${_TERMINAL_} --hide-menubar \
 		  --title="Benchmark Output of Miner ${miner_name}#${miner_version}" \
 		  -e "${Bench_Log_PTY_Cmd}"
@@ -2191,12 +2219,7 @@ if [ ${STOP_AFTER_MIN_REACHED} -eq 0 ]; then
     tweak_start_cmd="${LINUX_MULTI_MINING_ROOT}/benchmarking/tweak_commands.sh ${tweak_start_params}"
 
     ### SCREEN ADDITIONS: ###
-    if [ ${UseScreen} -eq 0 ]; then
-	xterm -T "Tweaking Terminal for ${miningAlgo} on GPU #${gpu_uuid}" \
-              -fn 10x20         \
-              -geometry 100x25  \
-              -e "${tweak_start_cmd}" &
-    else
+    if [ ${UseScreen} -eq 1 ]; then
 	### SCREEN ADDITIONS: ###
 	# Das erzeugt einen neuen Prozess und der benchmarker ist überdeckt und unzugänglich!
 	#screen -S Tweaking-Session -t "Tweaking Terminal for ${miningAlgo} on GPU #${gpu_uuid}"
@@ -2211,31 +2234,36 @@ if [ ${STOP_AFTER_MIN_REACHED} -eq 0 ]; then
 	screen -X \
 	       eval split \
 	       focus
+    else
+	xterm -T "Tweaking Terminal for ${miningAlgo} on GPU #${gpu_uuid}" \
+              -fn 10x20         \
+              -geometry 100x25  \
+              -e "${tweak_start_cmd}" &
     fi
 fi
 
 ### SCREEN ADDITIONS: ###
 if [ ${UseScreen} -eq 1 ]; then
-    # ... wählt in der aktuellen Region den Bencher (select ${BencherTitle})...
-    # ... splittet den Bildschirm vertikal (split -v), springt nach rechts (focus)...
-    screen -X eval "select ${BencherTitle}" "split -v" focus
-    # ... erzeugt ein neues (Screen)-Window in der aktuellen Region und startet den BENCHLOGGER (screen -t... $BASH ...)
-    #     und zeigt das Benchmark-Log an...
-    screen -p + -t ${BenchLogTitle} ${BASH} -c "${Bench_Log_PTY_Cmd}"
-    # ... wechselt nach oben zum Tweaker oder zurück zum Bencher, je nachdem, ob Bencher mit -t gestartet wurde (focus).
-    #     oder zurück zum gpu_gv-algo.sh, falls er von diesem gerufen wurde. gpu_gv-algo.sh und tweaker schließen sich gegenseitig aus.
-    screen -X eval focus
-fi
-
-if [ ${ScreenTest} -eq 1 ]; then
-    # Während des Screentestings...
-    # Damit der Tweaker den kill absetzen kann
-    echo "I'm going to sleep now" >${READY_FOR_SIGNALS}
-    # Damit die anderen beiden Screens wirklich aufgebaut sind, künstlich warten
-    read -p "Press ENTER to continue after Screens have built up..." xyz
-    #sleep 5
-
-    exit
+    Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
+    if [ ${CALLED_FROM_GPU} -eq 1 ]; then
+	cmd="${Bench_Log_PTY_Cmd}"'\nexit\n'
+	Miner_LOG_Title="M#${gpu_idx}"
+	screen -drx ${FG_SESS} -X screen -t ${Miner_LOG_Title}
+	screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
+	screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "${cmd}"
+	screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X other
+    else
+	# Standalone-Mode:
+	# ... wählt in der aktuellen Region den Bencher (select ${BencherTitle})...
+	# ... splittet den Bildschirm vertikal (split -v), springt nach rechts (focus)...
+	screen -X eval "select ${BencherTitle}" "split -v" focus
+	# ... erzeugt ein neues (Screen)-Window in der aktuellen Region und startet den BENCHLOGGER (screen -t... $BASH ...)
+	#     und zeigt das Benchmark-Log an...
+	screen -p + -t ${BenchLogTitle} ${BASH} -c "${Bench_Log_PTY_Cmd}"
+	# ... wechselt nach oben zum Tweaker oder zurück zum Bencher, je nachdem, ob Bencher mit -t gestartet wurde (focus).
+	#     oder zurück zum gpu_gv-algo.sh, falls er von diesem gerufen wurde. gpu_gv-algo.sh und tweaker schließen sich gegenseitig aus.
+	screen -X focus
+    fi
 fi
 
 ################################################################################

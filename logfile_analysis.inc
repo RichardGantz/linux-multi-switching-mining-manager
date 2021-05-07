@@ -89,6 +89,41 @@ detect_zm_hash_count='BEGIN { hash=7; speed=-1; einheit=""; unknownCnt=0; FirstS
 END { for ( i=unknownCnt; i>0; i--) { print FirstSpeed " " FirstEinheit; } }
 '
 
+# miniZ outputs
+# Jetzt gibt es ganz neue Bedingungen: Die Shares werden nicht mehr Einzeln ausgegeben, sondern ein "*" und die Gesamtanzahl
+#
+# ethash / kawpow:
+# [WARNING] Bad share: Share above target.
+# [ 0d 0h 0m40s] S:  3/0/1 0>RTX 3070  100% [0.C/ 0%]* 52.62(52.62)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
+#
+# zhash / beamhash / (equihash):
+# [ 0d 0h 1m00s] S:  4/0/0 0>RTX 3070  100% [0.C/ 0%]*61.51 I/s 126.39(126.39)Sol/s   0(  0.0)W clk=1815MHz mclk=7001MHz Sol/W=inf
+# [ 0d 0h 1m10s] S:  5/0/0 0>RTX 3070  100% [0.C/ 0%]*61.49 I/s 125.40(125.40)Sol/s   0(  0.0)W clk=1815MHz mclk=7001MHz Sol/W=inf
+#
+# Fehlen noch:
+# ERREXPR
+# OVREXPR
+# CONEXPR
+# 
+detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0 }
+/[[]WARNING[]] Bad share:/ { booos++; seq_booos++; next }
+match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
+   yeses++; seq_booos=0;
+   S1 = substr( $0, RSTART, RLENGTH )
+   SN = split( S1, SA )
+   if (match( SA[ SN ], /\([[:digit:].]+\).*(Sol|H)\/s/ )) {
+       M = substr( SA[ SN ], RSTART+1, RLENGTH );
+       speed   = substr( M, 1, index(M,")")-1 )
+       einheit = substr( SA[ SN ], index( SA[ SN ], ")" )+1 )
+       shares  = substr( SA[ 2 ], 1, index(SA[ 2 ],"/")-1 )
+       }
+   }
+END {
+    print seq_booos " " booos " >" yeses >"'${MINER}.booos'";
+    print shares " " speed " " einheit
+}
+'
+
 #/ GPU[[:digit:]]+: Share #[[:digit:]]+ accepted [[:digit:]]+ .s$/ \
 
 # Wir könnte zum Beispiel ein Array mit Logile-Meldungen pflegen,
@@ -198,6 +233,11 @@ OVERCLOCKING_MSGs=(
 # Ein '\' geht bei der Zusammensetzung zum String {YES|NO}EXPR "verloren"
 # Der nächste durch die Sub-Shell, die die Kommandozeile für den gawk aufbereitet.
 NOT_ACCEPTED_MSGs=(
+    # "miniZ":
+    # '[WARNING] Bad share: Share above target.
+    # 2021-05-06 - Wir bauen diese Abfragen ebenfalls in das awk-Script ein, das sowieso bemüht werden muss.
+    #'[[]WARNING[]] Bad share: Share above target.'
+
     # gminer "miner":
     # '17:01:47 Started Mining on GPU1: ZOTAC Graphics Device 12GB [0000:02:00.0]
     # '17:02:04 GPU1: Share #1 rejected: Invalid solution size.
@@ -246,6 +286,14 @@ NOT_ACCEPTED_MSGs=(
 # Ein '\' geht bei der Zusammensetzung zum String {YES|NO}EXPR "verloren"
 # Der nächste durch die Sub-Shell, die die Kommandozeile für den gawk aufbereitet.
 YES_ACCEPTED_MSGs=(
+    # "miniZ":
+    # '[WARNING] Bad share: Share above target.
+    # Jetzt gibt es ganz neue Bedingungen: Die Shares werden nicht mehr Einzeln ausgegeben, sondern ein "*" und die Gesamtanzahl
+    # [ 0d 0h 0m40s] S:  3/0/0 0>RTX 3070  100% [0.C/ 0%]* 52.62(52.62)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
+    # [ 0d 0h 1m10s] S:  5/0/0 0>RTX 3070  100% [0.C/ 0%]* 52.73(52.73)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
+    # 2021-05-06 - Wir bauen diese Abfragen ebenfalls in das awk-Script ein, das sowieso bemüht werden muss.
+    # '[]][*] ?[[:digit:].]+'
+
     # '+---+-------+----+---+-----------+------+----+---+-----+-----------+
     # '| ID   GPU   Temp Fan    Speed    Shares Core Mem Power Efficiency |
     # '+---+-------+----+---+-----------+------+----+---+-----+-----------+

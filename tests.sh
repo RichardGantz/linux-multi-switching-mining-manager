@@ -95,8 +95,8 @@ echo ${actMiningAlgos[@]}
 exit
 
 <<COMMENT
-date ist die schnellste Variante, wenn man keine Fractions braucht.
-stat ist um etwa 18% langsamer als date, kann aber auch eine fraction enthalten
+date ist die schnellste Variante, Fractions möglich.
+stat ist um etwa 18% langsamer als date,  Fractions möglich.
 find ist mehr als doppelt so langsam wie stat, hat aber gleich die fraction mit dabei:
 
 count=10000

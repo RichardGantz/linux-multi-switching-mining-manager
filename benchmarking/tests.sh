@@ -3,6 +3,50 @@
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
 
+miner_name=miniZ
+miner_version=1.7x3
+MINER=${miner_name}#${miner_version}
+BENCHLOGFILE="../miners/miniZ-zhash-test.log"
+#BENCHLOGFILE="../miners/miniz-ethash-test.log"
+#BENCHLOGFILE="../miners/miniz-beamhash-test.log"
+#BENCHLOGFILE="../miners/miniz-equihash-test.log" # <--- Hat gerechnet, aber in 12 Minuten keinen einzigen Share abgeliefert. Muss die 320s Regel greifen!
+#BENCHLOGFILE="../miners/miniz-kawpow-test.log"
+
+detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0 }
+/[[]WARNING[]] Bad share:/ { booos++; seq_booos++; next }
+match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
+   yeses++; seq_booos=0;
+   S1 = substr( $0, RSTART, RLENGTH )
+   SN = split( S1, SA )
+   if (match( SA[ SN ], /\([[:digit:].]+\).*(Sol|H)\/s/ )) {
+       M = substr( SA[ SN ], RSTART+1, RLENGTH );
+       speed   = substr( M, 1, index(M,")")-1 )
+       einheit = substr( SA[ SN ], index( SA[ SN ], ")" )+1 )
+       shares  = substr( SA[ 2 ], 1, index(SA[ 2 ],"/")-1 )
+       }
+   }
+END {
+    print seq_booos " " booos " >" yeses >"'${MINER}.booos'";
+    print shares " " speed " " einheit
+}
+'
+
+touch ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
+read hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
+	| gawk -e "${detect_miniZ_hash_count}" \
+	)
+
+echo ${hashCount} $speed $einheit
+cat ${MINER}.booos
+rm  ${MINER}.booos
+rm -f ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
+exit
+    cat ${BENCHLOGFILE} \
+		| grep -E -o 'S:.*\]\*.*H\/s' \
+		| gawk -e "${detect_miniZ_hash_count}" #\
+#	 )
+
+
 gpu_uuid=GPU-000bdf4a-1a2c-db4d-5486-585548cd33cb
 gpu_uuid=GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd
 miner_name=t-rex

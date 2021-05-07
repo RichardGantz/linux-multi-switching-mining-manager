@@ -15,3 +15,5 @@ cuckatoo31:GPU-c6467c28-be24-03ad-e7ea-9bc0e989488f
 cuckatoo32:GPU-c6467c28-be24-03ad-e7ea-9bc0e989488f
 # Der beamhash hat bei dieser GPU#0 nicht mal angefangen...
 beamhash:GPU-c6467c28-be24-03ad-e7ea-9bc0e989488f
+# equihash hat mit dem miniZ zwar gerechnet, lieferte nach 12 Miniuten aber immer noch keinen Wert ab. Deshalb lieber mal disablen
+equihash

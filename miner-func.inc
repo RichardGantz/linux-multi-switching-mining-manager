@@ -46,16 +46,33 @@ function _read_in_minerFees_to_MINER_FEES () {
 #
 function _set_ALLE_MINER_from_path () {
     local workdir=$(pwd) RC=0
+    shopt -s lastpipe
     cd ${LINUX_MULTI_MINING_ROOT}/miners
 
     _reserve_and_lock_file any_miner_algos_changed
-    ls -l *.algos >.act_miner_algos
-    [[ ! -f .all_miner_algos ]] && touch .all_miner_algos
+
+    # Diese Datei .act_miner_algos wird beim Start und am Anfang jedes Zyklus von jeder GPU erstellt.
+    unset LS_L
+    readarray -n 0 -O 0 -t LS_L <<<$(ls -l *.algos | tee .act_miner_algos)
+
+    # Diese Datei .all_miner_algos dient als Vergleich, um festzustellen, ob sich etwas zum vorherigen Zyklus geändert hat.
+    # Wenn sich etwas geändert hat (.algo editiert, Miner hinzugekommen, Miner entfern), muss das Array neu erstellt werden.
+    # Der nächste Befehl stellt nur sicher, dass eine Datei für den Vergleich da ist, und wurde an den Start des multi_mining_calc.sh verlegt.
+    # [[ ! -f .all_miner_algos ]] && touch .all_miner_algos
+    # Sollten die beiden Dateien nun unterschiedlich sein, muss das Array neu eingelesen werden.
     diff -q .act_miner_algos .all_miner_algos &>/dev/null
-    [[ $? -gt 0 ]] && touch .any_miner_algos_changed
-    cp -f .act_miner_algos .all_miner_algos
+    if [[ $? -gt 0 ]]; then
+	# Zur "Benachrichtigung" auch für alle anderen GVs dient die Datei .any_miner_algos_changed, die immer dann aktualisiert wird, wenn das Array ALLE_MINER neu erstellt werden muss
+	# Jeder schaut sich diese Zeit im nächsten Schritt an und merkt sie sich dann in den Variablen act_miner_algos_epoch und old_miner_algos_epoch
+	#       und weiss dann, dass neu eingelesen werden muss.
+	# Nur der erste GV, der eine Änderung feststellt, ändert den Zeitstempel dieser Datei.
+	touch .any_miner_algos_changed
+	# Indem die Dateien hier auf den selben Stand gebracht werden, ist sichergestellt, dass eine Änderung beim nächsten Eintritt in diese Funktion festgestellt werden kann.
+	cp -f .act_miner_algos .all_miner_algos
+    fi
     declare -i act_miner_algos_epoch=$(date --utc --reference=.any_miner_algos_changed +%s)
 
+    # Der folgende Befehl stellt sicher, dass nach einem Wiedereintritt in das Script das Array unbedingt eingelesen wird.
     [[ -z "${old_miner_algos_epoch}" ]] && declare -ig old_miner_algos_epoch=0
     if [ ${act_miner_algos_epoch} -gt ${old_miner_algos_epoch} ]; then
         echo "$(basename $0):${gpu_idx}: ###---> Updating ALLE_MINER Algo structures from disk."
@@ -63,10 +80,9 @@ function _set_ALLE_MINER_from_path () {
         unset ALLE_MINER MINER_IS_AVAILABLE
         declare -ag ALLE_MINER
         declare -Ag MINER_IS_AVAILABLE
-        ALLE_MINER=($(ls *.algos))
+        ALLE_MINER=(${LS_L[@]##* })
         ALLE_MINER=(${ALLE_MINER[@]%%[.]algos})
 
-        shopt -s lastpipe
         for minerName in ${ALLE_MINER[@]}; do
             # gpu-bENCH.inc liest nur $algorithm-Objekte aus der benchmark_UUID.json, wenn es den Miner aktuell gibt.
             # In der JSON können nämlich auch ältere Werte drin sein von Minern, die ausrangiert wurden.
@@ -109,28 +125,48 @@ function _set_ALLE_MINER_from_path () {
 
     _read_in_minerFees_to_MINER_FEES
 
+    _set_ALLE_LIVE_MINER
+
     cd ${workdir} >/dev/null
+
+    _ALL_MINERS_DATA_CHANGED_ON_DISK_=$RC
     return $RC
 }
 
 # Alle Algos aller Miner- und Versionsnummern werden in alle Mining_${m_name}_${m_version//\./_}_Algos eingelesen
 #
 function _set_ALLE_LIVE_MINER () {
-    local workdir=$(pwd) MINER
-    _set_ALLE_MINER_from_path
+    # Und das Array ALLE_MINER muss gesetzt sein.
+    # 2021-05-03 - Im Moment ist das durch Verlegung des Aufrufs von _set_ALLE_LIVE_MINER ans Ende der Funktion _set_ALLE_MINER_from_path sichergestellt.
+
+    local workdir=$(pwd) MINER RC=0
     cd ${LINUX_MULTI_MINING_ROOT}/miners
 
     _reserve_and_lock_file any_live_miner_changed
 
+    # Erstellt jedesmal eine aktuelle Datei .act_live_miners, die alle Miner mit LIVE_START_CMDs enthalten.
+    # Muss bei Gelegenheit noch auf Performance geprüft werden.
     ${LINUX_MULTI_MINING_ROOT}/set_live_miners.sh "${ALLE_MINER[@]}"
-    [ ! -s live_miners ] && echo "First Call" >live_miners
 
+    # Der folgende Befehl wurde zur Entlastung ebenfalls in das multi_mining_calc.sh verlegt (s. oben)
+    #[ ! -s live_miners ] && echo "First Call" >live_miners
     diff -q live_miners .act_live_miners &>/dev/null
-    RC=$?
-    if [[ $RC -gt 0 || ${#ALLE_LIVE_MINER[@]} -eq 0 ]]; then
-        local msg="###--->"
-        echo "$(basename $0):${gpu_idx}: ${msg} Updating  ALLE_LIVE_MINER  from disk."
+    if [[ $? -gt 0 ]]; then
+	# Zur "Benachrichtigung" auch für alle anderen GVs dient die Datei .live_miners_changed, die immer dann aktualisiert wird, wenn das Array ALLE_LIVE_MINER neu erstellt werden muss
+	# Jeder schaut sich diese Zeit im nächsten Schritt an und merkt sie sich dann in den Variablen act_live_miners_changed_epoch und old_live_miners_changed_epoch
+	#       und weiss dann, dass neu eingelesen werden muss.
+	# Nur der erste GV, der eine Änderung feststellt, ändert den Zeitstempel dieser Datei.
+	touch .live_miners_changed
+	# Indem die Dateien hier auf den selben Stand gebracht werden, ist sichergestellt, dass eine Änderung beim nächsten Eintritt in diese Funktion festgestellt werden kann.
         cp -f .act_live_miners live_miners
+    fi
+    declare -i act_live_miners_changed_epoch=$(date --utc --reference=.live_miners_changed +%s)
+
+    # Der folgende Befehl stellt sicher, dass nach einem Wiedereintritt in das Script das Array unbedingt eingelesen wird.
+    [[ -z "${old_live_miners_changed_epoch}" ]] && declare -ig old_live_miners_changed_epoch=0
+    if [ ${act_live_miners_changed_epoch} -gt ${old_live_miners_changed_epoch} ]; then
+        local msg="###--->"
+        echo "$(basename $0):${gpu_idx}: ${msg} Updating ALLE_LIVE_MINER from disk."
         unset ALLE_LIVE_MINER alle_live_miner
         declare -Ag ALLE_LIVE_MINER
 	readarray -n 0 -O 0 -t alle_live_miner <<<$(< live_miners)
@@ -139,6 +175,8 @@ function _set_ALLE_LIVE_MINER () {
             ALLE_LIVE_MINER[${MINER}]=1
         done
         echo "$(basename $0):${gpu_idx}: ${msg}"
+        old_live_miners_changed_epoch=${act_live_miners_changed_epoch}
+        RC=1
     fi
 
     _remove_lock
@@ -206,7 +244,8 @@ function _split_into_Available_and_Missing_Miner_Algo_Arrays () {
 # $IMPORTANT_BENCHMARK_JSON muss gesetzt sein !!!!!!!!!
 #
 function _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays () {
-    _set_ALLE_MINER_from_path
+    # Wurde kurz vorher durch den Aufruf der Funktion _set_Miner_Device_to_Nvidia_GpuIdx_maps bereits erledigt
+    # _set_ALLE_MINER_from_path
     #_ALL_MINERS_DATA_CHANGED_ON_DISK_=$?
 
     # Dann gleich Bereitstellung zweier Arrays mit AvailableAlgos und MissingAlgos.
@@ -310,8 +349,10 @@ function _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array ()
 }
 
 function _set_Miner_Device_to_Nvidia_GpuIdx_maps () {
-    _set_ALLE_MINER_from_path
-    _ALL_MINERS_DATA_CHANGED_ON_DISK_=$?
+    if [ ${#1} -eq 0 ]; then
+	_set_ALLE_MINER_from_path
+	_ALL_MINERS_DATA_CHANGED_ON_DISK_=$?
+    fi
 
     if [ ${#miner_gpu_idx[@]} -eq 0 -o ${_ALL_MINERS_DATA_CHANGED_ON_DISK_} -ne 0 ]; then
         echo "$(basename $0):${gpu_idx}: ###---> Updating Table \"<Miner Device-Num> to <Nvidia gpu_idx>\"."
@@ -357,6 +398,7 @@ function _set_Miner_Device_to_Nvidia_GpuIdx_maps () {
 
             esac
         done
+	_ALL_MINERS_DATA_CHANGED_ON_DISK_=0
     fi
 }
 
