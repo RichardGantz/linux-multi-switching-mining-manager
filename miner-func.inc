@@ -22,7 +22,7 @@ function _read_in_minerFees_to_MINER_FEES () {
     local miner
 
     _reserve_and_lock_file ${ALL_MINER_FEES_FILE}
-    declare -i act_miner_fees_epoch=$(date --utc --reference=${ALL_MINER_FEES_FILE} +%s)
+    declare -i act_miner_fees_epoch=$(date --reference=${ALL_MINER_FEES_FILE} +%s)
 
     [ -z "${all_miner_fees_epoch}" ] && declare -ig all_miner_fees_epoch=0
     if [[  ${act_miner_fees_epoch} > ${all_miner_fees_epoch} ]]; then
@@ -70,7 +70,7 @@ function _set_ALLE_MINER_from_path () {
 	# Indem die Dateien hier auf den selben Stand gebracht werden, ist sichergestellt, dass eine Änderung beim nächsten Eintritt in diese Funktion festgestellt werden kann.
 	cp -f .act_miner_algos .all_miner_algos
     fi
-    declare -i act_miner_algos_epoch=$(date --utc --reference=.any_miner_algos_changed +%s)
+    declare -i act_miner_algos_epoch=$(date --reference=.any_miner_algos_changed +%s)
 
     # Der folgende Befehl stellt sicher, dass nach einem Wiedereintritt in das Script das Array unbedingt eingelesen wird.
     [[ -z "${old_miner_algos_epoch}" ]] && declare -ig old_miner_algos_epoch=0
@@ -160,7 +160,7 @@ function _set_ALLE_LIVE_MINER () {
 	# Indem die Dateien hier auf den selben Stand gebracht werden, ist sichergestellt, dass eine Änderung beim nächsten Eintritt in diese Funktion festgestellt werden kann.
         cp -f .act_live_miners live_miners
     fi
-    declare -i act_live_miners_changed_epoch=$(date --utc --reference=.live_miners_changed +%s)
+    declare -i act_live_miners_changed_epoch=$(date --reference=.live_miners_changed +%s)
 
     # Der folgende Befehl stellt sicher, dass nach einem Wiedereintritt in das Script das Array unbedingt eingelesen wird.
     [[ -z "${old_live_miners_changed_epoch}" ]] && declare -ig old_live_miners_changed_epoch=0
@@ -285,7 +285,7 @@ function _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array ()
         touch .any_all_pool_infos_changed
         cp -f .act_all_pool_infos .all_all_pool_infos
     fi
-    declare -i act_all_pool_infos_epoch=$(date --utc --reference=.any_all_pool_infos_changed +%s)
+    declare -i act_all_pool_infos_epoch=$(date --reference=.any_all_pool_infos_changed +%s)
 
     [[ -z "${old_all_pool_infos_epoch}" ]] && declare -ig old_all_pool_infos_epoch=0
     if [ ${act_all_pool_infos_epoch} -gt ${old_all_pool_infos_epoch} ]; then
@@ -380,7 +380,7 @@ function _set_Miner_Device_to_Nvidia_GpuIdx_maps () {
 
                 # Die Ausnahmen hier oben
 		# Die folgenden miner richten sich, wenn es um das mining_device geht, nach einer anderen Nummerierungs-Reihenfolge
-                t-rex#*|zm#*)
+                zm#*)
                     # miner_gpu_idx[  ${MINER}#${gpu_idx}  ] = miner_dev
                     # 2018-01-25 ${bus[${gidx}]} enthält die "PCI-Bus ID" dezimal
                     #            Das Array ${zm_device_on_pci_bus[ "PCI-Bus ID" ]} hält die Miner Device ID

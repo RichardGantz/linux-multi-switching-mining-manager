@@ -47,7 +47,11 @@
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
 
-if [ 1 -eq 0 -a ${ScreenTest} -eq 1 ]; then
+# Um die miniZ - Algos zunächst mit der am schlechtesten laufenden GPU zu erstellen
+ScreenTest=0
+ScreenTest=1
+
+if [ ${ScreenTest} -eq 1 ]; then
     pwd
     echo "\$MAINSCREEN: $MAINSCREEN"
     echo "\$FG_SESS...: $FG_SESS"
@@ -190,7 +194,21 @@ _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
 
     # Zuerst die BenchLog mit den Hashwerten...
     touch ${temp_hash_sum}.lock
-    hashCount=$(cat ${BENCHLOGFILE} \
+    case "${MINER}" in
+	miniZ#*)
+	    read hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
+		| tail -n +$hash_line \
+		| tee >(  gawk -v _BC_="1" -M -e "${detect_miniZ_hash_count}" \
+		        | gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
+			| tee ${temp_hash_bc} \
+			| bc >${temp_hash_sum}; \
+			  rm -rf ${temp_hash_sum}.lock ) \
+		| gawk -e "${detect_miniZ_hash_count}" \
+		)
+	    ;;
+
+	*)
+	    hashCount=$(cat ${BENCHLOGFILE} \
 		    | tail -n +$hash_line \
 		    | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
 		    | gawk -e "${detect_zm_hash_count}" \
@@ -200,7 +218,9 @@ _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
 				| bc >${temp_hash_sum}; \
 			    rm -rf ${temp_hash_sum}.lock; ) \
 		    | wc -l \
-             )
+	    )
+	    ;;
+    esac
     # Wir warten, bis die vom tee produzierten Prozesse vollständig fertig sind
     while [[ -f ${temp_hash_sum}.lock ]]; do sleep .001; done
 
@@ -268,13 +288,25 @@ _measure_one_whole_WattsHashes_Cycle () {
 
     ### Hashwerte aus dem Hintergrund nachsehen, nur die Zeilen zählen und Flagge setzen, sobald die Minimum Hashwerte erreicht sind.
     touch ${FATAL_ERR_CNT}.lock ${RETRIES_COUNT}.lock ${BoooooS_COUNT}.lock
-    hashCount=$(cat ${BENCHLOGFILE} \
-		    | tail -n +$hash_line \
-		    | tee >(grep -E -c -m1 -e "${ERREXPR}" >${FATAL_ERR_CNT}; \
-			    rm -f ${FATAL_ERR_CNT}.lock) \
-			  >(grep -E -c -m1 -e "${CONEXPR}" >${RETRIES_COUNT}; \
-			    rm -f ${RETRIES_COUNT}.lock) \
-			  >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+    case "${MINER}" in
+	miniZ#*)
+	    # Diese drei haben wir noch nicht implementiert, da sie noch nicht aufgetreten sind.
+	    echo 0 | tee ${FATAL_ERR_CNT} ${RETRIES_COUNT} >${BoooooS_COUNT}
+	    read hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
+		| tail -n +$hash_line \
+		| gawk -v BOOFILE="${BoooooS_COUNT}" -e "${detect_miniZ_hash_count}" \
+		)
+	    rm -f ${FATAL_ERR_CNT}.lock ${RETRIES_COUNT}.lock ${BoooooS_COUNT}.lock
+	    ;;
+
+	*)
+	    hashCount=$(cat ${BENCHLOGFILE} \
+		| tail -n +$hash_line \
+		| tee >(grep -E -c -m1 -e "${ERREXPR}" >${FATAL_ERR_CNT}; \
+			rm -f ${FATAL_ERR_CNT}.lock) \
+		      >(grep -E -c -m1 -e "${CONEXPR}" >${RETRIES_COUNT}; \
+			rm -f ${RETRIES_COUNT}.lock) \
+		      >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
                                BEGIN { yeses=0; booos=0; seq_booos=0 }
                                $0 ~ BOO { booos++; seq_booos++; next }
                                $0 ~ YES { yeses++; seq_booos=0;
@@ -284,11 +316,13 @@ _measure_one_whole_WattsHashes_Cycle () {
                                END { print seq_booos " " booos " " yeses;
 			             # zu Debugzwecken die Suchmuster, die angekommen sind, ausgeben
 			             print BOO; print YES; }' >${BoooooS_COUNT} 2>/dev/null; \
-					 rm -f ${BoooooS_COUNT}.lock) \
-					 | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
-					 | gawk -e "${detect_zm_hash_count}" \
-					 | grep -E -c "/s\s*$"
+			rm -f ${BoooooS_COUNT}.lock) \
+		| sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+		| gawk -e "${detect_zm_hash_count}" \
+		| grep -E -c "/s\s*$"
              )
+	    ;;
+    esac
     # Wir warten, bis die vom tee produzierten Prozesse vollständig fertig sind
     while [[ -f ${FATAL_ERR_CNT}.lock || -f ${RETRIES_COUNT}.lock || -f ${BoooooS_COUNT}.lock ]]; do sleep .001; done
 
@@ -399,7 +433,7 @@ _measure_one_whole_WattsHashes_Cycle () {
         ###
         ### TWEAKING MODE
         ###
-        TWEAK_CMD_LOG_AGE=$(stat -c %Y ${TWEAK_CMD_LOG})
+        TWEAK_CMD_LOG_AGE=$(date --reference=${TWEAK_CMD_LOG} +%s)
         if [ $new_TweakCommand_available -lt ${TWEAK_CMD_LOG_AGE} ]; then
             #
             # Ein neuer Messzyklus muss initiaisiert werden.
@@ -810,13 +844,23 @@ _On_Exit () {
         #    Aufbereitung der Werte zum Schreiben in die benchmark_*.json
         #
 
-        # Weil im Logfile die Einheiten gemischt sein können (kH/s bis TH/s) rechnen wir alles in H/s bzw. Sol/s um.
+        # Weil im Logfile die Einheiten gemischt sein können (kH/s bis TH/s) rechnen wir alles in H/s bzw. Sol/s bzw. G/s um.
         #      Diese Basiseinheit merken wir uns in der Variablem $temp_einheit
-        temp_einheit=$(cat ${BENCHLOGFILE} \
-                           | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
-                           | gawk -e "${detect_zm_hash_count}" \
-                           | grep -E -m1 "/s\s*$" \
-                           | gawk -e '/H\/s\s*$/ {print "H/s"; next};/G\/s\s*$/ {print "G/s"; next}{print "Sol/s"}')
+	case "${MINER}" in
+	    miniZ#*)
+		read muck shit temp_einheit <<<$(cat ${BENCHLOGFILE} \
+			| gawk -v EINHEIT="1" -e "${detect_miniZ_hash_count}" \
+		     )
+		;;
+
+	    *)
+		temp_einheit=$(cat ${BENCHLOGFILE} \
+				   | sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+				   | gawk -e "${detect_zm_hash_count}" \
+				   | grep -E -m1 "/s\s*$" \
+				   | gawk -e '/H\/s\s*$/ {print "H/s"; next};/G\/s\s*$/ {print "G/s"; next}{print "Sol/s"}')
+		;;
+	esac
 
         summary="\nZusammenfassung der ermittelten Werte:\n"
         summary+="$(printf " Summe WATT   : %18s; Messwerte: %5s\n" $wattSum $wattCount)\n"
@@ -892,7 +936,7 @@ Aus welchem Grund ist er dann bei der Prüfung auf -f ${BENCHLOGFILE} hier rein 
 
     ### SCREEN ADDITIONS: ###
     if [ ${UseScreen} -eq 1 ]; then
-	[ "${BencherTitle}" != "MAIN" ] && screen -p ${BencherTitle} -X eval remove
+	[ "${BencherTitle}" != "MAIN" ] && screen -p ${BencherTitle} -X remove
     fi
 }
 #trap _On_Exit EXIT
@@ -1082,7 +1126,7 @@ else
                 "nh")
                     echo "------------------   Nicehash-Kurse           ----------------------"
                     if [ ! -s ${algoID_KURSE_PORTS_PAY} ] \
-                           || [[ $(($(date --utc --reference=${algoID_KURSE_PORTS_PAY} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
+                           || [[ $(($(date --reference=${algoID_KURSE_PORTS_PAY} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
                         _prepare_ALGO_PORTS_KURSE_from_the_Web
                         while [ $? -eq 1 ]; do
                             echo "Waiting for valid File ${algoID_KURSE_PORTS_PAY} from the Web, Second Nr. $secs"
@@ -1099,7 +1143,7 @@ else
                     if [ $((++one_call_is_enough)) -eq 1 ]; then
                         echo "------------------   WhatToMine BLOCK_REWARD  ----------------------"
                         if [ ! -s ${COIN_PRICING_WEB} ] \
-                               || [[ $(($(date --utc --reference=${COIN_PRICING_WEB} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
+                               || [[ $(($(date --reference=${COIN_PRICING_WEB} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
                             _prepare_COIN_PRICING_from_the_Web
                             while [ $? -eq 1 ]; do
                                 echo "Waiting for valid File ${COIN_PRICING_WEB} from the Web, Second Nr. $secs"
@@ -1113,7 +1157,7 @@ else
 
                         echo "------------------   Bittrex COIN-BTC-Faktor  ----------------------"
                         if [ ! -s ${COIN_TO_BTC_EXCHANGE_WEB} ] \
-                               || [[ $(($(date --utc --reference=${COIN_TO_BTC_EXCHANGE_WEB} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
+                               || [[ $(($(date --reference=${COIN_TO_BTC_EXCHANGE_WEB} +%s) + ${web_timeout})) -lt ${nowSecs} ]]; then
                             _prepare_COIN_TO_BTC_EXCHANGE_from_the_Web
                             while [ $? -eq 1 ]; do
                                 echo "Waiting for valid File ${COIN_TO_BTC_EXCHANGE_WEB} from the Web, Second Nr. $secs"
@@ -1217,7 +1261,12 @@ cd ${_WORKDIR_} >/dev/null
 # Es sind jetzt jede Menge Assoziativer Arrays mit Werten aus der JSON da
 #
 bENCH_SRC="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/bENCH.in"
-_read_IMPORTANT_BENCHMARK_JSON_in # without_miners
+# _func_gpu_abfrage_sh von oben ruft
+#    _set_Miner_Device_to_Nvidia_GpuIdx_maps ruft
+#        _set_ALLE_MINER_from_path
+#        _read_in_minerFees_to_MINER_FEES
+#        _set_ALLE_LIVE_MINER
+_read_IMPORTANT_BENCHMARK_JSON_in without_miners
 #echo "I'm here..."
 
 ################################################################################
@@ -1645,7 +1694,7 @@ for pidx in ${!Products[@]}; do
                                       && ${#PoolFee[${ppool}]}    -gt 0 \
                                 ]]; then
                                 # "Mines" in BTC berechnen
-                                algoMines=$(echo "scale=20;   ${bENCH[$algorithm]}  \
+                                algoMines=$(echo "scale=10;   ${bENCH[$algorithm]}  \
                                                * ${KURSE[$ccoin]}  \
                                                / ${k_base}^3  \
                                                * ( 100 - "${PoolFee[${ppool}]}" )    \
@@ -1697,7 +1746,7 @@ for pidx in ${!Products[@]}; do
 						   && ${#PoolFee[${ppool}]}         -gt 0   \
                                     ]]; then
                                     # "Mines" in BTC berechnen
-                                    algoMines=$(echo "scale=20;   86400 * ${BlockReward[${ccoin}]} * ${Coin2BTC_factor[${ccoin}]}   \
+                                    algoMines=$(echo "scale=10;   86400 * ${BlockReward[${ccoin}]} * ${Coin2BTC_factor[${ccoin}]}   \
                                                / ( ${BlockTime[${ccoin}]} * (1 + ${CoinHash[${ccoin}]} / ${bENCH[$algorithm]}) ) \
                                                * ( 100 - "${PoolFee[${ppool}]}" )    \
                                                * ( 100 - "${miner_fee}" ) \
@@ -1853,7 +1902,7 @@ if [ ! ${STOP_AFTER_MIN_REACHED} -eq 1 ]; then
     rm -f ${TWEAK_CMD_LOG}
     touch ${TWEAK_CMD_LOG}
     declare -i TWEAK_CMD_LOG_AGE
-    declare -i new_TweakCommand_available=$(stat -c %Y ${TWEAK_CMD_LOG})
+    declare -i new_TweakCommand_available=$(date --reference=${TWEAK_CMD_LOG} +%s)
     tweak_msg=''
     declare -A TWEAK_MSGs
     declare -i queryCnt=0
@@ -2145,7 +2194,7 @@ if [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]; then
     read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
 fi
 
-if [ ${ScreenTest} -eq 0 ]; then
+if [ 1 -eq 0 -a ${ScreenTest} -eq 0 ]; then
     # GPU-Kommandos absetzen...
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "${This}: Executing GPU-Commands"
     for (( i=0; i<${#CmdStack[@]}; i++ )); do
@@ -2178,7 +2227,7 @@ if [ ${UseScreen} -eq 1 ]; then
 	# Kein Miner-Start im Testmodus. Stattdessen die Analyse des laufenden Miners
 	fake_coin=daggerhashimoto
 	fake_device=${miner_device}
-	[ "${coin}" == "octopus" -o ${miner_device} -eq 8 ] && { fake_coin=octopus; fake_device=8; }
+	# [ "${coin}" == "octopus" -o ${miner_device} -eq 8 ] && { fake_coin=octopus; fake_device=8; }
 	BENCHLOGFILE=/home/avalon/miner/t-rex/t-rex-${fake_device}-${fake_coin}.log
 	# $PPID wird in der Screen-Session nicht aufgelöst... ist leer ???
 	# $BASHPID war auch unbekannt. Erst $$ hatte funktioniert
@@ -2248,12 +2297,24 @@ if [ ${UseScreen} -eq 1 ]; then
     if [ ${CALLED_FROM_GPU} -eq 1 ]; then
 	cmd="${Bench_Log_PTY_Cmd}"'\nexit\n'
 	Miner_LOG_Title="M#${gpu_idx}"
-	screen -drx ${FG_SESS} -X screen -t ${Miner_LOG_Title}
-	screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
-	screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "${cmd}"
-	screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X other
+	if [ $(screen -ls|grep -c ${BG_SESS}) -eq 1 ]; then
+	    screen -drx ${FG_SESS} -X screen -t ${Miner_LOG_Title}
+	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/benchmarking\n"
+	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "${cmd}"
+	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X other
+	else
+	    # Von einem gpu_gv-algo.sh gerufen, der NICHT vom mm gerufen wurde
+	    screen -X screen -t ${Miner_LOG_Title}
+	    screen -p ${Miner_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/benchmarking\n"
+	    until [ -s ${BENCHLOGFILE} ]; do sleep .01; done
+	    screen -p ${Miner_LOG_Title} -X stuff "${cmd}"
+	    screen -p ${Miner_LOG_Title} -X other
+	    screen -X eval \
+		   "select ${BencherTitle}" "split -v" focus \
+		   "select ${Miner_LOG_Title}" other
+	fi
     else
-	# Standalone-Mode:
+	# Standalone-Mode (z.B. fürs Tweaken):
 	# ... wählt in der aktuellen Region den Bencher (select ${BencherTitle})...
 	# ... splittet den Bildschirm vertikal (split -v), springt nach rechts (focus)...
 	screen -X eval "select ${BencherTitle}" "split -v" focus

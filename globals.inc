@@ -32,6 +32,7 @@ fi
 # Wir verwenden oft "readarray" am Ende einer Pipe. Deshalb wollen wir, dass diese Option global verfügbar ist.
 # An jeder Stelle im Source-Code, wo diese Zeile gefunden wird, kann sie also entfernt werden.
 shopt -s lastpipe
+shopt -s extglob
 
 # Die Anzahl der besten Algos, die bei der globalen Berechnung pro GPU berücksichtigt werden sollen
 BEST_ALGO_CNT=5 # 2021-05-02 Mehr als 60 Mio Berechnungen bei 10 GPU's, 210 Sekunden Berechnungsdauer
@@ -197,11 +198,9 @@ function _get_file_modified_time_ () {
 
     _reserve_and_lock_file "$1" "--do_not_log"
     if [ -f ${1} ]; then
-        m_time=$(stat -c "%Y.%y" ${1})
-        _modified_time_=${m_time%%.*}
-        _fraction_=${m_time##*.}
-        [[ "${_fraction_}" =~ ^0*([[:digit:]]*) ]] && _fraction_=${BASH_REMATCH[1]}
-        [  "${_fraction_}" == ""                 ] && _fraction_="1"
+	read _modified_time_ _fraction_ <<<$(date -r "${1}" "+%s %N")
+	_fraction_=${_fraction_##*(0)}
+	_fraction_=${_fraction_:-1}
     fi
     _remove_lock "--do_not_log"
     echo "${_modified_time_} ${_fraction_}"

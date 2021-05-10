@@ -10,8 +10,8 @@
 
 minerfolder="/home/avalon/miner/miniZ/1.7x3"
 
-extra_params="--nocolor --show-shares"
-extra_params="--nocolor --show-shares --shares-detail"
+#extra_params="--nocolor --show-shares --logfile $FILENAME"
+extra_params="--nocolor --show-shares --shares-detail --telemetry=0"
 
 LIVE_START_CMD='%s/%s --url=%s.%s@%s:%s --pass %s --cuda-devices=%s --pers=auto '${extra_params}
 LIVE_PARAMETERSTACK=(

@@ -490,7 +490,7 @@ for algorithm in "${!bENCH[@]}"; do
                             ]]; then
 
                             # "Mines" in BTC berechnen
-                            algoMines=$(echo "scale=20;   ${bENCH[${algorithm}]}  \
+                            algoMines=$(echo "scale=10;   ${bENCH[${algorithm}]}  \
                                                            * ${KURSE[${coin}]}  \
                                                            / ${k_base}^3  \
                                                            * ( 100 - "${PoolFee[${pool}]}" )     \
@@ -523,7 +523,7 @@ for algorithm in "${!bENCH[@]}"; do
                                            && ${WATTS[${algorithm}]}       -lt 1000 \
                             ]]; then
                             # "Mines" in BTC berechnen
-                            algoMines=$(echo "scale=20;   86400 * ${BlockReward[${coin}]} * ${Coin2BTC_factor[${coin}]}   \
+                            algoMines=$(echo "scale=10;   86400 * ${BlockReward[${coin}]} * ${Coin2BTC_factor[${coin}]}   \
                                                            / ( ${BlockTime[${coin}]} * (1 + ${CoinHash[${coin}]} / ${bENCH[${algorithm}]}) ) \
                                                            * ( 100 - "${PoolFee[${pool}]}" )     \
                                                            * ( 100 - "${miner_fee}" ) \

@@ -206,14 +206,16 @@ printFrac="000000000"${nowFrac}
 zeitstempel_t0=${NOWSECS}.${printFrac:$((${#printFrac}-9))}
 echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t0} \
      "GPU #${gpu_idx}: ZEITMARKE t0: Absetzen der NVIDIA-Commands" | tee -a ${ERRLOG} ${BENCHLOGFILE}
-for (( i=0; $i<${#CmdStack[@]}; i++ )); do
-    if [ ${ScreenTest} -eq 1 ]; then
-	echo "Die folgenden Kommandos werden wegen ScreenTest=1 NICHT abgesetzt:"
-	echo ${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
-    else
-	${CmdStack[$i]} | tee -a ${BENCHLOGFILE}
-    fi
-done
+if [ 1 -eq -1 -o ${ScreenTest} -eq 1 ]; then
+    echo "Die folgenden Kommandos werden NICHT abgesetzt, bis das Problem mit dem nvidia-settings P0-Mode gelöst ist:" | tee -a ${ERRLOG} ${BENCHLOGFILE}
+    for (( i=0; $i<${#CmdStack[@]}; i++ )); do
+	echo ${CmdStack[$i]} | tee -a ${ERRLOG} ${BENCHLOGFILE}
+    done
+else
+    for (( i=0; $i<${#CmdStack[@]}; i++ )); do
+	${CmdStack[$i]} | tee -a ${ERRLOG} ${BENCHLOGFILE}
+    done
+fi
 
 ####################################################################################
 ################################################################################
@@ -294,6 +296,7 @@ while :; do
 	    screen -drx ${FG_SESS} -X screen -t ${Miner_LOG_Title}
 	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
 	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "${cmd}"
+	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X select LMMS
 
 	    # Im Testmodus gleich wieder auf den originalen Wert zurücksetzen
 	    [ -n "${NORMAL_BENCHLOGFILE}" ] && BENCHLOGFILE=${NORMAL_BENCHLOGFILE}
@@ -329,7 +332,7 @@ while :; do
 	    # Diese drei haben wir noch nicht implementiert, da sie noch nicht aufgetreten sind.
 	    echo 0 | tee ${MINER}.fatal_err ${MINER}.retry >${MINER}.overclock
 	    read hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
-		| gawk -e "${detect_miniZ_hash_count}" \
+		| gawk -v BOOFILE="${MINER}.booos" -e "${detect_miniZ_hash_count}" \
 		)
 	    rm -f ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
 	    ;;

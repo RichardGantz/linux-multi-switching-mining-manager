@@ -112,8 +112,8 @@ _update_SELF_if_necessary()
     UPD_FILE="update_${SRC_FILE}"
     rm -f $UPD_FILE
     if [ ! "$GPU_DIR" == "$SRC_DIR" ]; then
-        src_secs=$(date --utc --reference=../${SRC_DIR}/${SRC_FILE} +%s)
-        dst_secs=$(date --utc --reference=${SRC_FILE} +%s)
+        src_secs=$(date --reference=../${SRC_DIR}/${SRC_FILE} +%s)
+        dst_secs=$(date --reference=${SRC_FILE} +%s)
         if [[ $dst_secs < $src_secs ]]; then
             # create update command file
             echo "cp -f ../${SRC_DIR}/${SRC_FILE} .; \
@@ -459,7 +459,9 @@ function _do_all_auto_benchmarks {
 	    cmd="cd ${LINUX_MULTI_MINING_ROOT}/benchmarking; ${cmd}"
 	    # Vom mm aus gerufen befinden wir uns hier in der ${BG_SESS}!
 	    # Deshalb hier die Umleitung in das eigene Logfile, damit die Aktivitäten vorne gesehen werden können.
-            cmd+=" >>../${gpu_uuid}/gpu_gv-algo_${gpu_uuid}.log"
+	    if [ $(screen -ls|grep -c ${BG_SESS}) -eq 1 ]; then
+		cmd+=" >>../${gpu_uuid}/gpu_gv-algo_${gpu_uuid}.log"
+	    fi
 	    cmd+='\nexit\n'
 	    # Vom mm aus gerufen befinden wir uns hier in der ${BG_SESS}!
 	    # Merkmal: ${STY} == ${BG_SESS} - aber wir brauchen wahrscheinlich andere Kriterien, um das sicher zu erkennen.
@@ -495,6 +497,10 @@ function _do_all_auto_benchmarks {
     cd ${_WORKDIR_}
 }
 
+# Nach dem Aufruf dieser Funktion steht das Array WillBenchmarkAlgorithm mit den zu benchmarkenden Algorithms
+# Diese Funktion wurde in die gpu-bENCH.inc verlegt, damit sie auch vom Benchmarker gerufen werden kann.
+_find_algorithms_to_benchmark
+
 ###############################################################################
 #
 # Gibt es überhaupt schon etwas zu tun?
@@ -525,10 +531,6 @@ while [ ! -f ${SYNCFILE} ]; do
     sleep .5
 done
 [[ "${_progressbar}" != "\r" ]] && printf "\n"
-
-# Nach dem Aufruf dieser Funktion steht das Array WillBenchmarkAlgorithm mit den zu benchmarkenden Algorithms
-# Diese Funktion wurde in die gpu-bENCH.inc verlegt, damit sie auch vom Benchmarker gerufen werden kann.
-_find_algorithms_to_benchmark
 
 ### SCREEN ADDITIONS: ###
 #if [ ${ScreenTest} -eq 0 ]; then
@@ -594,7 +596,7 @@ while :; do
         #  2. Ruft _read_IMPORTANT_BENCHMARK_JSON_in falls die Quelldatei upgedated wurde.
         #                             => Aktuelle Arrays bENCH["AlgoName"] und WATTS["AlgoName"]
 	#  2021-04-19:                => Array pleaseBenchmarkAlgorithm[]
-        if [[ $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds < $(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s) ]]; then
+        if [[ $IMPORTANT_BENCHMARK_JSON_last_age_in_seconds < $(date --reference=$IMPORTANT_BENCHMARK_JSON +%s) ]]; then
             echo "GPU #${gpu_idx}: ###---> Updating Arrays bENCH[] and WATTs[] (and more) from $IMPORTANT_BENCHMARK_JSON"
             _read_IMPORTANT_BENCHMARK_JSON_in # without_miners
         fi
@@ -713,7 +715,14 @@ while :; do
 
         # Mal sehen, ob es überhaupt schon Benchmarkwerte gibt oder ob Benchmarks nachzuholen sind.
         # Erst mal alle MiningAlgos ermitteln, die möglich sind und gegen die vorhandenen JSON Einträge checken.
-        _set_Miner_Device_to_Nvidia_GpuIdx_maps
+	# Die folgende Variable steht beim ersten Mal in dieser Endlosschleife auf "0",
+	#     weil sie von dieser Funktion selbst beim Aufruf VOR der Endlosschleife auf "0" gesetzt wurde.
+	#     _set_ALLE_MINER_from_path wird nur gerufen, wenn _ALL_MINERS_DATA_CHANGED_ON_DISK_ weder "0" noch "1" ist.
+        _set_Miner_Device_to_Nvidia_GpuIdx_maps ${_ALL_MINERS_DATA_CHANGED_ON_DISK_}
+	# Damit wird jetzt sichergestellt, dass beim nächsten Schleifendurchlauf _set_ALLE_MINER_from_path wieder gerufen wird.
+	# Es sei denn, beim Aufruf von _read_IMPORTANT_BENCHMARK_JSON_in oben wurde die Variable durch _set_ALLE_MINER_from_path auf "1" gesetzt,
+	#    wodurch _set_Miner_Device_to_Nvidia_GpuIdx_maps seine Arrays wieder aufbaut
+	unset _ALL_MINERS_DATA_CHANGED_ON_DISK_
         _read_in_ALL_Mining_Available_and_Missing_Miner_Algo_Arrays
         _read_in_static_COIN_MININGALGO_SERVERNAME_PORT_from_Pool_Info_Array
 
@@ -796,7 +805,7 @@ while :; do
 				    # Denn die Zahl im Windows-Switcher-Sourcecode ist um eine 10er-Potenz höher, also 1000000000 bzw. 0.000000001
 				    # Das liegt möglicherweise daran, dass der Switcher dseine Daten von einer ANDEREN Nicehash-Seite abruft.
 				    # Mehr Details dazu in der README_GER.md
-				    algoMines=$(echo "scale=20;   ${bENCH[${algorithm}]}  \
+				    algoMines=$(echo "scale=10;   ${bENCH[${algorithm}]}  \
                                                            * ${KURSE[${coin}]}  \
                                                            / 100000000  \
                                                            * ( 100 - "${PoolFee[${pool}]}" )     \
@@ -840,7 +849,7 @@ while :; do
                                             && ${WATTS[${algorithm}]}       -lt 1000 \
                                     ]]; then
                                     # "Mines" in BTC berechnen
-                                    algoMines=$(echo "scale=20;   86400 * ${BlockReward[${coin}]} * ${Coin2BTC_factor[${coin}]}   \
+                                    algoMines=$(echo "scale=10;   86400 * ${BlockReward[${coin}]} * ${Coin2BTC_factor[${coin}]}   \
                                                            / ( ${BlockTime[${coin}]} * (1 + ${CoinHash[${coin}]} / ${bENCH[${algorithm}]}) ) \
                                                            * ( 100 - "${PoolFee[${pool}]}" )     \
                                                            * ( 100 - "${miner_fee}" ) \
@@ -1388,7 +1397,7 @@ while :; do
                 for ((cmd=0; cmd<${#CmdStack[@]}; cmd++)); do
                     cmdParameterString+="${CmdStack[${cmd}]// /°} "
                 done
-		shopt -s extglob
+		#shopt -s extglob
 		cmdParameterString="${cmdParameterString%%*( )}"
                 
                 echo "GPU #${gpu_idx}: STARTE Miner Shell ${MinerShell}.sh und übergebe Algorithm ${coin_algorithm} und mehr..."
@@ -1408,7 +1417,7 @@ ${server_name} \
 ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
 $cmdParameterString"
 		p_cmd="${p_cmd%%*( )}"
-		shopt -u extglob
+		#shopt -u extglob
 
 		m_cmd="${p_cmd} >>${MinerShell}.log"
 
@@ -1441,7 +1450,7 @@ $cmdParameterString"
 		    until [ -s ${MinerShell}.pid ]; do sleep .02; done
 		    read _ppid_ _p_cmd_ <<<$(pgrep -f -a "${p_cmd}")
 		    if [ ${_ppid_} -eq $(< ${MinerShell}.pid) ]; then
-			_epoch_=$(date --utc +%s)
+			_epoch_=$(date +%s)
 			printf -v to_cmd_history "%s %5d %s" ${_epoch_} ${_ppid_} "${_p_cmd_}"
 			echo ${_ppid_} >${MinerShell}.ppid
 			echo "${to_cmd_history}" >>MinerShell_STARTS_HISTORY
@@ -1496,7 +1505,7 @@ $cmdParameterString"
     #                         mit der Meldung "Waiting for new actual Pricing Data from the Web..."
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
     echo "GPU #${gpu_idx}: Waiting for SYNCFILE and therefore for new actual Pricing Data from the Web..."
-    while (( ${new_Data_available} == $(date --utc --reference=${SYNCFILE} +%s) )) ; do
+    while (( ${new_Data_available} == $(date --reference=${SYNCFILE} +%s) )) ; do
         sleep 1
     done
     #  9. Merkt sich das neue "Alter" von ${SYNCFILE} in der Variablen ${new_Data_available}

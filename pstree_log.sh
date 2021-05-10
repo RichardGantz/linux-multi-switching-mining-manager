@@ -11,7 +11,7 @@
 echo "$1:MessungsStart" >>pstree.log
 while :; do
     #pstree -c $rootPID >>pstree.log
-    echo "$(date --utc +%s):" >>pstree.log
+    echo "$(date +%s):" >>pstree.log
     ps -fu $(whoami) | grep -e "$(< multi_mining_calc.pid)" \
         | grep -v 'grep -e ' \
         | grep -v 'pstree_log.sh' \

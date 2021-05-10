@@ -7,45 +7,87 @@ miner_name=miniZ
 miner_version=1.7x3
 MINER=${miner_name}#${miner_version}
 BENCHLOGFILE="../miners/miniZ-zhash-test.log"
-#BENCHLOGFILE="../miners/miniz-ethash-test.log"
-#BENCHLOGFILE="../miners/miniz-beamhash-test.log"
+BENCHLOGFILE="../miners/miniz-ethash-test.log"
+BENCHLOGFILE="../miners/miniz-beamhash-test.log"
 #BENCHLOGFILE="../miners/miniz-equihash-test.log" # <--- Hat gerechnet, aber in 12 Minuten keinen einzigen Share abgeliefert. Muss die 320s Regel greifen!
 #BENCHLOGFILE="../miners/miniz-kawpow-test.log"
+BENCHLOGFILE="../miners/miniZ-6.log"
 
-detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0 }
-/[[]WARNING[]] Bad share:/ { booos++; seq_booos++; next }
+# [ 0d 0h18m30s] S: 97/1/0 0>RTX 3070  100% [0.C/ 0%]* 61.87(56.98)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
+# [INFO   ] Target set to 00000004F784BD45 (864.72M)
+# [ 0d 0h18m40s] S:101/1/0 0>RTX 3070  100% [0.C/ 0%]* 62.26(57.11)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
+# [ 0d 1h13m30s] S:448/15/4 0>RTX 3070 99.1% [0.C/ 0%]* 62.15(61.88)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
+
+detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0; last_shares=0 }
+/[[]WARNING[]] (Bad|Stale) share:/ { booos++; seq_booos++; next }
 match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
    yeses++; seq_booos=0;
-   S1 = substr( $0, RSTART, RLENGTH )
+   S1 = substr( $0, RSTART+2, RLENGTH )
    SN = split( S1, SA )
    if (match( SA[ SN ], /\([[:digit:].]+\).*(Sol|H)\/s/ )) {
        M = substr( SA[ SN ], RSTART+1, RLENGTH );
        speed   = substr( M, 1, index(M,")")-1 )
        einheit = substr( SA[ SN ], index( SA[ SN ], ")" )+1 )
-       shares  = substr( SA[ 2 ], 1, index(SA[ 2 ],"/")-1 )
-       }
+       shares  = substr( SA[ 1 ], 1, index(SA[ 1 ],"/")-1 )
+       if (length(_BC_)) {
+       	  delta = shares - last_shares
+	  last_shares = shares
+	  print delta "*" speed " " einheit
+       } else if (length(EINHEIT)) {
+       	      if (einheit ~ /H\/s\s*$/) {einheit = "H/s"; exit}
+	      einheit = "Sol/s"
+       	      exit
+	 }
    }
+}
 END {
-    print seq_booos " " booos " >" yeses >"'${MINER}.booos'";
-    print shares " " speed " " einheit
+    if (length(BOOFILE)) print seq_booos " " booos " >" yeses >BOOFILE
+    if (length(_BC_)==0) print shares " " speed " " einheit
 }
 '
+BOOFILE_for_GWAK=${MINER}.booos
 
-touch ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
+read hashCount speed einheit <<<$(
+    cat ${BENCHLOGFILE} \
+	| gawk -v BOOFILE="${BOOFILE_for_GWAK}" -e "${detect_miniZ_hash_count}" \
+     )
+echo ${hashCount} ${speed} ${einheit}
+cat ${BOOFILE_for_GWAK}
+exit
+rm -f ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock \
+   ${BOOFILE_for_GWAK} \
+   ${temp_hash_bc} ${temp_hash_sum}
+
+exit
+
 read hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
-	| gawk -e "${detect_miniZ_hash_count}" \
+	| tee >(gawk -v _BC_="1" -M -e "${detect_miniZ_hash_count}" \
+		    | gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
+		    | tee ${temp_hash_bc} \
+		    | bc >${temp_hash_sum}; \
+	      rm -rf ${temp_hash_sum}.lock; ) \
+	| gawk -v BOOFILE="${BOOFILE_for_GWAK}" -e "${detect_miniZ_hash_count}" \
 	)
 
-echo ${hashCount} $speed $einheit
-cat ${MINER}.booos
-rm  ${MINER}.booos
-rm -f ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
-exit
-    cat ${BENCHLOGFILE} \
-		| grep -E -o 'S:.*\]\*.*H\/s' \
-		| gawk -e "${detect_miniZ_hash_count}" #\
-#	 )
+cat ${temp_hash_bc}
+cat ${temp_hash_sum}
 
+hashSum=$(< ${temp_hash_sum})
+echo "scale=2; \
+              avghash     = $hashSum / $hashCount;     \
+              print avghash, \" \", avgwatt, \" \", quotient, \" \", hashpersecs" | bc
+
+
+temp_hash_bc="_temp_hash_bc_input"
+temp_hash_sum="_temp_hash_sum"
+BOOFILE_for_GWAK=
+
+		read hashCount speed temp_einheit <<<$(cat ${BENCHLOGFILE} \
+			| gawk -v EINHEIT="1" -e "${detect_miniZ_hash_count}" \
+		     )
+
+echo ${hashCount} ${speed} ${temp_einheit}
+exit
 
 gpu_uuid=GPU-000bdf4a-1a2c-db4d-5486-585548cd33cb
 gpu_uuid=GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd

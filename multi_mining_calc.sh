@@ -317,6 +317,11 @@ while : ; do
     #       werden berücksichtigt, vor allem sind das die Daten über den generellen Beachtungszustand
     #       von GPUs und Algorithmen.
     #       GPUs können als ENABLED (1) oder DISABLED (0) gesetzt werden
+    # _func_gpu_abfrage_sh ruft
+    #    _set_Miner_Device_to_Nvidia_GpuIdx_maps ruft
+    #        _set_ALLE_MINER_from_path
+    #        _read_in_minerFees_to_MINER_FEES
+    #        _set_ALLE_LIVE_MINER
     _func_gpu_abfrage_sh
 
     #
@@ -863,6 +868,7 @@ while : ; do
                             profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
                             actAlgoProfit[${algoIdx}]=${ACTUAL_REAL_PROFIT}
                         fi
+if [ 1 -eq 0 ]; then
                         if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
                             MAX_PROFIT_GPU_Algo_Combination="${gpu_idx}:${algoIdx},"
                             msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
@@ -879,7 +885,7 @@ while : ; do
                             msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
                             MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
                         fi
-                        #fi
+fi
                     done
 
                     profitableAlgoIndexesCnt=${#profitableAlgoIndexes[@]}
@@ -1000,7 +1006,7 @@ while : ; do
 
         if [[ ${MAX_GOOD_GPUs} -gt 1 ]]; then      # Den Fall für 1 GPU allein haben wir ja schon ermittelt.
 
-            # Bei zu wenig Solarpower könnte das ins Minus rutschen...
+	    # Bei zu wenig Solarpower könnte das ins Minus rutschen...
             #     [ DAS MÜSSEN WIR NOCH CHECKEN, OB DAS WIRKLICH SICHTBAR WIRD ]
             # Deshalb werden wir auch noch Kombinationen mit weniger als der vollen Anzahl an gewinnbringenden GPUs
             #     durchrechnen.
@@ -1012,10 +1018,15 @@ while : ; do
             #
             # numGPUs:        Anzahl zu berechnender GPU-Kombinationen mit numGPUs GPU's
             #
+
+	    # Um die Anzahl an Berechnungen einzuschränken, starten wir mal mit der Anzahl an GPU's -3, wenn die Zahl größer ist als 8 GPU's
+	    MIN_GOOD_GPUs=2
+	    [ ${MAX_GOOD_GPUs} -ge 8 ] && MIN_GOOD_GPUs=8
+
             rm -f .bc_result_GPUs_* .bc_prog_GPUs_* .bc_results_all 
             start[$c]=$(date +%s)
             echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
-            for (( numGPUs=2; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
+            for (( numGPUs=${MIN_GOOD_GPUs}; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
                 # Parameter: $1 = maxTiefe
                 #            $2 = Beginn Pointer1 bei Index 0
                 #            $3 = Ende letzter Pointer 5
@@ -1107,7 +1118,7 @@ while : ; do
             # MAX_PROFIT:   .00190162 1:0,2:0,3:0,4:0,6:0,7:0
             #
             read muck MAX_PROFIT   MAX_PROFIT_GPU_Algo_Combination <<<$(< .MAX_PROFIT.in)   #${_MAX_PROFIT_in}
-            echo -e "\$muck: $muck\n \$MAX_PROFIT: $MAX_PROFIT\n \$MAX_PROFIT_GPU_Algo_Combination: $MAX_PROFIT_GPU_Algo_Combination"
+            # echo -e "\$muck: $muck\n \$MAX_PROFIT: $MAX_PROFIT\n \$MAX_PROFIT_GPU_Algo_Combination: $MAX_PROFIT_GPU_Algo_Combination"
             if [ ${#MAX_PROFIT} -eq 0 ]; then
                 echo "${ende[$c]}: Stopping MultiMiner because of no MAX_PROFIT with exit code 77" | tee -a ${ERRLOG} .MM_STOPPED_INTERALLY
                 exit 77
@@ -1129,10 +1140,18 @@ while : ; do
 
         # Warten auf die bc Threads und Auswerten der Ergebnisse.
 
-        echo "=========    Berechnungsverlauf    ========="
-        for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
-            echo ${MAX_PROFIT_MSG_STACK[$msg]}
-        done
+	if [ 1 -eq 1 ]; then
+            echo "=========    Berechnungsverlauf    ========="
+	    if [ 1 -eq 0 ]; then
+		# Veränderungen an MIN_GOOD_GPUs, PossibleCandidateGPUidx=( {0..10} ), etc. müssen in dieser Datei manuell vorgenommen werden!
+		# Lauf bei 8 von 11 bis 11 von 11 GPUs bis zu 2 Sekunden, die man sich sparen kann :-)
+		./bc_berechnungs_historie.sh
+	    else
+		for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
+		    echo ${MAX_PROFIT_MSG_STACK[$msg]}
+		done
+	    fi
+	fi
         if [[ "${MAX_PROFIT_GPU_Algo_Combination}" != "${MAX_FP_GPU_Algo_Combination}" \
                     && "${MAX_FP_MINES}" > "${MAX_PROFIT}" ]]; then
             echo "FULL POWER MINES ${MAX_FP_MINES} wären mehr als die EFFIZIENZ Mines ${MAX_PROFIT}"
@@ -1483,7 +1502,7 @@ while : ; do
     [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 
     printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
-    while [ "${new_Data_available}" == "$(date --utc --reference=${SYNCFILE} +%s)" ] ; do
+    while [ "${new_Data_available}" == "$(date --reference=${SYNCFILE} +%s)" ] ; do
         sleep 1
     done
 

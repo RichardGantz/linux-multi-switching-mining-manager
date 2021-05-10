@@ -141,7 +141,7 @@ function _read_IMPORTANT_BENCHMARK_JSON_in ()
     _reserve_and_lock_file ${IMPORTANT_BENCHMARK_JSON}    # Zum Lesen und Bearbeiten reservieren...
 
     # Dateialter zum Zeitpunkt des Array-Aufbaus festhalten
-    IMPORTANT_BENCHMARK_JSON_last_age_in_seconds=$(date --utc --reference=$IMPORTANT_BENCHMARK_JSON +%s)
+    IMPORTANT_BENCHMARK_JSON_last_age_in_seconds=$(date --reference=$IMPORTANT_BENCHMARK_JSON +%s)
 
     ################################################################################
     #
@@ -281,7 +281,7 @@ function _read_IMPORTANT_BENCHMARK_JSON_in ()
         LESS_THREADS[${lfdAlgorithm}]=${READARR[$i+ofs++]}
     done
 
-    if [ ${w_o_miners} -eq 0 ]; then
+#    if [ ${w_o_miners} -eq 0 ]; then
         ################################################################################
         #
         # Vergleich der eingelesenen Algorithmen mit der Menge an Algorithmen,
@@ -316,7 +316,7 @@ function _read_IMPORTANT_BENCHMARK_JSON_in ()
                 fi
             done
         done
-    fi
+#    fi
 }
 
 ################################################################################

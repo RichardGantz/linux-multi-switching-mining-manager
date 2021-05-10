@@ -109,7 +109,7 @@ function _calculate_ACTUAL_REAL_PROFIT () {
     #     weil alle Stellen >scale einfach weggeschmissen werden.
     #gesamtFormel="mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000"
     #echo "scale=8; ${gesamtFormel}; print real_profit, \" \", mines_sum" \
-    echo "scale=20; mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000; print real_profit, \" \", mines_sum" \
+    echo "scale=10; mines_sum=$3; real_profit = mines_sum - ( ${gesamtKostenBTC} ) * 24 / 1000; print real_profit, \" \", mines_sum" \
         | bc \
         | read ACTUAL_REAL_PROFIT ACTUAL_MAX_FP_MINES
     #   | tee bc_inner_commands \
@@ -162,7 +162,7 @@ function _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT () {
     OLD_MAX_PROFIT=${MAX_PROFIT}
     OLD_MAX_FP_MINES=${MAX_FP_MINES}
 
-    echo 'scale=20;
+    echo 'scale=10;
 mines_sum='$3';
 real_profit= mines_sum - ( '"${gesamtKostenBTC}"' ) * 24 / 1000;
 max_profit='"${MAX_PROFIT}"';
@@ -351,7 +351,7 @@ fi
 #
 # Die folgenden Überlegungen sind zu berücksichtigen:
 #
-# Diese Funktion bereitet im Wesentlichen den Programmcode vor, der vom bc anzuarbeiten ist.
+# Diese Funktion bereitet im Wesentlichen den Programmcode vor, der vom bc abzuarbeiten ist.
 # Und dieser besteht im Wesentlichen aus verschachtelten for-Schleifen. Eine for-Schleife pro GPU mit der Anzahl an Algos Durchläufen.
 # Bei 2 GPUs gibt es zwei for-Schleifen, bei 7 GPUs gibt es 7 for-Schleifen.
 #
@@ -371,9 +371,9 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
     # TestCombinationGPUs enthält echte GPU-Indexes
     MAX_GPU_TIEFE=${#TestCombinationGPUs[@]}
 
-    # ACHTUNG: BESCHRÄNKUNG AUF 10 GPUs im Moment, bis wir wissen, ob das so läuft.
+    # ACHTUNG: BESCHRÄNKUNG AUF 18 GPUs im Moment.
     FN_combi=''
-    bc_loop_var=(i j k l m n o p q r)
+    bc_loop_var=(i j k l m n o p q r s t u v w x y z)
     total_number_of_loops_str=''
     for_header=''
     for_footer=''
@@ -386,7 +386,7 @@ function _CALCULATE_GV_of_all_TestCombinationGPUs_members () {
     gpu_algo_mines_str=''
 
     # Der Anfang des bc Programmes:
-    bc_prog="scale=20;max_profit=${MAX_PROFIT};max_mines=${MAX_FP_MINES};solar_kosten_btc=${SolarWattAvailable}*${kWhMin};"
+    bc_prog="scale=10;max_profit=${MAX_PROFIT};max_mines=${MAX_FP_MINES};solar_kosten_btc=${SolarWattAvailable}*${kWhMin};"
 
     for (( lfdGPU=0; $lfdGPU<${MAX_GPU_TIEFE}; lfdGPU++ )); do
         gpu_idx=${TestCombinationGPUs[${lfdGPU}]}
@@ -476,7 +476,7 @@ print \"FP_M: \",   max_mines,  \" ${gpu_algo_mines_str%\"\,} \" FP_W: \", max_w
     # Für Diagnose-Zwecke diesen tee vor | bc einfügen
     #   | tee .bc_prog_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
     echo "$bc_prog" \
-        | bc >.bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
+	| bc >.bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
     &
     bc_THREAD_PIDS[$!]=".bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi}"
 }

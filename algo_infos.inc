@@ -75,8 +75,8 @@ function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
     # PORTS müssen aus dieser Datei geholt werden.
     # https://api2.nicehash.com/main/api/v2/mining/algorithms
     # Da sich die Ports wohl kaum ändern, genügt es, jede Stunde abzurufen
-    Pay_Time=$(date --utc --reference=${algoID_KURSE__PAY__WEB} +%s)
-    [ -s ${algoID_KURSE_PORTS_WEB} ] && PortTime=$(date --utc --reference=${algoID_KURSE_PORTS_WEB} +%s) || PortTime=0
+    Pay_Time=$(date --reference=${algoID_KURSE__PAY__WEB} +%s)
+    [ -s ${algoID_KURSE_PORTS_WEB} ] && PortTime=$(date --reference=${algoID_KURSE_PORTS_WEB} +%s) || PortTime=0
     if [ $((${Pay_Time}-3600)) -gt ${PortTime} ]; then
 	jsonValid=$(curl "https://api2.nicehash.com/main/api/v2/mining/algorithms" \
 			| tee ${algoID_KURSE_PORTS_WEB} \
@@ -182,7 +182,7 @@ function _prepare_Strompreise_in_BTC_from_the_Web () {
         # Kosten in EUR
         kwh_EUR=$(< kwh_${GRID[$grid]}_kosten.in)
         # Kosten Umrechnung in BTC
-        echo $(echo "scale=20; ${kwh_EUR}/${btcEUR}" | bc) >kWh_${GRID[$grid]}_Kosten_BTC.in
+        echo $(echo "scale=10; ${kwh_EUR}/${btcEUR}" | bc) >kWh_${GRID[$grid]}_Kosten_BTC.in
     done
 }
 

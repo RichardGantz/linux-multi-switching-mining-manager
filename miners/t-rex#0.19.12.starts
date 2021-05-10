@@ -10,7 +10,7 @@ minerfolder="/home/avalon/miner/t-rex/t-rex-0.19.12"
 
 extra_params="--api-bind-telnet 0 --api-bind-http 0"
 
-LIVE_START_CMD='%s/%s -o stratum+tcp://%s:%s -u %s.%s -p %s --devices %s -a %s --no-color '${extra_params}
+LIVE_START_CMD='%s/%s -o stratum+tcp://%s:%s -u %s.%s -p %s --devices %s -a %s --no-color --pci-indexing '${extra_params}
 LIVE_PARAMETERSTACK=(
     "minerfolder"
     "miner_name"

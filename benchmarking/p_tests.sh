@@ -3,29 +3,36 @@
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
 
-miner_name=miniZ
-miner_version=1.7x3
-MINER=${miner_name}#${miner_version}
-BENCHLOGFILE="../miners/miniz-ethash-test.log"
-BENCHLOGFILE="../miners/miniZ-zhash-test.log"
+SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
+#touch -t 05090705.00 ${SYNCFILE}
+
+if [ 1 -eq 1 ]; then
+#    m_time=$(stat -c "%Y.%y" ${SYNCFILE})
+#    echo $m_time
+#    m_time=$(find ${SYNCFILE} -printf "%T@")
+#    echo $m_time
+#    m_time=$(date --reference=${SYNCFILE} "+%s %N")
+#    echo $m_time
+
+    m_time=$(stat -c "%Y.%y" ${SYNCFILE})
+    _modified_time_=${m_time%%.*}
+    _fraction_=${m_time##*.}
+    _fraction_=${_fraction_%% *}
+    echo $_modified_time_ $_fraction_
+
+    read _modified_time_ _fraction_ <<<$(date --reference=${SYNCFILE} "+%s %N")
+    echo $_modified_time_ $_fraction_
+
+    read _modified_time_ _fraction_ <<<$(date -r ${SYNCFILE} "+%s %N")
+    echo $_modified_time_ $_fraction_
+
+    [ $_fraction_ -eq 0 ] && echo NULL || echo NOT NULL
+    exit
+fi
 
 durchgaenge=1
 while ((durchgaenge--)); do
-    COUNT=10000 #0000
-
-detect_miniZ_hash_count='BEGIN { hash=6 }
-match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
-   S1 = substr( $0, RSTART, RLENGTH )
-   SN = split( S1, SA )
-   if (match( SA[ SN ], /\([[:digit:].]+\)(Sol|H)\/s/ )) {
-       M = substr( SA[ SN ], RSTART+1, RLENGTH )
-       speed   = substr( M, 1, index(M,")")-1 )
-       einheit = substr( SA[ SN ], index( SA[ SN ], ")" )+1 )
-       shares  = substr( SA[ 2 ], 1, index(SA[ 2 ],"/")-1 )
-       }
-   }
-END { print shares " " speed " " einheit }
-'
+    COUNT=1000 #0000
 
     count=${COUNT}
     rm -f .test.out
@@ -33,9 +40,8 @@ END { print shares " " speed " " einheit }
 
 	# Put your code to test BELOW this line
 
-	cat ${BENCHLOGFILE} \
-	| gawk -e "${detect_miniZ_hash_count}"
-	    
+	read _modified_time_ _fraction_ <<<$(date -r ${SYNCFILE} "+%s %N")
+
 	# Put your code to test ABOVE this line
 
     done ; } >.test.out 2>&1
@@ -48,26 +54,13 @@ END { print shares " " speed " " einheit }
     seconds=${seconds%s}
     echo "scale=4; sekunden=${minutes}*60 + ${seconds}; print sekunden, \"\n\"" | bc | tee .test.1
 
-detect_miniZ_hash_count='BEGIN { hash=2 }
-match( $0, /\([[:digit:].]+\)(Sol|H)\/s/ ) {
-       M = substr( $0, RSTART+1, RLENGTH )
-       speed   = substr( M, 1, index(M,")")-1 )
-       einheit = substr( $NF, index( $NF, ")" )+1 )
-       shares  = substr( $hash, 1, index($hash,"/")-1 )
-       }
-END { print shares " " speed " " einheit }
-'
-
     count=${COUNT}
     rm -f .test.out
     { time while ((count--)); do
 
 	# Put your code to test BELOW this line
 
-	cat ${BENCHLOGFILE} \
-	| grep -E -o 'S:.*\]\*.*(Sol|H)\/s' \
-	| gawk -e "${detect_miniZ_hash_count}"
-	    
+	read _modified_time_ _fraction_ <<<$(date --reference=${SYNCFILE} "+%s %N")
 
 	# Put your code to test ABOVE this line
 
@@ -83,7 +76,7 @@ END { print shares " " speed " " einheit }
 
     echo 'scale=2; print "Das Verhältnis von Test1 zu Test2 beträgt ", '$(< .test.1)'/'$(< .test.2)'*100, " %\n"' | bc
 
-    sleep 1
+    sleep .1
 done
 
 rm -f .test.*
@@ -96,6 +89,12 @@ exit
 ### Vergleich der BENCHLOGFILE-Auswertung mit und ohne vorgeschaltetes grep
 ###
 ################################################################################
+
+miner_name=miniZ
+miner_version=1.7x3
+MINER=${miner_name}#${miner_version}
+BENCHLOGFILE="../miners/miniz-ethash-test.log"
+BENCHLOGFILE="../miners/miniZ-zhash-test.log"
 
 # Aufbau ohne grep
 detect_miniZ_hash_count='BEGIN { hash=6 }

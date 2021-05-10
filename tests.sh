@@ -12,7 +12,31 @@
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_delays.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_yeses.inc
 
+read muck MAX_PROFIT   MAX_PROFIT_GPU_Algo_Combination <<<$(< .MAX_PROFIT.in)   #${_MAX_PROFIT_in}
+read muck MAX_FP_MINES MAX_FP_GPU_Algo_Combination     muck2 MAX_FP_WATTS <<<$(< .MAX_FP_MINES.in) #${_MAX_FP_MINES_in}
+if [[ "${MAX_PROFIT_GPU_Algo_Combination}" != "${MAX_FP_GPU_Algo_Combination}" \
+          && "${MAX_FP_MINES}" > "${MAX_PROFIT}" ]]; then
+    echo "FULL POWER MINES ${MAX_FP_MINES} wären mehr als die EFFIZIENZ Mines ${MAX_PROFIT}"
+fi
+exit
+
 #_read_in_SYSTEM_FILE_and_SYSTEM_STATEin
+RUNNING_STATE=xyz
+read RunSecs  RunFrac <<<$(_get_file_modified_time_ ${RUNNING_STATE})
+echo $RunSecs
+if [[ ${RunSecs} > 0 ]]; then
+    echo "Time got"
+fi
+exit
+
+# Die führenden Nulen müssen von der Fraction, um nicht als Octalzahlen interpretiert zu werden
+#     und wenn zufälligerweise 0 sein sollte, muss es auf 1 gesetzt werden.
+_fraction_=000092600000
+#_fraction_=000000000
+_fraction_=${_fraction_##*(0)}
+_fraction_=${_fraction_:-1}
+echo $_fraction_
+exit
 
 #cat $(ls .bc_result_GPUs_3_0_1_4)
 cat $(ls .bc_result_GPUs_*) \
@@ -120,8 +144,8 @@ sys	0m7,114s
 1618312974, 1618312907
 
 date:
-Pay_Time=$(date --utc --reference=${algoID_KURSE_PORTS_PAY} +%s)
-PortTime=$(date --utc --reference=${algoID_KURSE_PORTS_ARR} +%s)
+Pay_Time=$(date --reference=${algoID_KURSE_PORTS_PAY} +%s)
+PortTime=$(date --reference=${algoID_KURSE_PORTS_ARR} +%s)
 
 real	0m20,291s
 user	0m15,092s

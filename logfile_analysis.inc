@@ -104,32 +104,38 @@ END { for ( i=unknownCnt; i>0; i--) { print FirstSpeed " " FirstEinheit; } }
 # ERREXPR
 # OVREXPR
 # CONEXPR
-# 
-detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0 }
-/[[]WARNING[]] Bad share:/ { booos++; seq_booos++; next }
+#
+detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0; last_shares=0 }
+/[[]WARNING[]] (Bad|Stale) share:/ { booos++; seq_booos++; next }
 match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
    yeses++; seq_booos=0;
-   S1 = substr( $0, RSTART, RLENGTH )
+   S1 = substr( $0, RSTART+2, RLENGTH )
    SN = split( S1, SA )
    if (match( SA[ SN ], /\([[:digit:].]+\).*(Sol|H)\/s/ )) {
        M = substr( SA[ SN ], RSTART+1, RLENGTH );
        speed   = substr( M, 1, index(M,")")-1 )
        einheit = substr( SA[ SN ], index( SA[ SN ], ")" )+1 )
-       shares  = substr( SA[ 2 ], 1, index(SA[ 2 ],"/")-1 )
-       }
+       shares  = substr( SA[ 1 ], 1, index(SA[ 1 ],"/")-1 )
+       if (length(_BC_)) {
+       	  delta = shares - last_shares
+	  last_shares = shares
+	  print delta "*" speed " " einheit
+       } else if (length(EINHEIT)) {
+       	      if (einheit ~ /H\/s\s*$/) {einheit = "H/s"; exit}
+	      einheit = "Sol/s"
+       	      exit
+	 }
    }
+}
 END {
-    print seq_booos " " booos " >" yeses >"'${MINER}.booos'";
-    print shares " " speed " " einheit
+    if (length(BOOFILE)) print seq_booos " " booos " >" yeses >BOOFILE
+    if (length(_BC_)==0) print shares " " speed " " einheit
 }
 '
-
-#/ GPU[[:digit:]]+: Share #[[:digit:]]+ accepted [[:digit:]]+ .s$/ \
 
 # Wir könnte zum Beispiel ein Array mit Logile-Meldungen pflegen,
 # das uns sagt, das wir den Algo vorübergehend meiden sollten.
 # Das könnte uns vielleicht auch dazu veranlassen, die "Country" zu wechseln ("eu" bzw. "us")
-
 # 2021-04-14:
 # Miner startet erst gar nicht, weil Out of Memory
 FATAL_ERROR_MSGs=(

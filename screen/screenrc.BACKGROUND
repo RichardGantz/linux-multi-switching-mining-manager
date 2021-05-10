@@ -36,6 +36,9 @@ bindkey "^[[1;5B" focus down
 # switch windows with F3 (prev) and F4 (next)
 bindkey "^[OR" prev
 bindkey "^[OS" next
+# For Sebastians Terminal:
+bindkey "^[[[C" prev
+bindkey "^[[[D" next
 
 # switch layouts with Ctrl+F3 (prev layout) and Ctrl+F4 (next)
 bindkey "^[O1;5R" layout prev

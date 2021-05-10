@@ -133,7 +133,7 @@ while :; do
 
     # Anstatt nur 31s lang zu schlafen, prüfen wir sekündlich die Internetverbindung...
     # sleep 31
-    SleepingStart=$(date --utc --reference=${SYNCFILE} +%s)
+    SleepingStart=$(date --reference=${SYNCFILE} +%s)
 
     while :; do
         _check_InternetConnection
