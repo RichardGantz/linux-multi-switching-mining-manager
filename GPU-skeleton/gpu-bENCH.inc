@@ -184,7 +184,6 @@ function _read_IMPORTANT_BENCHMARK_JSON_in ()
     #      
     #sed -e 's/\r//g' $IMPORTANT_BENCHMARK_JSON | \
     [ ${#bENCH_SRC} -eq 0 ] && bENCH_SRC=${IMPORTANT_BENCHMARK_JSON}.tee_bENCH_SRC
-    shopt -s lastpipe
     gawk -e '$1 ~ /"Name":/ \
        { mining_algo = substr( tolower($2), 2, length($2)-3 )
          if ( length( mining_algo ) > 0 ) {

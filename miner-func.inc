@@ -46,7 +46,6 @@ function _read_in_minerFees_to_MINER_FEES () {
 #
 function _set_ALLE_MINER_from_path () {
     local workdir=$(pwd) RC=0
-    shopt -s lastpipe
     cd ${LINUX_MULTI_MINING_ROOT}/miners
 
     _reserve_and_lock_file any_miner_algos_changed

@@ -62,20 +62,7 @@ function _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES () {
     # Die erste Stelle ist der GPU-Index und der Wert ist der Index in die Algorithmenliste dieser GPU
     # echo "${MAX_PROFIT_GPU_Algo_Combination}"
     unset GPUINDEXES; declare -ag GPUINDEXES
-
-    # Da wussten wir noch nicht mit den BASH-Stringausgabe-Möglichkeiten umzugehen, deshalb haben wir den sed verwendet.
-    # Und deshalb haben wir das in den read gepiped und ein weiteres Problem auf uns genommen, nämlich sicherzustellen,
-    # dass die BASH die von read eingelesenen Werte nicht wieder verwirft, wenn dieser read aus einer Subshell herauskommt,
-    # in der normalerweise jeder Prozess einer Pipe separat stattfindet...
-    #
-    #shopt_cmd_before=$(shopt -p lastpipe)
-    #shopt -s lastpipe
-    #echo ${MAX_PROFIT_GPU_Algo_Combination} | sed -e 's/\,/ /g' | read -a GPUINDEXES
-
-    # ... stattdessen kann die BASH das mittlerweile selbst:
     read -a GPUINDEXES <<<"${MAX_PROFIT_GPU_Algo_Combination//,/ }"
-
-    #${shopt_cmd_before}
 }
 
 ########################################################################

@@ -104,7 +104,6 @@ function _setup_Nvidia_Default_Tuning_CmdStack () {
 
 
 function _query_actual_Power_Temp_and_Clocks () {
-    shopt -s lastpipe
     nvidia-smi -q -i ${gpu_idx} -d Clock,Power >nvidia-befehle/nvidia-Clock-Power.out
     actTemp=$(nvidia-smi -i ${gpu_idx} --query-gpu=temperature.gpu --format=csv,noheader)
 

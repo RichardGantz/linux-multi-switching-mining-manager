@@ -182,7 +182,7 @@ if [ -f MinerShell_STARTS_HISTORY ]; then
     read _epoch_ msh_pid _bash_ MinerShell Parameters <<<$(tail -1 MinerShell_STARTS_HISTORY)
     MinerShell=$(basename ${MinerShell} .sh)
     if [ ${msh_pid} -eq $(< ${MinerShell}.ppid) ]; then
-	echo "Ran MinerShell \"${MinerShell}\" before _update_SELF_if_necessary() with PID ${msh_pid}"
+        echo "GPU #${gpu_idx}: ###---> Ran MinerShell \"${MinerShell}\" before _update_SELF_if_necessary() with PID ${msh_pid}"
     else
         echo "--->INKONSISTENZ ENTDECKT: Alles deutet darauf, dass die MinerShell ${MinerShell}.sh noch läuft."
         echo "--->Die PID aus der Datei Datei ${MinerShell}.ppid ($(< ${MinerShell}.ppid)) sowie die PID aus der Datei MinerShell_STARTS_HISTORY (${msh_pid}) sind aber UNTERSCHIEDLICH???"
@@ -358,10 +358,6 @@ IMPORTANT_BENCHMARK_JSON="benchmark_${gpu_uuid}.json"
 #     ---> stattfinden soll, um keine Änderung im System zu verpassen.              <---
 #     
 bENCH_SRC="bENCH.in"
-
-# Damit readarray als letzter Prozess in einer Pipeline nicht in einer subshell
-# ausgeführt wird und diese beim Austriit gleich wieder seine Variablen verwirft
-shopt -s lastpipe
 
 # Die Datei macht einiges, was das Format der benchmark.json betrifft, wobei die entsprechenden Funktionen dafür
 # in der Datei gpu-bENCH.inc definiert sind.
@@ -1397,7 +1393,6 @@ while :; do
                 for ((cmd=0; cmd<${#CmdStack[@]}; cmd++)); do
                     cmdParameterString+="${CmdStack[${cmd}]// /°} "
                 done
-		#shopt -s extglob
 		cmdParameterString="${cmdParameterString%%*( )}"
                 
                 echo "GPU #${gpu_idx}: STARTE Miner Shell ${MinerShell}.sh und übergebe Algorithm ${coin_algorithm} und mehr..."
@@ -1417,7 +1412,6 @@ ${server_name} \
 ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
 $cmdParameterString"
 		p_cmd="${p_cmd%%*( )}"
-		#shopt -u extglob
 
 		m_cmd="${p_cmd} >>${MinerShell}.log"
 
