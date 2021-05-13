@@ -78,9 +78,9 @@ fi
 # Rest ist Nvidia GPU Default Tuning CmdStack
 shift 9
 # So funktioniert das vielleicht nicht, weil Spaces im Command-String sind.
-#command_string=$*
-command_string="$*"
-read -a CmdStack <<<"${command_string}"
+#cmdParameterString=$*
+cmdParameterString="$*"
+read -a CmdStack <<<"${cmdParameterString}"
 declare -i i
 for (( i=0; $i<${#CmdStack[@]}; i++ )); do
     CmdStack[$i]=${CmdStack[$i]//°/ }
@@ -206,7 +206,7 @@ printFrac="000000000"${nowFrac}
 zeitstempel_t0=${NOWSECS}.${printFrac:$((${#printFrac}-9))}
 echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t0} \
      "GPU #${gpu_idx}: ZEITMARKE t0: Absetzen der NVIDIA-Commands" | tee -a ${ERRLOG} ${BENCHLOGFILE}
-if [ 1 -eq -1 -o ${ScreenTest} -eq 1 ]; then
+if [ ${nvidia_settings_unsolved} -eq 1 -o ${ScreenTest} -eq 1 ]; then
     echo "Die folgenden Kommandos werden NICHT abgesetzt, bis das Problem mit dem nvidia-settings P0-Mode gelöst ist:" | tee -a ${ERRLOG} ${BENCHLOGFILE}
     for (( i=0; $i<${#CmdStack[@]}; i++ )); do
 	echo ${CmdStack[$i]} | tee -a ${ERRLOG} ${BENCHLOGFILE}

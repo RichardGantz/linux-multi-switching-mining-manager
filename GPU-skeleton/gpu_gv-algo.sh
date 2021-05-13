@@ -306,11 +306,12 @@ trap _On_Exit EXIT # == SIGTERM == TERM == -15
 #  5. Schreibt seine PID in eine gleichnamige Datei mit der Endung .pid
 This=$(basename $0 .sh)
 echo $$ >${This}.pid
+
 # Ermittlung der Process Group ID, die beim multi_mining_calc.sh seiner eigenen PID gleicht.
 # Alles, was er aufruft, sollte die selbe Group-ID haben, also auch die gpu_gv-algos und algo_multi_abfrage.sh
 # Interessant wird es bei den gpu_gv-algo.sh's, wenn die wiederum etwas rufen.
 # Wie lautet dann die Group-ID?
-# Die folgenden Teilen haben gezeigt, dass die gpu_gv-algi der selben Prozessgruppe angehört.
+# Die folgenden Zeilen haben gezeigt, dass die gpu_gv-algi der selben Prozessgruppe angehören.
 #  PID  PGID   SID TTY          TIME CMD
 # 9462  9462  1903 pts/0    00:00:00 multi_mining_ca
 #echo "GPU #${gpu_idx} gehört zu folgender Prozess-Gruppe:"
@@ -1410,7 +1411,7 @@ ${gpu_uuid} \
 ${domain} \
 ${server_name} \
 ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
-$cmdParameterString"
+${cmdParameterString}"
 		p_cmd="${p_cmd%%*( )}"
 
 		m_cmd="${p_cmd} >>${MinerShell}.log"

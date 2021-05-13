@@ -2194,7 +2194,7 @@ if [ ${ATTENTION_FOR_USER_INPUT} -eq 1 ]; then
     read -p "ENTER für OK und Benchmark-Start, <Ctrl>+C zum Abbruch " startIt
 fi
 
-if [ 1 -eq 0 -a ${ScreenTest} -eq 0 ]; then
+if [ ${nvidia_settings_unsolved} -eq 0 -a ${ScreenTest} -eq 0 ]; then
     # GPU-Kommandos absetzen...
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "${This}: Executing GPU-Commands"
     for (( i=0; i<${#CmdStack[@]}; i++ )); do

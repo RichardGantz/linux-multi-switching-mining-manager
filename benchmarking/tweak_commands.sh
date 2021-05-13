@@ -104,7 +104,7 @@ source gpu-bENCH.sh
 cd ${_WORKDIR_} >/dev/null
 _read_IMPORTANT_BENCHMARK_JSON_in without_miners
 
-# Wen es noch nichts aus der JSON gibt, sind die Werte mit 0 vorbelegt
+# Wenn es noch nichts aus der JSON gibt, sind die Werte mit 0 vorbelegt
 _declare_and_fill_nvidiPara_Array
 
 # Fan-Kontrolle ermöglichen. GPUFanControlState=1 heisst: MANUELL. GPUFanControlState=0 heisst AUTOMATIC
@@ -149,7 +149,7 @@ while :; do
             echo "${cmd}" | tee -a ${WATT_LOGFILE} ${HASH_LOGFILE} >>${OWN_LOGFILE}
         fi
     else
-        DoIt=true
+        DoIt=1
     fi
 
     echo ""

@@ -29,6 +29,11 @@ if [ ${UseScreen} -eq 1 ]; then
     [ ${#BG_SESS} -eq 0 ] && export BG_SESS=BACKGROUND.$$
 fi
 
+# Das Kommando nvidia-settings zum Tweaken verschiedener Einstellungen funktioniert nicht ohne weiteres.
+# Da ist einiges zu erledigen, was in der README_GER.md nachzulesen ist.
+# Sobald das Problem gelöst ist, kann die Variable nvidia_settings_unsolved auf 0 gesetzt werden
+nvidia_settings_unsolved=1
+
 # Wir verwenden oft "readarray" am Ende einer Pipe. Deshalb wollen wir, dass diese Option global verfügbar ist.
 # An jeder Stelle im Source-Code, wo diese Zeile gefunden wird, kann sie also entfernt werden.
 shopt -s lastpipe
