@@ -576,11 +576,10 @@ while :; do
     #fi
 
     # new_Data_available wurde direkt vor der Endlosschleife gesetzt oder gleich nach dem Herausfallen ganz unten
-    # Wie alt das SYNCFILE maximal sein darf steht in der Variablen ${GPU_alive_delay}, in globals.inc gesetzt.
+    # Wie alt das SYNCFILE maximal sein darf steht in der Variablen ${GPU_alive_delay}, in globals.inc gesetzt (6 Sekunden).
     SynSecs=$((${new_Data_available}+${GPU_alive_delay}))
-    touch .now_$$
-    read NOWSECS nowFrac <<<$(_get_file_modified_time_ .now_$$)
-    rm -f .now_$$ ..now_$$.lock .ALGO_WATTS_MINES.in
+    { read NOWSECS nowFrac <<<$(date "+%s %N"); nowFrac=${nowFrac##*(0)}; nowFrac=${nowFrac:-1}; }
+    rm -f .ALGO_WATTS_MINES.in
     if [[ ${NOWSECS} -lt ${SynSecs} || (${NOWSECS} -eq ${SynSecs} && ${nowFrac} -le ${SynFrac}) ]]; then
 
         # (2018-01-23) Bisher konnten wir darauf verzichten.
@@ -934,8 +933,6 @@ while :; do
     #############################################################################
     #############################################################################
     echo "GPU #${gpu_idx}: Waiting for new RUNNING_STATE to get orders..."
-    # Das haben wir weiter oben gemacht, nachdem wir die Valid-Datei geschrieben haben.
-    #read ValSecs ValFrac <<<$(_get_file_modified_time_ ${_WORKDIR_}/${GPU_VALID_FLAG})
     # RUNNING_STATE muss nun älter sein als diese unsere Datei, die den MM veranlasst haben, auszuwerten und RUNNING_STATE zu schreiben.
     read RunSecs  RunFrac  <<<$(_get_file_modified_time_ ${RUNNING_STATE})
     until [[ ${ValSecs} -le ${RunSecs} || (${ValSecs} -eq ${RunSecs} && ${ValFrac} -le ${RunFrac}) ]]; do
