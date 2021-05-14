@@ -1,16 +1,49 @@
 #!/bin/bash
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
-[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
-[[ ${#_ALGOINFOS_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
-[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
-[[ ${#_NVIDIACMD_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
-[[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
+#[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
+#[[ ${#_ALGOINFOS_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
+#[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
+#[[ ${#_NVIDIACMD_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
+#[[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
 #    [[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/GPU-skeleton/gpu-bENCH.inc
 #[[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu-bENCH.inc
 #source ${LINUX_MULTI_MINING_ROOT}/miners/${miner_name}#${miner_version}.starts
 #source ${LINUX_MULTI_MINING_ROOT}/multi_mining_calc.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_delays.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_yeses.inc
+
+function _prepare_ALGO_PORTS_KURSE_from_the_Web_old () {
+    # Auswertung und Erzeugung der PAY-Datei, aus der das Array KURSE eingelesen wird
+    gawk -e 'BEGIN { RS=":[[]{|},{|}[]],"} \
+          match( $0, /"algorithm":"[[:alnum:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
+          match( $0, /"speed":[.[:digit:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) } \
+          match( $0, /"paying":[.[:digit:]E\-]*/ )\
+               { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
+         ${algoID_KURSE__PAY__WEB}
+}
+
+function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
+    gawk -e 'BEGIN { RS=":[[]{|},{|}[]],"} \
+          match( $0, /"algorithm":"[[:alnum:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); print tolower( substr(M, index(M,":")+2 ) ) }  \
+          match( $0, /"speed":[.[:digit:]]*/ )\
+               { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) } \
+          match( $0, /"paying":[.[:digit:]E\-]*/ )\
+               { M=substr($0, RSTART, RLENGTH)
+	       	 M=substr(M, index(M,":")+1 )
+	       	 if (split( M, pay, "E" ) == 1) {
+		    print M
+		 } else {
+		    print "(" pay[1] "*10^" pay[2] ")"
+		 }
+	       }' \
+         ${algoID_KURSE__PAY__WEB}
+}
+
+diff <(_prepare_ALGO_PORTS_KURSE_from_the_Web_old) <(_prepare_ALGO_PORTS_KURSE_from_the_Web)
+exit
 
 read muck MAX_PROFIT   MAX_PROFIT_GPU_Algo_Combination <<<$(< .MAX_PROFIT.in)   #${_MAX_PROFIT_in}
 read muck MAX_FP_MINES MAX_FP_GPU_Algo_Combination     muck2 MAX_FP_WATTS <<<$(< .MAX_FP_MINES.in) #${_MAX_FP_MINES_in}

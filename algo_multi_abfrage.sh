@@ -7,12 +7,13 @@
 # Alle 31s werden aktuellste Daten aus dem Netz bezogen und so aufbereitet, dass
 # alle Beteiligten neue Berechnungen anstellen können, ja MÜSSEN!
 # Nachdem SYNCFILE=you_can_read_now.sync touched wurde steht fest:
-# Diese Daten sind für die nächsten 30s FIXIERT und UNVERÄNDERBAR:
-#    ALGO_NAMES.in    (ändert sich nicht so oft und wird daher nur beim Start und
-#                      danach etwa jede Stunde erstellt.
-#                      Allerdings wäre zu überlegen, ob man nicht doch auch jedes mal
-#                      diese Daten einliest, um neue Algorithmen NICHT ZU VERPASSEN ??)
-#    KURSE.in
+# Diese Daten sind für mindestens ${SECS} (31s) FIXIERT und UNVERÄNDERBAR:
+#    NH_PAYINGS.json  ${algoID_KURSE__PAY__WEB} Nicehash API-Abruf
+#    NH_PAYINGS.in    ${algoID_KURSE_PORTS_PAY} Aufbereitet zum Einlesen in Arrays
+#    NH_PORTS.json    ${algoID_KURSE_PORTS_WEB} Nicehash API-Abruf
+#                     (ändert sich nicht so oft und wird daher nur beim Start und
+#                      danach etwa jede Stunde erstellt.)
+#    NH_PORTS.in      ${algoID_KURSE_PORTS_ARR} Aufbereitet zum Einlesen in Arrays
 #    BTC_EUR_kurs.in
 #
 ###############################################################################
@@ -35,7 +36,6 @@ function _On_Exit () {
     [[ ${debug} -eq 0 ]] \
         && rm -f ${algoID_KURSE_PORTS_WEB} ${algoID_KURSE__PAY__WEB} ${algoID_KURSE_PORTS_ARR} ${algoID_KURSE_PORTS_PAY} ${BTC_EUR_KURS_WEB} \
 	      BTC_EUR_kurs.in kWh_*_Kosten_BTC.in ${SYNCFILE} \
-              ALGO_NAMES.json ALGO_NAMES.in \
               ${COIN_PRICING_ARR} ${COIN_TO_BTC_EXCHANGE_ARR} \
               I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t \
               ${This}.err
@@ -74,7 +74,7 @@ _check_InternetConnection () {
 }
 
 _check_InternetConnection
-declare -i SECS=31 nowSecs
+declare -i SECS=31
 while :; do
 
     # Wir warten mit dem Abruf, bis die Datei RUNNING_STATE 10s älter ist als SYNCFILE.
@@ -89,7 +89,7 @@ while :; do
             read RunSecs  RunFrac <<<$(_get_file_modified_time_ ${RUNNING_STATE})
         done
         # der Multiminer hat die neue RUNNING_STATE geschrieben. Jetzt nicht zu früh abrufen und Startschuss geben.
-        # Die GPUs sollen erst mal Gelegenheit haben, die Miner zu stoppen und zu starten...
+        # Die GPUs sollen erst mal Gelegenheit haben, die Miner zu stoppen und zu starten... (z.B. 5s)
         sleep ${RUN_SYNC_delay}
     fi
 
@@ -137,8 +137,6 @@ while :; do
 
     while :; do
         _check_InternetConnection
-        nowSecs=$(date +%s)
-        # [[ $(( ${nowSecs} - ${SleepingStart} )) -le ${SECS} ]] && sleep 1 || break
-        (( ${nowSecs} - ${SleepingStart} <= ${SECS} )) && sleep 1 || break
+        (( $(date +%s) - ${SleepingStart} <= ${SECS} )) && sleep 1 || break
     done
 done

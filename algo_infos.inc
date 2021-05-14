@@ -106,7 +106,14 @@ function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
           match( $0, /"speed":[.[:digit:]]*/ )\
                { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) } \
           match( $0, /"paying":[.[:digit:]E\-]*/ )\
-               { M=substr($0, RSTART, RLENGTH); print substr(M, index(M,":")+1 ) }' \
+               { M=substr($0, RSTART, RLENGTH)
+	       	 M=substr(M, index(M,":")+1 )
+	       	 if (split( M, pay, "E" ) == 1) {
+		    print M
+		 } else {
+		    print "(" pay[1] "*10^" pay[2] ")"
+		 }
+	       }' \
          ${algoID_KURSE__PAY__WEB} 2>/dev/null \
         >${algoID_KURSE_PORTS_PAY}
 }
@@ -136,7 +143,7 @@ function _read_in_ALGO_PORTS_KURSE () {
     readarray -n 0 -O 0 -t READARR <${algoID_KURSE_PORTS_PAY}
     for ((i=0; $i<${#READARR[@]}; i+=3)) ; do
         SPEED[${READARR[$i]}]=${READARR[$i+1]}
-        KURSE[${READARR[$i]}]="("${READARR[$i+2]/E/\*10\^}")"
+        KURSE[${READARR[$i]}]=${READARR[$i+2]}
     done
 
     if [ 1 -eq 0 ]; then
