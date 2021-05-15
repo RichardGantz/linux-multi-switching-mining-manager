@@ -59,7 +59,8 @@ find . -name ALGO_WATTS_MINES\.in    -delete
 find . -name .sort_profit_algoIdx_\* -delete
 rm -f "${LINUX_MULTI_MINING_ROOT}/BTCEURkurs" \
    ${algoID_KURSE_PORTS_WEB} \
-   ${algoID_KURSE__PAY__WEB}
+   ${algoID_KURSE__PAY__WEB} \
+   .NVIDIA_SMI_PM_LAUNCHED_GPUs
 
 # Aktuelle PID der 'multi_mining_calc.sh' ENDLOSSCHLEIFE
 This=$(basename $0 .sh)
@@ -352,7 +353,6 @@ while : ; do
 		    GPU_gv_Title="GV#${lfd_gpu_idx}"
 		    screen -drx ${BG_SESS} -X screen -t ${GPU_gv_Title}
 		    screen -drx ${BG_SESS} -p ${GPU_gv_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n ${cmd}"
-		    sleep .1
 		else
 		    "${cmd}" &
                     BG_PIDs+=( $! )
@@ -363,13 +363,13 @@ while : ; do
                 #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
                 LOG_PTY_CMD[${lfd_gpu_idx}]="tail -f ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/${GPU_GV_LOG}"
 		### SCREEN ADDITIONS: ###
-		# Das war nur, um den Namen der .pid-datei zu verifizieren
 		if [ ${UseScreen} -eq 1 ]; then
 		    cmd="${LOG_PTY_CMD[${lfd_gpu_idx}]}"'\nexit\n'
 		    GPU_gv_LOG_Title="GV#${lfd_gpu_idx}"
 		    screen -X screen -t ${GPU_gv_LOG_Title}
-		    screen -p ${GPU_gv_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n ${cmd}"
-		    sleep .1
+		    screen -p ${GPU_gv_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n"
+		    until [ -s ${GPU_GV_LOG} ]; do sleep .01; done
+		    screen -p ${GPU_gv_LOG_Title} -X stuff "${cmd}"
 		    screen -X select ${MAINSCREEN}
 		else
 		    ofsX=$((ii*60+50))
@@ -538,17 +538,27 @@ while : ; do
     #
     # Zunächst also warten, bis die "Mines"-Berechnungen und die Wattangaben alle verfügbar sind.
 
-    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "Going to wait for all GPUs to calculate their ALGO_WATTS_MINES.in"
+    echo $(date "+%Y-%m-%d %H:%M:%S %s.%N" ) "Going to wait for all GPUs to calculate their ALGO_WATTS_MINES.in"
     [ ${debug} -eq 1 ] && echo "Maximum waittime until: \${SynSecs}.\${SynFrac} ${SynSecs}.${SynFrac}"
 
     unset ALGO_WATTS_MINES_delivering_GPUs validation_time NumValidatedGPUs
     declare -i  NumValidatedGPUs=0
     declare -Ag ALGO_WATTS_MINES_delivering_GPUs validation_time
+
+    # Nochmal "kurz" die GLOBAL_GPU_SYSTEM_STATE.in einlesen, um nicht zu lange auf disabled GPU's warten zu müssen
+    # Hat leider nichts gebracht. Ganz wenige GPU's, die sich ganz am Anfang rausnehmen, um zu benchmarken, waren "zu langsam".
+    # Sie wurden schon "zu spät" gestartet, was weiter oben verbessert wurde. Danach hat es geklappt.
+    # Aber bei 11 GPU's sind wir schon fast an einem Limit, das bald wieder erreicht sein könnte.
+    # Es geht hier eigentlich NUR um den allerersten Start, dass der MM nicht 15s Sekunden wartet, obwohl sich GPU's bereits rausgenommen haben.
+    # Möglicherweise sollte diese "Beschleunigung" anders gelöst werden.
+    # Es funktioniert im Moment jedenfalls
+    # Da _progressbar im weiteren Verlauf IMMER gleich '\r' ist, wird diese Kontrolle nur beim allerersten Mal gemacht
+    [[ "${_progressbar}" != "\r" ]] && { _get_SYSTEM_STATE_in; echo "Enabled, ValidatedGPUs: ${NumEnabledGPUs}, ${NumValidatedGPUs}"; }
+
     if [ ${NumEnabledGPUs} -gt 0 ]; then
 
         # Warten bis zu maximal 15 Sekunden (${MM_validating_delay}), bis wenigstens 1 GPU gültige Werte signalisiert hat.
-        touch .now_$$
-        read nowSecs nowFrac <<<$(_get_file_modified_time_ .now_$$)
+	{ read nowSecs nowFrac <<<$(date "+%s %N"); nowFrac=${nowFrac##*(0)}; nowFrac=${nowFrac:-1}; }
         until (( ${nowSecs} > ${SynSecs} || ( ${nowSecs} == ${SynSecs} && ${nowFrac} > ${SynFrac} ) )); do
             for UUID in ${!uuidEnabledSOLL[@]}; do
                 if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
@@ -566,12 +576,8 @@ while : ; do
             [ ${NumEnabledGPUs} -eq ${NumValidatedGPUs} ] && break
 
             sleep .1
-            touch .now_$$
-            read nowSecs nowFrac <<<$(_get_file_modified_time_ .now_$$)
-            #read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
-            #SynSecs=$((${new_Data_available} + ${MM_validating_delay}))
+	    { read nowSecs nowFrac <<<$(date "+%s %N"); nowFrac=${nowFrac##*(0)}; nowFrac=${nowFrac:-1}; }
         done
-        rm -f .now_$$ ..now_$$.lock
     else
         echo "---> ACHTUNG: Im Moment sind ALLE GPU's DISABLED..."
     fi

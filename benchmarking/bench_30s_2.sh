@@ -53,6 +53,8 @@ ScreenTest=1
 
 if [ ${ScreenTest} -eq 1 ]; then
     pwd
+    echo "\$MULTI_MINERS_PID: $MULTI_MINERS_PID"
+#    declare -p NVIDIA_SMI_PM_LAUNCHED_string
     echo "\$MAINSCREEN: $MAINSCREEN"
     echo "\$FG_SESS...: $FG_SESS"
     echo "\$BG_SESS...: $BG_SESS"
@@ -1022,6 +1024,16 @@ if [ ! -d test ]; then mkdir test; fi
 cd ${LINUX_MULTI_MINING_ROOT}
 source gpu-abfrage.sh
 
+# Damit die anschließende _func_gpu_abfrage_sh nicht wieder die PersitenceMode Befehle absetzt,
+# wenn der Benchmarker von einer gpu_gv-algo.sh gerufen wurde.
+# 
+[ ${CALLED_FROM_GPU} -eq 1 -a -f .NVIDIA_SMI_PM_LAUNCHED_GPUs ] && {
+    read -a arr_indexes <.NVIDIA_SMI_PM_LAUNCHED_GPUs
+    for arr_index in ${arr_indexes[@]}; do
+	NVIDIA_SMI_PM_LAUNCHED[${arr_index}]=1
+    done
+}
+
 #if [ ! -s ${SYSTEM_STATE}.in ]; then
 _func_gpu_abfrage_sh
 #else
@@ -1395,64 +1407,42 @@ disd_msg[${#disd_msg[@]}]="--->-------------------------------------------------
 disd_msg[${#disd_msg[@]}]="--->         Beginn mit der Durchsuchung der DISABLED Algos und/oder Coins         <---"
 
 # Erst mal die über GLOBAL_ALGO_DISABLED Algos rausnehmen, in beiden Modes, User und Auto...
-unset GLOBAL_ALGO_DISABLED_ARR
-if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
-    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
-    cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
-    _remove_lock                                     # ... und wieder freigeben
+_find_algorithms_to_benchmark
 
-    for ((i=0; i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
-
-        unset disabled_algos_GPUs
-        read -a disabled_algos_GPUs <<<${GLOBAL_ALGO_DISABLED_ARR[$i]//:/ }
-        DisAlgo=${disabled_algos_GPUs[0]}
-        if [ ${#disabled_algos_GPUs[@]} -gt 1 ]; then
-            # Nur für bestimmte GPUs disabled. Wenn die eigene GPU nicht aufgeführt ist, übergehen
-            [[ ! ${GLOBAL_ALGO_DISABLED_ARR[$i]} =~ ^.*:${gpu_uuid} ]] && unset DisAlgo
-        fi
-        if [ -n "${DisAlgo}" ]; then
-            for ccoin in ${!actMiningAlgos[@]}; do
-                [ "${actMiningAlgos[$ccoin]}" == "${DisAlgo}" ] && unset actMiningAlgos[$ccoin]
-            done
-            for a in ${!actMissingAlgos[@]}; do
-                if [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ]; then
-                    unset actMissingAlgos[$a]
-                    # Es konnte nur einen Eintrag mit diesem Ccoin geben, deshalb um der Performance willen Abbruch der Schleife
-                    break
-                fi
-            done
-            disd_msg[${#disd_msg[@]}]="---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
+# Für $gpu_idx bereits herausgefilterte $algorithms
+for DisAlgo in ${MyDisabledAlgos[@]}; do
+    disd_msg[${#disd_msg[@]}]="---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
+    # Die beiden Miner-spezifischen Arrays actMiningAlgos[$coin] und actMissingAlgos[] noch bereinigen
+    for ccoin in ${!actMiningAlgos[@]}; do
+        [ "${actMiningAlgos[$ccoin]}" == "${DisAlgo}" ] && unset actMiningAlgos[$ccoin]
+    done
+    for a in ${!actMissingAlgos[@]}; do
+        if [ "${actMissingAlgos[$a]}" == "${DisAlgo}" ]; then
+	    unset actMissingAlgos[$a]
+	    # Es konnte nur einen Eintrag mit diesem Ccoin geben, deshalb um der Performance willen Abbruch der Schleife
+	    break
         fi
     done
-fi
+done
 
 if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]]; then
     # Vorher ausfiltern aller GLOBAL und Dauerhaft disabled Algos, denn sie sollen nicht angeboten werden
     # und die Automatik soll sie nicht durchführen
-    #    Zunächst die über BENCH_ALGO_DISABLED Algos rausnehmen...
-    unset BENCH_ALGO_DISABLED_ARR
-    if [ -s ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED ]; then
 
-        _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED
-        cat ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t BENCH_ALGO_DISABLED_ARR
-        _remove_lock                                     # ... und wieder freigeben
-
-        for actRow in "${BENCH_ALGO_DISABLED_ARR[@]}"; do
-            read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
-            if [ ${gpuIdx#0} -eq ${gpu_idx} ]; then
-                read mining_algo m_name m_version muck <<<"${lfdAlgorithm//#/ }"
-                if [ "${m_name}#${m_version}" == "${miner_name}#${miner_version}" ]; then
-                    for ccoin in ${!actMiningAlgos[@]}; do
-                        [ "${actMiningAlgos[$ccoin]}" == "${mining_algo}" ] && unset actMiningAlgos[$ccoin]
-                    done
-                    [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
-                    actMissingAlgos=( $(echo ${actMissingAlgos[@]} | sed -e 's/\b'${mining_algo}'\b//g') )
-                    [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
-                    disd_msg[${#disd_msg[@]}]="---> Algo ${lfdAlgorithm} wegen des Vorhandenseins in der Datei BENCH_ALGO_DISABLED herausgenommen."
-                fi
-            fi
-        done
-    fi
+    # Für $gpu_idx bereits herausgefilterte $algorithms
+    for lfdAlgorithm in ${MyDisabledAlgorithms[@]}; do
+	disd_msg[${#disd_msg[@]}]="---> Algo ${lfdAlgorithm} wegen des Vorhandenseins in der Datei BENCH_ALGO_DISABLED herausgenommen."
+	# Die beiden Miner-spezifischen Arrays actMiningAlgos[$coin] und actMissingAlgos[] noch bereinigen
+        read mining_algo m_name m_version muck <<<"${lfdAlgorithm//#/ }"
+        if [ "${m_name}#${m_version}" == "${miner_name}#${miner_version}" ]; then
+	    for ccoin in ${!actMiningAlgos[@]}; do
+                [ "${actMiningAlgos[$ccoin]}" == "${mining_algo}" ] && unset actMiningAlgos[$ccoin]
+	    done
+	    [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
+	    actMissingAlgos=( $(echo ${actMissingAlgos[@]} | sed -e 's/\b'${mining_algo}'\b//g') )
+	    [ ${debug} -eq 1 ] && declare -p ${!actMissingAlgos}
+        fi
+    done
 fi
 
 # Absetzen der Meldungen in beiden Modi

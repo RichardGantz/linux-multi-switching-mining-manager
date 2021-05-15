@@ -343,8 +343,8 @@ function _init_some_file_and_path_variables () {
 ###
 ################################################################################
 function _init_NH_continent_handling () {
-    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-    declare -ig nowSecs=$(date +%s) timestamp
+    declare -ig nowSecs timestamp
+    read nowDate nowTime nowSecs <<<$(date "+%Y-%m-%d %H:%M:%S %s" )
     if [ "${pool}" == "nh" ]; then
         CONTINENTFILE="${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/act_continent_${coin_algorithm}"
         while :; do
@@ -359,12 +359,12 @@ function _init_NH_continent_handling () {
                         location_ptr=0
                         continent=${LOCATION[${location_ptr}]}
                         echo "# Probieren wir es nach 1h wieder von vorne mit dem Besten..." >>${CONTINENTFILE}
-                        echo ${nowDate} ${nowSecs} ${location_ptr} ${continent}              >>${CONTINENTFILE}
+                        echo ${nowDate} ${nowTime} ${nowSecs} ${location_ptr} ${continent}   >>${CONTINENTFILE}
                     fi
                 else
                     continent=${LOCATION[${location_ptr}]}
-                    echo "# Beginnen wir neu mit dem Besten..."             >>${CONTINENTFILE}
-                    echo ${nowDate} ${nowSecs} ${location_ptr} ${continent} >>${CONTINENTFILE}
+                    echo "# Beginnen wir neu mit dem Besten..."                        >>${CONTINENTFILE}
+                    echo ${nowDate} ${nowTime} ${nowSecs} ${location_ptr} ${continent} >>${CONTINENTFILE}
                 fi
                 break
             else
@@ -375,8 +375,8 @@ function _init_NH_continent_handling () {
                 if [[ $location_ptr -eq ${#LOCATION[@]} ]]; then
                     continent="SelbstWahl"
                 else
-                    echo "# Entscheidung wurde per Parameter übergeben..."  >>${CONTINENTFILE}
-                    echo ${nowDate} ${nowSecs} ${location_ptr} ${continent} >>${CONTINENTFILE}
+                    echo "# Entscheidung wurde per Parameter übergeben..."             >>${CONTINENTFILE}
+                    echo ${nowDate} ${nowTime} ${nowSecs} ${location_ptr} ${continent} >>${CONTINENTFILE}
                     break
                 fi
             fi
@@ -394,10 +394,10 @@ function _disable_algorithm () {
     # $1 - $algorithm
     # $2 - $reason
     # $3 - $gpu_idx
-    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-    nowSecs=$(date +%s)
+    local nowDate nowTime nowSecs
+    read  nowDate nowTime nowSecs <<<$(date "+%Y-%m-%d %H:%M:%S %s" )
     _reserve_and_lock_file ../BENCH_ALGO_DISABLED
-    printf "%s %s %02i %30s %s\n" "${nowDate}" "${nowSecs}" "$3" "$1" "$2" >>../BENCH_ALGO_DISABLED
+    printf "%s %s %s %02i %30s %s\n" "${nowDate}" "${nowTime}" "${nowSecs}" "$3" "$1" "$2" >>../BENCH_ALGO_DISABLED
     _remove_lock                                     # ... und wieder freigeben
     echo "Der Algorithm ${algorithm} wurde in die Datei BENCH_ALGO_DISABLED eingetragen."
 }
@@ -508,24 +508,30 @@ awk -e \"\$2 == ${MINER_pid} && /${REGEXPAT}/ {print $2; exit }\"\n" | tee -a ${
 #
 #     Die Definition dieser Funktion kann in eine .inc verlegt werden $$$$$$$$$$$$$$$$$$$$
 
+# Diese Funktion prüft die über die Dateien GLOBAL_, BENCH_ und MINER_ALGO_DISABLED disabled Coins/Algos/Algorithms
+# gegen das Array pleaseBenchmarkAlgorithm[], woraus das Array WillBenchmarkAlgorithm[] hervorgeht.
+# Und die Arrays MyDisabledAlgos[] (GLOBAL), MyDisabledAlgorithms[] (BENCH) für dauerhaft disabled Algos/Algorithms
+# Und das Array MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} für temporär in den Berechnungen nicht zu beachtende coin_algorithm's
+
 # Voraussetzungen.
 # - gpu_uuid
 function _find_algorithms_to_benchmark {
     # local algo_GPU disabledAlgo GPUs lfdGPU lfdAlgorithm mName mVer muck888 
+    local lfdAlgorithm nowDate nowTime nowSecs
 
     unset WillBenchmarkAlgorithm
     declare -ag WillBenchmarkAlgorithm
     unset GLOBAL_ALGO_DISABLED_ARR
 
     # 1. Zuerst die GLOBAL_ALGO_DISABLED Algos
-    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
     if [ -s ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED ]; then
+	_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED
 	cat ${LINUX_MULTI_MINING_ROOT}/GLOBAL_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t GLOBAL_ALGO_DISABLED_ARR
+	_remove_lock
     fi
-    _remove_lock
 
     unset MyDisabledAlgos
-    declare -a MyDisabledAlgos
+    declare -ag MyDisabledAlgos
     for algo_GPU in ${GLOBAL_ALGO_DISABLED_ARR[@]}; do
 	read disabledAlgo GPUs <<<"${algo_GPU//:/ }"
 	if [ ${#GPUs} -gt 1 ]; then
@@ -545,12 +551,12 @@ function _find_algorithms_to_benchmark {
     # 2. Dann die BENCH_ALGO_DISABLED Algos
     # ...
     unset MyDisabledAlgorithms MyDisabledAlgorithms_in
-    declare -a MyDisabledAlgorithms
-    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED
+    declare -ag MyDisabledAlgorithms
     if [ -s ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED ]; then
+	_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED
 	cat ${LINUX_MULTI_MINING_ROOT}/BENCH_ALGO_DISABLED | grep -E -v -e '^#|^$' | readarray -n 0 -O 0 -t MyDisabledAlgorithms_in
+	_remove_lock                                     # ... und wieder freigeben
     fi
-    _remove_lock                                     # ... und wieder freigeben
 
     for actRow in "${MyDisabledAlgorithms_in[@]}"; do
 	read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
@@ -563,10 +569,10 @@ function _find_algorithms_to_benchmark {
     # Denn vielleicht ist nur der Coin eines bestimmten Pools im Moment nicht verfügbar, der Algorithm aber bei anderen Pools durchaus problemlos laufen könnte.
     unset MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
     declare -Ag MINER_ALGO_DISABLED_ARR MINER_ALGO_DISABLED_DAT
-    _reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
-    nowDate=$(date "+%Y-%m-%d %H:%M:%S" )
-    declare -i nowSecs=$(date +%s)
     if [ -s ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ]; then
+	_reserve_and_lock_file ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
+
+	read nowDate nowTime nowSecs <<<$(date "+%Y-%m-%d %H:%M:%S %s" )
 	if [ $debug -eq 1 ]; then echo "Reading ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED ..."; fi
 	declare -i timestamp
 	unset READARR
@@ -580,11 +586,11 @@ function _find_algorithms_to_benchmark {
 	# die wieder zu ENABLEN sind, bzw. die aus dem Disabled_ARR verschwinden müssen,
 	# bevor wir die Datei neu schreiben.
 	for coin_algorithm in "${!MINER_ALGO_DISABLED_ARR[@]}"; do
-            if [ ${nowSecs} -gt $(( ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} + 300 )) ]; then
+            if [[ ${nowSecs} > $(( ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} + 300 )) ]]; then
 		# Der Algo ist wieder einzuschalten
 		unset MINER_ALGO_DISABLED_ARR[${coin_algorithm}]
 		unset MINER_ALGO_DISABLED_DAT[${coin_algorithm}]
-		printf "ENABLED ${nowDate} ${nowSecs} ${coin_algorithm}\n" | tee -a ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
+		printf "ENABLED ${nowDate} ${nowTime} ${nowSecs} ${coin_algorithm}\n" | tee -a ${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED_HISTORY
             fi
 	done
 	# Weg mit dem bisherigen File...
@@ -594,8 +600,9 @@ function _find_algorithms_to_benchmark {
             # Die eingelesenen Werte wieder ausgeben
             printf "${MINER_ALGO_DISABLED_DAT[${coin_algorithm}]} ${MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} ${coin_algorithm}\n" >>${LINUX_MULTI_MINING_ROOT}/MINER_ALGO_DISABLED
 	done
+
+	_remove_lock                                     # ... und wieder freigeben
     fi
-    _remove_lock                                     # ... und wieder freigeben
 
     # 4. Die Erstellung des Arrays der zu benchmarkenden Algorithms
     for lfdAlgorithm in ${pleaseBenchmarkAlgorithm[@]}; do
@@ -603,7 +610,6 @@ function _find_algorithms_to_benchmark {
 	    [ "${lfdAlgorithm}" == "${disabledAlgo}" ] && continue 2
 	done
 	read lfdAlgo mName mVer muck888 <<<${lfdAlgorithm//#/ }
-	echo "checking $lfdAlgo..."
 	for disabledAlgo in ${MyDisabledAlgos[@]}; do
 	    [ "${lfdAlgo}" == "${disabledAlgo}" ] && continue 2
 	done

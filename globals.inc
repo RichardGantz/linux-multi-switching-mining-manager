@@ -87,6 +87,10 @@ FATAL_ERRORS="${LINUX_MULTI_MINING_ROOT}/FATAL_ERRORS.log"
 # Wieviele Zeilen der gpu_system.out gehören zu jeweils einer GPU
 declare -ig num_gpu_rows=7
 
+#declare -g NVIDIA_SMI_PM_LAUNCHED_string
+#[ -z "${NVIDIA_SMI_PM_LAUNCHED_string}" ] && export NVIDIA_SMI_PM_LAUNCHED_string
+#export NVIDIA_SMI_PM_LAUNCHED_string
+
 # Der zm miner muss etwas anders behandelt werden und ist nur vorhanden, bzw. wird nur berücksichtigt,
 # wenn die folgende Variable in der nächsten Zeile (zm_list_devices_cmd) NICHT leer ist.
 # (Vorhanden sein sollte sie aber schon, damit die Abfragen keine Fehlermeldungen auslösen.
@@ -173,7 +177,7 @@ function pos_join () {
 function _remove_lock () {
     flock -u 999                                     # ... und wieder freigeben
     [[ "$1" != "--do_not_log" ]] && \
-        echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Released the exclusive Lock now" \
+        echo $(date "+%Y-%m-%d %H:%M:%S %s.%N") $(basename $0) "PID ${own_PID} Released the exclusive Lock now" \
              >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.${LockBase}
 }
 
@@ -189,7 +193,7 @@ function _reserve_and_lock_file () {
     exec 999>${LockFile}
     flock -x 999
     [[ "$2" != "--do_not_log" ]] && \
-        echo $(date "+%Y-%m-%d %H:%M:%S") $(basename $0) "PID ${own_PID} Got the exclusive Lock now" \
+        echo $(date "+%Y-%m-%d %H:%M:%S %s.%N") $(basename $0) "PID ${own_PID} Got the exclusive Lock now" \
              >>${LINUX_MULTI_MINING_ROOT}/._reserve_and_lock_counter.${LockBase}
 }
 
@@ -201,13 +205,13 @@ function _get_file_modified_time_ () {
     # Aus diesem Grund prüfen wir die Fraction gleich und lassen führende Nullen hier schon weg
     declare _modified_time_="0" _fraction_="1"
 
-    _reserve_and_lock_file "$1" "--do_not_log"
     if [ -f ${1} ]; then
+	_reserve_and_lock_file "$1" "--do_not_log"
 	read _modified_time_ _fraction_ <<<$(date -r "${1}" "+%s %N")
 	_fraction_=${_fraction_##*(0)}
 	_fraction_=${_fraction_:-1}
+	_remove_lock "--do_not_log"
     fi
-    _remove_lock "--do_not_log"
     echo "${_modified_time_} ${_fraction_}"
 }
 

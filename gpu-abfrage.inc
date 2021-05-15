@@ -59,6 +59,33 @@ function _update_SYSTEM_STATEin_if_necessary () {
     cd ${_WORKDIR_} >/dev/null
 }
 
+# Die folgende Datei GLOBAL_GPU_SYSTEM_STATE.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
+# Sie wird, wenn nicht vorhanden vom Skript erstellt, damit wir die UUID's und Namen haben.
+# Und wenn sie vorhanden ist, merken wir uns die manuell gesetzten Enabled-Zustände,
+#     BEVOR wir die Datei neu schreiben.
+# Warum muss sie neu geschrieben werden?
+#     Weil möglicherweise in der Zwischenzeit Karten ein- oder ausgebaut wurden,
+#     die dazugenommen werden müssen mit einem Default-Wert ENABLED
+#     oder ganz rausfliegen können, weil sie eh nicht mehr im System sind
+function _get_SYSTEM_STATE_in {
+    unset SYSTEM_STATE_CONTENT
+    unset uuidEnabledSOLL;  declare -Ag uuidEnabledSOLL
+    unset NumEnabledGPUs;   declare -ig NumEnabledGPUs
+    if [ -s ${SYSTEM_STATE}.in ]; then
+        cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
+        cat ${SYSTEM_STATE}.in  \
+            | grep -e "^GPU-"   \
+            | cut -d':' --output-delimiter=' ' -f1,3 \
+            | readarray -n 0 -O 0 -t SYSTEM_STATE_CONTENT
+
+        for (( i=0; i<${#SYSTEM_STATE_CONTENT[@]}; i++ )); do
+            read UUID GenerallyEnabled <<<${SYSTEM_STATE_CONTENT[$i]}
+            declare -ig uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
+            NumEnabledGPUs+=${GenerallyEnabled}
+        done
+    fi
+}
+
 function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
     local UUID
     unset READARR
@@ -133,34 +160,7 @@ function _read_in_SYSTEM_FILE_and_SYSTEM_STATEin () {
 	done
     fi
 
-    # Die folgende Datei GLOBAL_GPU_SYSTEM_STATE.in (${SYSTEM_STATE}.in) bearbeiten wir manuell.
-    # Sie wird, wenn nicht vorhanden vom Skript erstellt, damit wir die UUID's und Namen haben.
-    # Und wenn sie vorhanden ist, merken wir uns die manuell gesetzten Enabled-Zustände,
-    #     BEVOR wir die Datei neu schreiben.
-    # Warum muss sie neu geschrieben werden?
-    #     Weil möglicherweise in der Zwischenzeit Karten ein- oder ausgebaut wurden,
-    #     die dazugenommen werden müssen mit einem Default-Wert ENABLED
-    #     oder ganz rausfliegen können, weil sie eh nicht mehr im System sind
-    unset SYSTEM_STATE_CONTENT
-    unset uuidEnabledSOLL;  declare -Ag uuidEnabledSOLL
-    unset NumEnabledGPUs;   declare -ig NumEnabledGPUs
-    if [ -s ${SYSTEM_STATE}.in ]; then
-        cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
-        cat ${SYSTEM_STATE}.in               \
-            | grep -v "^#"                   \
-            | grep -e "^GPU-" \
-            | readarray -n 0 -O 0 -t SYSTEM_STATE_CONTENT
-
-        for (( i=0; $i<${#SYSTEM_STATE_CONTENT[@]}; i++ )); do
-            if [ "${SYSTEM_STATE_CONTENT[$i]:0:4}" == "GPU-" ]; then
-                echo ${SYSTEM_STATE_CONTENT[$i]} \
-                    | cut -d':' --output-delimiter=' ' -f1,3 \
-                    | read UUID GenerallyEnabled
-                declare -ig uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
-                NumEnabledGPUs+=${GenerallyEnabled}
-            fi
-        done
-    fi
+    _get_SYSTEM_STATE_in
 }
 
 # Die folgenden beiden Funktionen können gerufen werden, um eine GPU in der Datei GLOBAL_GPU_SYSTEM_STATE.in

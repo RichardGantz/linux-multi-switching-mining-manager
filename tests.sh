@@ -1,5 +1,6 @@
 #!/bin/bash
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
+[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.sh
 #[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
 #[[ ${#_ALGOINFOS_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 #[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
@@ -11,6 +12,81 @@
 #source ${LINUX_MULTI_MINING_ROOT}/multi_mining_calc.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_delays.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_yeses.inc
+
+_func_gpu_abfrage_sh
+[ -n "${NVIDIA_SMI_PM_LAUNCHED_string}" ] && {
+    read -a arr_indexes <_func_gpu_abfrage_sh.test
+    for arr_index in ${arr_indexes[@]}; do
+	NVIDIA_SMI_PM_LAUNCHED[${arr_index}]=1
+    done
+}
+declare -p NVIDIA_SMI_PM_LAUNCHED
+exit
+
+#rm _func_gpu_abfrage_sh.test
+if [ ! -f _func_gpu_abfrage_sh.test ]; then
+    _func_gpu_abfrage_sh
+    NVIDIA_SMI_PM_LAUNCHED_string=$(echo ${!NVIDIA_SMI_PM_LAUNCHED[@]} | tee _func_gpu_abfrage_sh.test )
+fi
+read -a arr_indexes <_func_gpu_abfrage_sh.test
+for arr_index in ${arr_indexes[@]}; do
+    NVIDIA_SMI_PM_LAUNCHED[${arr_index}]=1
+done
+declare -p NVIDIA_SMI_PM_LAUNCHED
+
+NVIDIA_SMI_PM_LAUNCHED_string=${!NVIDIA_SMI_PM_LAUNCHED[@]}
+echo ${NVIDIA_SMI_PM_LAUNCHED_string}
+
+exit
+
+function _get_SYSTEM_STATE_in_old {
+    unset SYSTEM_STATE_CONTENT
+    unset uuidEnabledSOLL;  declare -Ag uuidEnabledSOLL
+    unset NumEnabledGPUs;   declare -ig NumEnabledGPUs
+    if [ -s ${SYSTEM_STATE}.in ]; then
+        cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
+        cat ${SYSTEM_STATE}.in  \
+            | grep -e "^GPU-"   \
+            | readarray -n 0 -O 0 -t SYSTEM_STATE_CONTENT
+
+        for (( i=0; $i<${#SYSTEM_STATE_CONTENT[@]}; i++ )); do
+            echo ${SYSTEM_STATE_CONTENT[$i]} \
+                | cut -d':' --output-delimiter=' ' -f1,3 \
+                | read UUID GenerallyEnabled
+            declare -ig uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
+            NumEnabledGPUs+=${GenerallyEnabled}
+        done
+    fi
+}
+
+function _get_SYSTEM_STATE_in {
+    unset SYSTEM_STATE_CONTENT
+    unset uuidEnabledSOLL;  declare -Ag uuidEnabledSOLL
+    unset NumEnabledGPUs;   declare -ig NumEnabledGPUs
+    if [ -s ${SYSTEM_STATE}.in ]; then
+        cp -f ${SYSTEM_STATE}.in ${SYSTEM_STATE}.BAK
+        cat ${SYSTEM_STATE}.in  \
+            | grep -e "^GPU-"   \
+            | cut -d':' --output-delimiter=' ' -f1,3 \
+            | readarray -n 0 -O 0 -t SYSTEM_STATE_CONTENT
+
+        for (( i=0; i<${#SYSTEM_STATE_CONTENT[@]}; i++ )); do
+            read UUID GenerallyEnabled <<<${SYSTEM_STATE_CONTENT[$i]}
+            declare -ig uuidEnabledSOLL[${UUID}]=${GenerallyEnabled}
+            NumEnabledGPUs+=${GenerallyEnabled}
+        done
+    fi
+}
+
+_get_SYSTEM_STATE_in_old
+echo ${uuidEnabledSOLL[@]}, ${NumEnabledGPUs}
+_get_SYSTEM_STATE_in
+echo ${uuidEnabledSOLL[@]}, ${NumEnabledGPUs}
+exit
+
+echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "Going to wait for all GPUs to calculate their ALGO_WATTS_MINES.in"
+echo $(date "+%Y-%m-%d %H:%M:%S %s" ) "Going to wait for all GPUs to calculate their ALGO_WATTS_MINES.in"
+exit
 
 function _prepare_ALGO_PORTS_KURSE_from_the_Web_old () {
     # Auswertung und Erzeugung der PAY-Datei, aus der das Array KURSE eingelesen wird

@@ -199,11 +199,8 @@ for (( i=0; $i<${#CmdStack[@]}; i++ )); do
 done
 
 # GPU-Kommandos absetzen...
-touch .now_$$
-read NOWSECS nowFrac <<<$(_get_file_modified_time_ .now_$$)
-#rm -f .now_$$ ..now_$$.lock
-printFrac="000000000"${nowFrac}
-zeitstempel_t0=${NOWSECS}.${printFrac:$((${#printFrac}-9))}
+{ read NOWSECS nowFrac <<<$(date "+%s %N"); }
+zeitstempel_t0=${NOWSECS}.${nowFrac}
 echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t0} \
      "GPU #${gpu_idx}: ZEITMARKE t0: Absetzen der NVIDIA-Commands" | tee -a ${ERRLOG} ${BENCHLOGFILE}
 if [ ${nvidia_settings_unsolved} -eq 1 -o ${ScreenTest} -eq 1 ]; then
@@ -244,11 +241,8 @@ while :; do
     if [ ! -f ${MINER}.pid ]; then
         _build_minerstart_commandline
 
-        touch .now_$$
-        read NOWSECS nowFrac <<<$(_get_file_modified_time_ .now_$$)
-        rm -f .now_$$ ..now_$$.lock
-        printFrac="000000000"${nowFrac}
-        zeitstempel_t1=${NOWSECS}.${printFrac:$((${#printFrac}-9))}
+	{ read NOWSECS nowFrac <<<$(date "+%s %N"); }
+	zeitstempel_t1=${NOWSECS}.${nowFrac}
         echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t1} \
              "GPU #${gpu_idx}: ZEITMARKE t1: Starting Miner alias ${coin_algorithm} with the following command line:" \
             | tee -a ${ERRLOG} ${BENCHLOGFILE}

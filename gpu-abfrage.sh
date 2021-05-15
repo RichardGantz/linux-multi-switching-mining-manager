@@ -71,6 +71,10 @@
 # Erst mal die beiden Funktionen _read_in_SYSTEM_FILE_and_SYSTEM_STATEin und _update_SYSTEM_STATEin_if_necessary
 [[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
 
+# Wir versuchen ma, diese Variable in die globals.inc zu verlegen und zu exportieren.
+# Wenn der MM nämlich schon die _func_gpu_abfrage_sh gerufen hat, muss der zwei child-Prozesse weiter unten laufende benchmarker
+# diese Befehle nicht mehr aufrufen. Das soll er höchstens im Standalone-Mode machen.
+# Da er aber auch im "--gpu-called" Modus die globals sourced, werden dieses Deklaration und der export auf jeden Fall zusammen treffen.
 declare -Ag NVIDIA_SMI_PM_LAUNCHED
 
 function _func_gpu_abfrage_sh () {
@@ -168,6 +172,7 @@ if ($7 !~ /^[[:digit:].]+ W$/)  { print "1" } else { print substr( $7, 1, index(
         fi
         echo ${gpu_idx} > ${UUID}/gpu_index.in
     done
+    echo ${!NVIDIA_SMI_PM_LAUNCHED[@]} >.NVIDIA_SMI_PM_LAUNCHED_GPUs
 }
 
 # Für Debug-Zwecke, wenn man nur die Abfrage testen will, kann man die nächste Zeile entkommentieren

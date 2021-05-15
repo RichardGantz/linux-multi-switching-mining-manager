@@ -45,6 +45,7 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/set_live_miners.sh \
     ${SRC_DIR}/multi_mining_calc.inc \
     ${SRC_DIR}/multi_mining_calc.sh \
+    ${SRC_DIR}/bc_berechnungs_historie.sh \
     ${SRC_DIR}/perfmon.sh \
     ${SRC_DIR}/pool.infos \
     ${SRC_DIR}/pstree_log.sh \

@@ -498,6 +498,27 @@ function _do_all_auto_benchmarks {
 # Diese Funktion wurde in die gpu-bENCH.inc verlegt, damit sie auch vom Benchmarker gerufen werden kann.
 _find_algorithms_to_benchmark
 
+### SCREEN ADDITIONS: ###
+#if [ ${ScreenTest} -eq 0 ]; then
+    #     ... und nimmt sich bei Bedarf aus dem System, um die Benchmarks durchzuführen
+    if [ ${#WillBenchmarkAlgorithm[@]} -gt 0 ]; then
+        DoAutoBenchmark=1
+
+	_do_all_auto_benchmarks
+
+        printf "GPU #${gpu_idx}: ###---> Going to take me back into the system, recognized as \"Enabled\"..."
+        _enable_GPU_UUID_GLOBALLY ${gpu_uuid}
+        printf " done\n"
+        unset DoAutoBenchmark
+
+	# Sicherheitshalber nach den Benchmarks beenden.
+	# Automatische Benchmarks abgeschlossen.
+	# Die GPU ist wieder enabled und wird beim nächsten multi_miner-Zyklus berücksichtigt.
+	# Da es keine Datei gpu_gv-algo.pid mehr in diesem Verzeichnis gibt, startet der multi_miner das Script also wieder automatisch.
+	exit 99
+    fi
+#fi
+
 ###############################################################################
 #
 # Gibt es überhaupt schon etwas zu tun?
@@ -529,28 +550,6 @@ while [ ! -f ${SYNCFILE} ]; do
 done
 [[ "${_progressbar}" != "\r" ]] && printf "\n"
 
-### SCREEN ADDITIONS: ###
-#if [ ${ScreenTest} -eq 0 ]; then
-    #     ... und nimmt sich bei Bedarf aus dem System, um die Benchmarks durchzuführen
-    if [ ${#WillBenchmarkAlgorithm[@]} -gt 0 ]; then
-        DoAutoBenchmark=1
-
-	_do_all_auto_benchmarks
-
-        printf "GPU #${gpu_idx}: ###---> Going to take me back into the system, recognized as \"Enabled\"..."
-        _enable_GPU_UUID_GLOBALLY ${gpu_uuid}
-        printf " done\n"
-        unset DoAutoBenchmark
-
-	# Sicherheitshalber nach den Benchmarks beenden.
-	# Automatische Benchmarks abgeschlossen.
-	# Die GPU ist wieder enabled und wird beim nächsten multi_miner-Zyklus berücksichtigt.
-	# Da es keine Datei gpu_gv-algo.pid mehr in diesem Verzeichnis gibt, startet der multi_miner das Script also wieder automatisch.
-	exit 99
-    fi
-#fi
-
-# Neu:
 read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
 
 ###############################################################################
@@ -696,7 +695,8 @@ while :; do
         #
         ###############################################################################
 	# Diese Funktion prüft die über die Dateien GLOBAL_, BENCH_ und MINER_ALGO_DISABLED disabled Coins/Algos/Algorithms
-	# gegen das Array pleaseBenchmarkAlgorithm[], woars das Array WillBenchmarkAlgorithm[] hervorgeht.
+	# gegen das Array pleaseBenchmarkAlgorithm[], woraus das Array WillBenchmarkAlgorithm[] hervorgeht.
+	# Und die Arrays MyDisabledAlgos[] (GLOBAL), MyDisabledAlgorithms[] (BENCH) für dauerhaft disabled Algos/Algorithms
 	# Und das Array MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} für temporär in den Berechnungen nicht zu beachtende coin_algorithm's
 	_find_algorithms_to_benchmark
 
@@ -744,11 +744,13 @@ while :; do
             # oder wenn gerade nichts dafür bezahlt wird.
 
             # Wenn der Algo durch BENCHMARKING PERMANENT Disabled ist, übergehen:
-            for lfdAlgorithm in ${BENCH_ALGO_DISABLED_ARR[@]}; do
+	    # Wurde in der Funktion _find_algorithms_to_benchmark erstellt und enthält einen $algorithm
+            for lfdAlgorithm in ${MyDisabledAlgorithms[@]}; do
                 [[ "${algorithm%#888}" == "${lfdAlgorithm}" ]] && continue 2
             done
             # Wenn der Algo GLOBAL Disabled ist, übergehen:
-            for lfdAlgorithm in ${GLOBAL_ALGO_DISABLED_ARR[@]}; do
+	    # Wurde in der Funktion _find_algorithms_to_benchmark erstellt und enthält nur einen $algo
+            for lfdAlgorithm in ${MyDisabledAlgos[@]}; do
                 [[ ${algorithm} =~ ^${lfdAlgorithm} ]] && continue 2
             done
 
@@ -773,7 +775,8 @@ while :; do
                 coin_algorithm="${coin_pool}#${miningAlgo}#${MINER}"
 
                 # Wenn der coin#pool#miningAlgo#miner_name#miner_version für 5 Minuten Disabled ist, übergehen:
-                [[ ${#MINER_ALGO_DISABLED_ARR[${coin_algorithm%#888}]} -ne 0 ]] && continue 2
+		# (Laut Kommentaren in der MinerShell.sh kann es kein #888 in dieser Datei geben.)
+                [[ ${#MINER_ALGO_DISABLED_ARR[${coin_algorithm}]} -ne 0 ]] && continue 2
 
                 coin_algorithm+=$( [[ -n "${muck888}" ]] && echo "#${muck888}" )
                 # Da ${coin_pool} nicht unique ist wg. evtl. mehrerer Server-Ports, beachten wir jeweils nur das erste Vorkommen.
