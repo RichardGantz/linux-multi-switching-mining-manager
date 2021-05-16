@@ -1403,15 +1403,15 @@ source ${LINUX_MULTI_MINING_ROOT}/miners/${miner_name}#${miner_version}.starts
 ###
 ################################################################################
 
-disd_msg[${#disd_msg[@]}]="--->-------------------------------------------------------------------------------<---"
-disd_msg[${#disd_msg[@]}]="--->         Beginn mit der Durchsuchung der DISABLED Algos und/oder Coins         <---"
+disd_msg+=( "--->-------------------------------------------------------------------------------<---" )
+disd_msg+=( "--->         Beginn mit der Durchsuchung der DISABLED Algos und/oder Coins         <---" )
 
 # Erst mal die über GLOBAL_ALGO_DISABLED Algos rausnehmen, in beiden Modes, User und Auto...
 _find_algorithms_to_benchmark
 
 # Für $gpu_idx bereits herausgefilterte $algorithms
 for DisAlgo in ${MyDisabledAlgos[@]}; do
-    disd_msg[${#disd_msg[@]}]="---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
+    disd_msg+=( "---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen." )
     # Die beiden Miner-spezifischen Arrays actMiningAlgos[$coin] und actMissingAlgos[] noch bereinigen
     for ccoin in ${!actMiningAlgos[@]}; do
         [ "${actMiningAlgos[$ccoin]}" == "${DisAlgo}" ] && unset actMiningAlgos[$ccoin]
@@ -1431,7 +1431,7 @@ if [[ ${ATTENTION_FOR_USER_INPUT} -eq 0 ]]; then
 
     # Für $gpu_idx bereits herausgefilterte $algorithms
     for lfdAlgorithm in ${MyDisabledAlgorithms[@]}; do
-	disd_msg[${#disd_msg[@]}]="---> Algo ${lfdAlgorithm} wegen des Vorhandenseins in der Datei BENCH_ALGO_DISABLED herausgenommen."
+	disd_msg+=( "---> Algo ${lfdAlgorithm} wegen des Vorhandenseins in der Datei BENCH_ALGO_DISABLED herausgenommen." )
 	# Die beiden Miner-spezifischen Arrays actMiningAlgos[$coin] und actMissingAlgos[] noch bereinigen
         read mining_algo m_name m_version muck <<<"${lfdAlgorithm//#/ }"
         if [ "${m_name}#${m_version}" == "${miner_name}#${miner_version}" ]; then
@@ -1616,7 +1616,7 @@ echo "Es folgt die Auswahl der im Moment möglichen Produkte."
 unset Products
 declare -a Products
 for ccoin in ${!actMiningAlgos[@]}; do
-    [[ "${actMiningAlgos[$ccoin]}" == "$miningAlgo" ]] && Products[${#Products[@]}]=$ccoin
+    [[ "${actMiningAlgos[$ccoin]}" == "$miningAlgo" ]] && Products+=( $ccoin )
 done
 
 if [ ${#Products[@]} -eq 0 ]; then
@@ -1675,7 +1675,7 @@ for pidx in ${!Products[@]}; do
                     if [  "${Preise_Kurse_valid}" == "1" ]; then
                         [ ${debug} -eq 1 ] && echo "Case \"${ppool}\" entered, trying to find Coin ${REGEXPAT} in \${ALGOs[@]}: ${ALGOs[@]}"
                         if [[ "${ALGOs[@]}" =~ ${REGEXPAT} ]]; then
-                            menuItems[${#menuItems[@]}]="${ccoin}#${ppool}"
+                            menuItems+=( "${ccoin}#${ppool}" )
                             # Einen Preis können wir vielleicht auch anbieten...
                             coin_mines=".0"
                             coin_kurs=${KURSE[$ccoin]//[.0]}
@@ -1700,13 +1700,13 @@ for pidx in ${!Products[@]}; do
                                 coin_mines=${KURSE[$ccoin]}
                                 earnings_possible=1
                             fi
-                            menuMines[${#menuMines[@]}]=${coin_mines}
+                            menuMines+=( ${coin_mines} )
                         fi
                     else
                         found=$(grep -E -m 1 -c -e "^${ccoin}:${miningAlgo}:" ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$ppool]})
                         if [ $found -eq 1 ]; then
-                            menuItems[${#menuItems[@]}]="${ccoin}#${ppool}"
-                            menuMines[${#menuMines[@]}]=".0"
+                            menuItems+=( "${ccoin}#${ppool}" )
+                            menuMines+=( ".0" )
                         fi
                     fi
                     ;;
@@ -1724,7 +1724,7 @@ for pidx in ${!Products[@]}; do
                             declare -n  actCoinsPoolsOfMiningAlgo="CoinsPoolsOfMiningAlgo_${miningAlgo}"
                             COINPOOLREGEXP="\b${ccoin}#${ppool}#[^#]+#[[:digit:]]+\b"
                             if [[ "${actCoinsPoolsOfMiningAlgo[@]}" =~ ${COINPOOLREGEXP} ]]; then
-                                menuItems[${#menuItems[@]}]="${ccoin}#${ppool}"
+                                menuItems+=( "${ccoin}#${ppool}" )
                                 # Einen Preis können wir vielleicht auch anbieten...
                                 coin_mines=".0"
                                 coin_kurs=${BlockReward[$ccoin]//[.0]}
@@ -1751,14 +1751,14 @@ for pidx in ${!Products[@]}; do
                                     coin_mines=${BlockReward[$ccoin]}
                                     earnings_possible=1
                                 fi
-                                menuMines[${#menuMines[@]}]=${coin_mines}
+                                menuMines+=( ${coin_mines} )
                             fi
                         fi
                     else
                         found=$(grep -E -m 1 -c -e "^${ccoin}:${miningAlgo}:" ${LINUX_MULTI_MINING_ROOT}/${OfflineInfo[$ppool]})
                         if [ $found -eq 1 ]; then
-                            menuItems[${#menuItems[@]}]="${ccoin}#${ppool}"
-                            menuMines[${#menuMines[@]}]=".0"
+                            menuItems+=( "${ccoin}#${ppool}" )
+                            menuMines+=( ".0" )
                         fi
                     fi
                     ;;

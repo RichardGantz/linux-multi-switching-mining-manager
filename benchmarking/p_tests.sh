@@ -3,6 +3,154 @@
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
 
+# Welche Methode zum push auf ein Array ist schneller?
+# arr+=( $x ) oder arr[${#arr[@]}]=$x ?
+
+gpu_idx=999
+
+durchgaenge=10
+while ((durchgaenge--)); do
+    COUNT=1000000 #0000
+
+    unset SwitchNotGPUs
+    count=${COUNT}
+    rm -f .test.out
+    { time while ((count--)); do
+
+	# Put your code to test BELOW this line
+
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+	SwitchNotGPUs+=( ${gpu_idx} )
+
+	# Put your code to test ABOVE this line
+
+    done ; } >.test.out 2>&1
+    until [ -s .test.out ]; do sleep .01; done
+
+    read muck good rest <<<$(cat .test.out | grep -m1 "^real")
+    good=${good//,/.}
+    minutes=${good%m*}
+    seconds=${good#*m}
+    seconds=${seconds%s}
+    echo "scale=4; sekunden=${minutes}*60 + ${seconds}; print sekunden, \"\n\"" | bc | tee .test.1
+
+    unset SwitchNotGPUs
+    count=${COUNT}
+    rm -f .test.out
+    { time while ((count--)); do
+
+	# Put your code to test BELOW this line
+
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+        SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+
+	# Put your code to test ABOVE this line
+
+    done ; } >.test.out 2>&1
+    until [ -s .test.out ]; do sleep .01; done
+
+    read muck good rest <<<$(cat .test.out | grep -m1 "^real")
+    good=${good//,/.}
+    minutes=${good%m*}
+    seconds=${good#*m}
+    seconds=${seconds%s}
+    echo "scale=4; sekunden=${minutes}*60 + ${seconds}; print sekunden, \"\n\"" | bc | tee .test.2
+
+    echo 'scale=2; print "Das Verhältnis von Test1 zu Test2 beträgt ", '$(< .test.1)'/'$(< .test.2)'*100, " %\n"' | bc
+
+    sleep .1
+done
+
+rm -f .test.*
+<<RESULT1
+Oben:  SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+Unten: SwitchNotGPUs+=( ${gpu_idx} )
+
+53.332
+51.923
+Das Verhältnis von Test1 zu Test2 beträgt 102.00 %
+53.048
+51.759
+Das Verhältnis von Test1 zu Test2 beträgt 102.00 %
+53.020
+51.836
+Das Verhältnis von Test1 zu Test2 beträgt 102.00 %
+53.055
+52.071
+Das Verhältnis von Test1 zu Test2 beträgt 101.00 %
+52.886
+52.011
+Das Verhältnis von Test1 zu Test2 beträgt 101.00 %
+52.455
+51.774
+Das Verhältnis von Test1 zu Test2 beträgt 101.00 %
+52.926
+52.042
+Das Verhältnis von Test1 zu Test2 beträgt 101.00 %
+52.697
+51.574
+Das Verhältnis von Test1 zu Test2 beträgt 102.00 %
+52.501
+51.961
+Das Verhältnis von Test1 zu Test2 beträgt 101.00 %
+52.299
+52.012
+Das Verhältnis von Test1 zu Test2 beträgt 100.00 %
+RESULT1
+
+<<RESULT2
+Oben:  SwitchNotGPUs+=( ${gpu_idx} )
+Unten: SwitchNotGPUs[${#SwitchNotGPUs[@]}]=${gpu_idx}
+
+52.148
+53.200
+Das Verhältnis von Test1 zu Test2 beträgt 98.00 %
+51.255
+53.443
+Das Verhältnis von Test1 zu Test2 beträgt 95.00 %
+51.567
+53.230
+Das Verhältnis von Test1 zu Test2 beträgt 96.00 %
+51.626
+53.155
+Das Verhältnis von Test1 zu Test2 beträgt 97.00 %
+51.370
+53.411
+Das Verhältnis von Test1 zu Test2 beträgt 96.00 %
+51.491
+53.007
+Das Verhältnis von Test1 zu Test2 beträgt 97.00 %
+51.478
+52.948
+Das Verhältnis von Test1 zu Test2 beträgt 97.00 %
+51.469
+53.663
+Das Verhältnis von Test1 zu Test2 beträgt 95.00 %
+51.433
+53.323
+Das Verhältnis von Test1 zu Test2 beträgt 96.00 %
+51.320
+53.053
+Das Verhältnis von Test1 zu Test2 beträgt 96.00 %
+RESULT2
+exit
+
 SYNCFILE="${LINUX_MULTI_MINING_ROOT}/you_can_read_now.sync"
 #touch -t 05090705.00 ${SYNCFILE}
 

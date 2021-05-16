@@ -125,7 +125,7 @@ for ((i=0; i<${#GLOBAL_ALGO_DISABLED_ARR[@]}; i++)) ; do
                 break
             fi
         done
-        disd_msg[${#disd_msg[@]}]="---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen."
+        disd_msg+=( "---> Algo ${DisAlgo} wegen des Vorhandenseins in der Datei GLOBAL_ALGO_DISABLED herausgenommen." )
     fi
 done
 

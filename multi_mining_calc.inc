@@ -264,7 +264,7 @@ if [ 1 -eq 1 ]; then
 	    fi
             # Hier könnten wir eigentlich schon ausgeben, welche GPU mit welchem Algo
             msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-            MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
+            MAX_PROFIT_MSG_STACK+=( ${msg} )
             if [[ ${verbose} == 1 ]]; then
                 _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
                 echoString="Exactly: "
@@ -289,7 +289,7 @@ if [ 1 -eq 1 ]; then
             MAX_FP_WATTS=${CombinationWatts}
             MAX_FP_GPU_Algo_Combination=${algosCombinationKey}
             msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
-            MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
+            MAX_FP_MSG_STACK+=( ${msg} )
         fi
 
         # Für Statistik-Zwecke. Dieser Zähler sollte über die 31s-Intervalle ziemlich gleich bleiben
@@ -651,9 +651,9 @@ function _read_in_All_ALGO_WATTS_MINESin () {
                 # Wir nehmen das jetzt aber alles mal raus und machen es anders und beobachten wieder
                 # die Durchlaufzeiten, ob die sich wieder mit der Zeit erhöhen UND ob sich
                 # der Speicherbedarf erhöht, OBWOHL alle Arrays immer erst durch UNSET zerstört werden
-                actGPUAlgos[${#actGPUAlgos[@]}]="${READARR[$i]}"
-                actAlgoWatt[${#actAlgoWatt[@]}]="${READARR[$i+1]}"
-                actAlgoMines[${#actAlgoMines[@]}]="${READARR[$i+2]}"
+                actGPUAlgos+=( "${READARR[$i]}" )
+                actAlgoWatt+=( "${READARR[$i+1]}" )
+                actAlgoMines+=( "${READARR[$i+2]}" )
             done
         fi
     done
@@ -703,9 +703,9 @@ function _read_in_Validated_ALGO_WATTS_MINESin () {
                 # Wir nehmen das jetzt aber alles mal raus und machen es anders und beobachten wieder
                 # die Durchlaufzeiten, ob die sich wieder mit der Zeit erhöhen UND ob sich
                 # der Speicherbedarf erhöht, OBWOHL alle Arrays immer erst durch UNSET zerstört werden
-                actGPUAlgos[${#actGPUAlgos[@]}]="${READARR[$i]}"
-                actAlgoWatt[${#actAlgoWatt[@]}]="${READARR[$i+1]}"
-                actAlgoMines[${#actAlgoMines[@]}]="${READARR[$i+2]}"
+                actGPUAlgos+=( "${READARR[$i]}" )
+                actAlgoWatt+=( "${READARR[$i+1]}" )
+                actAlgoMines+=( "${READARR[$i+2]}" )
             done
         fi
     done

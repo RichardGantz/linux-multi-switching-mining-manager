@@ -298,13 +298,13 @@ function _find_algorithms_to_benchmark {
 	if [ ${#GPUs} -gt 1 ]; then
 	    for lfdGPU in ${GPUs}; do
 		if [ "${lfdGPU}" == "${gpu_uuid}" ]; then
-		    MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
+		    MyDisabledAlgos+=( ${disabledAlgo} )
 		    break
 		fi
 	    done
 	else
 	    # Zeile gilt für ALLE GPUs
-	    MyDisabledAlgos[${#MyDisabledAlgos[@]}]=${disabledAlgo}
+	    MyDisabledAlgos+=( ${disabledAlgo} )
 	fi
     done
     #declare -p MyDisabledAlgos
@@ -321,7 +321,7 @@ function _find_algorithms_to_benchmark {
 
     for actRow in "${MyDisabledAlgorithms_in[@]}"; do
 	read _date_ _oclock_ timestamp gpuIdx lfdAlgorithm Reason <<<${actRow}
-	[ ${gpuIdx#0} -eq ${gpu_idx} ] && MyDisabledAlgorithms[${#MyDisabledAlgorithms[@]}]=${lfdAlgorithm}
+	[ ${gpuIdx#0} -eq ${gpu_idx} ] && MyDisabledAlgorithms+=( ${lfdAlgorithm} )
     done
 
     declare -p MyDisabledAlgorithms
@@ -383,7 +383,7 @@ function _find_algorithms_to_benchmark {
 	    read _coin_ _pool_ _algo_ _mNam_ _mVer_ <<<"${coin_algorithm//#/ }"
 	    [ "${lfdAlgorithm}" == "${_algo_}#${_mNam_}#${_mVer_}" ] && continue 2
 	done
-	WillBenchmarkAlgorithm[${#WillBenchmarkAlgorithm[@]}]=${lfdAlgorithm}
+	WillBenchmarkAlgorithm+=( ${lfdAlgorithm} )
     done
 }
 # Danach steht das Array WillBenchmarkAlgorithm mit den zu benchmarkenden Algorithms

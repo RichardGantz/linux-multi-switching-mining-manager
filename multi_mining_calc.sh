@@ -229,7 +229,7 @@ rm -f ${RUNNING_STATE}
 # Startet eine Session ${BG_SESS} und eine shell, aus der heraus nvidia-settings laufen,
 # sofern sie aus einem mate-terminal-Child gerufen werden, das eine screen-Session für dem MM-Start erstellt hat.
 # !!! GANZ WICHTIG: Die angegebene screenrc muss mit einem "detach" enden !!!
-#     Sonst kommt er nicht nach hierher zurück und überlager den ${MAINSCREEN}
+#     Sonst kommt er nicht nach hierher zurück und überlagert den ${MAINSCREEN}
 if [ ${UseScreen} -eq 1 ]; then
     if [ $(screen -ls|grep -c ${BG_SESS}) -eq 0 ]; then
 	cp ${LINUX_MULTI_MINING_ROOT}/screen/screenrc.${BG_SESS%%.*} ${LINUX_MULTI_MINING_ROOT}/screen/.screenrc.${BG_SESS}
@@ -390,6 +390,10 @@ while : ; do
     # Dann starten wir die algo_multi_abfrage.sh, wenn sie nicht schon läuft...
     #
     if [ ! -f algo_multi_abfrage.pid ]; then
+	# Hier könnten wir noch 2s oder so warten, bis alle 11 GPUs gestartet sind und sich aus dem Spiel genommen haben,
+	#      falls sie ein paar algos benchen müssen
+	# sleep 2
+
         # Das lohnt sich erst, wenn wir den curl dazu gebracht haben, ebenfalls umzuleiten...
         # ${_TERMINAL_} -x ./abc.sh
         #    Für die Logs in eigenem Terminalfenster, in dem verblieben wird, wenn tail abgebrochen wird:
@@ -401,7 +405,6 @@ while : ; do
 
 	### SCREEN ADDITIONS: ###
 	if [ ${UseScreen} -eq 1 ]; then
-#	    screen -X eval detach
 	    PREISE_Title="PREISE"
 	    # Das erzeugt einen neuen Prozess und der ursprüngliche ist überdeckt und unzugänglich!
 	    # ... bis wir uns davon detached haben...
@@ -832,7 +835,7 @@ while : ; do
                 # Es kam offensichtlich nichts aus der Datei ALGO_WATTS_MINES.in.
                 # Vielleicht wegen einer Vorabfilterung durch gpu_gv-algo.sh (unwahrscheinlich aber machbar)
                 # ---> ARRAYPUSH 2 <---
-                SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${gpu_idx}
+                SwitchOffGPUs+=( ${gpu_idx} )
                 ;;
 
             *)
@@ -871,27 +874,9 @@ while : ; do
 			    echo "\${ACTUAL_REAL_PROFIT}: ${ACTUAL_REAL_PROFIT}"
 			fi
                         if [[ "${ACTUAL_REAL_PROFIT:0:1}" != "-" && ${#_octal_} -gt 0 ]]; then
-                            profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
+                            profitableAlgoIndexes+=( ${algoIdx} )
                             actAlgoProfit[${algoIdx}]=${ACTUAL_REAL_PROFIT}
                         fi
-if [ 1 -eq 0 ]; then
-                        if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
-                            MAX_PROFIT_GPU_Algo_Combination="${gpu_idx}:${algoIdx},"
-                            msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-                            MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
-                        fi
-
-                        # (17.11.2017)
-                        # Wir halten jetzt auch die MAX_FP_MINES und die dabei verbrauchten Watt in MAX_FP_WATTS fest
-                        # Das sind Daten, die wir "nebenbei" festhalten für den Fall,
-                        #     dass IM MOMENT (für den kommenden Zyklus) GARANTIERT KEINE NETZPOWER BEZOGEN WERDEN MUSS
-                        if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
-                            MAX_FP_WATTS=${actAlgoWatt[$algoIdx]}
-                            MAX_FP_GPU_Algo_Combination="${gpu_idx}:${algoIdx},"
-                            msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
-                            MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
-                        fi
-fi
                     done
 
                     profitableAlgoIndexesCnt=${#profitableAlgoIndexes[@]}
@@ -900,7 +885,7 @@ fi
                         ###
                         ### Jetzt steht fest, dass diese GPU mindestens 1 Algo hat, der mit Gewinn rechnet.
                         ###
-                        PossibleCandidateGPUidx[${#PossibleCandidateGPUidx[@]}]=${gpu_idx}
+                        PossibleCandidateGPUidx+=( ${gpu_idx} )
 
                         # Hilfsarray für AlgoIndexe vor dem Neuaufbau immer erst löschen
                         declare -n deleteIt="PossibleCandidate${gpu_idx}AlgoIndexes";    unset deleteIt
@@ -910,7 +895,7 @@ fi
                         ###
                         ### Bevor wir das Array nun endgültig freigeben, sortieren wir es und packen nur die BEST_ALGO_CNT=5 Stück drauf.
                         ###
-                        ### profitableAlgoIndexes[${#profitableAlgoIndexes[@]}]=${algoIdx}
+                        ### profitableAlgoIndexes+=( ${algoIdx} )
                         ### actAlgoProfit[${algoIdx}]=${ACTUAL_REAL_PROFIT}
                         rm -f .sort_profit_algoIdx_${gpu_idx}.in
                         for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
@@ -943,7 +928,7 @@ fi
                         exactNumAlgos[${gpu_idx}]=${profitableAlgoIndexesCnt}
                     else
                         # Wenn kein Algo übrigbleiben sollte, GPU aus.
-                        SwitchOffGPUs[${#SwitchOffGPUs[@]}]=${gpu_idx}
+			SwitchOffGPUs+=( ${gpu_idx} )
                     fi
                 else
                     SwitchNotGPUs+=( ${gpu_idx} )
@@ -1057,11 +1042,11 @@ fi
             #let GLOBAL_GPU_COMBINATION_LOOP_COUNTER++
             #MAX_PROFIT_GPU_Algo_Combination=${algosCombinationKey}
             #msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-            #MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
+            #MAX_PROFIT_MSG_STACK+=( ${msg} )
             #MAX_FP_WATTS=${CombinationWatts}
             #MAX_FP_GPU_Algo_Combination=${algosCombinationKey}
             #msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
-            #MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
+            #MAX_FP_MSG_STACK+=( ${msg} )
 
             # So sieht der Output des bc aus (Zwischenmeldungen werden im Moment nicht auf den msg-Stack gelegt):
             #TOTAL NUMBER OF LOOPS = 58*54*54 = 169128
@@ -1135,9 +1120,9 @@ fi
 
             GLOBAL_GPU_COMBINATION_LOOP_COUNTER=$(< .GLOBAL_GPU_COMBINATION_LOOP_COUNTER)
             msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-            MAX_PROFIT_MSG_STACK[${#MAX_PROFIT_MSG_STACK[@]}]=${msg}
+            MAX_PROFIT_MSG_STACK+=( ${msg} )
             msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
-            MAX_FP_MSG_STACK[${#MAX_FP_MSG_STACK[@]}]=${msg}
+            MAX_FP_MSG_STACK+=( ${msg} )
             let GLOBAL_MAX_PROFIT_CALL_COUNTER+=GLOBAL_GPU_COMBINATION_LOOP_COUNTER
             #exit 77
         else

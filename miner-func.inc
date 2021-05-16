@@ -220,9 +220,9 @@ function _split_into_Available_and_Missing_Miner_Algo_Arrays () {
         fi
 	#echo FOUND == ${found}
         if [ $found -eq 99 ]; then
-            actMissingAlgos[${#actMissingAlgos[@]}]=${lfdMiningAlgo}
+            actMissingAlgos+=( ${lfdMiningAlgo} )
         else
-            actAvailableAlgos[${#actAvailableAlgos[@]}]=${lfdMiningAlgo}
+            actAvailableAlgos+=( ${lfdMiningAlgo} )
         fi
     done
     # Doppelt brauchen wir sie nicht. Ist nur sinnvoll in actMiningAlgos
