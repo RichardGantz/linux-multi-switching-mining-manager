@@ -49,4 +49,12 @@ bindkey "^[O1;5S" layout next
 # F2 macht ein "C-a F", falls nicht der ganze Platz im Window genutzt wird
 bindkey "^[OQ" fit
 
+# Dieser Pfad muss in der produktiven Umgebung dringend angepasst werden!
+chdir $LMMS_SRC_ROOT
+#chdir $LMMS_RUN_ROOT
+
+# Und wenn das oben nicht funktionieren sollte, ein stuff
+# stuff "cd $LMMS_SRC_ROOT\n"
+# stuff "cd $LMMS_RUN_ROOT\n"
+
 detach

@@ -57,9 +57,7 @@ find . -name \*\.ppid                -delete
 find . -name \*\.lock                -delete
 find . -name ALGO_WATTS_MINES\.in    -delete
 find . -name .sort_profit_algoIdx_\* -delete
-rm -f "${LINUX_MULTI_MINING_ROOT}/BTCEURkurs" \
-   ${algoID_KURSE_PORTS_WEB} \
-   ${algoID_KURSE__PAY__WEB} \
+rm -f ${algoID_KURSE__PAY__WEB} ${algoID_KURSE_PORTS_WEB} \
    .NVIDIA_SMI_PM_LAUNCHED_GPUs
 
 # Aktuelle PID der 'multi_mining_calc.sh' ENDLOSSCHLEIFE
@@ -132,6 +130,7 @@ mv -f ${ERRLOG} ${ERRLOG}.BAK
 
 function _delete_temporary_files () {
     rm -f ${SYNCFILE} ${SYSTEM_STATE}.lock .bc_result_GPUs_* .bc_results_all .bc_prog_GPUs_* ._reserve_and_lock_counter.* \
+       .NVIDIA_SMI_PM_LAUNCHED_GPUs .*.lock .sort_profit_algoIdx_* \
        I_n_t_e_r_n_e_t__C_o_n_n_e_c_t_i_o_n__L_o_s_t
 }
 _delete_temporary_files
@@ -142,43 +141,24 @@ _delete_temporary_files
 function _terminate_all_log_ptys () {
     for gpu_idx in ${!LOG_PTY_CMD[@]}; do
         if [ -n "${LOG_PTY_CMD[${gpu_idx}]}" ]; then
-            broken_pipe_text+="Beenden des Logger-Terminals GPU #${gpu_idx} ... "
+            echo "Beenden des Logger-Terminals GPU #${gpu_idx} ... "
             REGEXPAT="${LOG_PTY_CMD[${gpu_idx}]//\//\\/}"
             REGEXPAT="${REGEXPAT//\+/\\+}"
-            kill_pids=$(ps -ef \
-                      | grep -e "${REGEXPAT}" \
-                      | grep -v 'grep -e ' \
-                      | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-            if [ ! "$kill_pids" == "" ]; then
-                kill $kill_pids >/dev/null
-                broken_pipe_text+="done.\n"
-            fi
+            pkill -f "${REGEXPAT}"
         fi
     done
 }
 
-function _terminate_all_processes_of_script () {
-    kill_pids=$(ps -ef \
-       | grep -e "/bin/bash.*${LINUX_MULTI_MINING_ROOT}.*$1.*" \
-       | grep -v 'grep -e ' \
-       | gawk -e 'BEGIN {pids=""} {pids=pids $2 " "} END {print pids}')
-    if [ ! "$kill_pids" == "" ]; then
-        broken_pipe_text+="Killing all $1 processes... "
-        kill $kill_pids
-        broken_pipe_text+="done.\n"
-    fi
-}
-
 function _On_Exit () {
-    broken_pipe_text="MultiMiner: _On_EXIT() ENTRY, CLEANING UP RESOURCES NOW...\n"
-    _terminate_all_processes_of_script "gpu_gv-algo.sh"
-    _terminate_all_processes_of_script "algo_multi_abfrage.sh"
-    broken_pipe_text+="\n"
-    printf ${broken_pipe_text} | tee -a .broken_pipe_text
+    printf "MultiMiner: _On_EXIT() ENTRY, CLEANING UP RESOURCES NOW...\n"
+    _terminate_all_log_ptys
+    echo "Killing algo_multi_abfrage.sh..."
+    pkill -f "algo_multi_abfrage.sh$"
+    echo "Killing all gpu_gv-algo.sh..."
+    pkill -f "gpu_gv-algo.sh$"
 
     # Temporäre Dateien löschen
     [[ $debug -eq 0 ]] && _delete_temporary_files
-    _terminate_all_log_ptys
 
     ### SCREEN ADDITIONS: ###
     if [ ${UseScreen} -eq 1 ]; then
@@ -187,11 +167,8 @@ function _On_Exit () {
 	rm -f ${LINUX_MULTI_MINING_ROOT}/screen/.screenrc.${BG_SESS}
     fi
 
-    # Das sollte eigentlich sowieso alles erledigen?
-    # Aber wir wollen lieber kein gleichzeitiges kill -15 an alle, sondern versuchen es vorher geregelt, damit alles sauber bereinigt wird.
-    # Dieser kill soll die restlichen Prozesse noch wegmachen, die übrig geblieben sind...
-    kill -- -$$
     rm -f ${This}.pid
+    printf "MultiMiner: CLEANING UP RESOURCES FINISHED... exiting NOW.\n"
 }
 trap _On_Exit EXIT
 
@@ -216,8 +193,8 @@ source ./multi_mining_calc.inc
 # ALLE LAUFENDEN gpu_gv-algo.sh killen.
 # ---> DAS MUSS NATÜRLICH AUCH DEN MINERN NOCH MITGETEILT WERDEN! <---
 # ---> WIR BEFINDEN UNS HIER NOCH IN DER TROCKENÜBUNG             <---
-_terminate_all_processes_of_script "gpu_gv-algo.sh"
-_terminate_all_processes_of_script "algo_multi_abfrage.sh"
+pkill -f "gpu_gv-algo.sh$"
+pkill -f "algo_multi_abfrage.sh$"
 # ---> WIR MÜSSEN AUCH ÜBERLEGEN, WAS WIR MIT DEM RUNNING_STATE MACHEN !!! <---
 # ---> WIE SINNVOLL IST ES, DEN AUFZUHEBEN?                                <---
 rm -f ${RUNNING_STATE}
@@ -416,15 +393,13 @@ while : ; do
 	    screen -drx ${BG_SESS} -X screen -t ${PREISE_Title}
 	    screen -drx ${BG_SESS} -p ${PREISE_Title} -X chdir "${LINUX_MULTI_MINING_ROOT}" # nicht sicher, ob dieses Kommando einen Effekt hat...
 	    screen -drx ${BG_SESS} -p ${PREISE_Title} -X stuff "${cmd}"
-#	    sleep .2
             exec 1>>${MultiMining_log}
 
             ##LOG_PTY_CMD[998]="${LOG_PTY_CMD[998]} &; screen -X eval detach"
 	    cmd="${LOG_PTY_CMD[998]}"'\nexit\n'
 	    PREISE_LOG_Title="PREISE-LOG"
 	    #screen -rx ${BG_SESS} -p + -t ${PREISE_LOG_Title} ${BASH} -c "${LOG_PTY_CMD[998]}"
-	    screen -X screen -t ${PREISE_LOG_Title}
-#	    screen -p ${PREISE_LOG_Title} -X eval "chdir ${LINUX_MULTI_MINING_ROOT}"
+	    screen -X screen -t ${PREISE_LOG_Title} 98
 	    screen -p ${PREISE_LOG_Title} -X stuff "${cmd}"
 	    screen -X select ${MAINSCREEN}
 	else
@@ -1198,7 +1173,23 @@ while : ; do
     #                   da möglicherweise die beste Kombination aus weniger als ${MAX_GOOD_GPUs} besteht.
     # Dann hätten wir diejenigen ${MAX_GOOD_GPUs} - ${SwitchOnCnt} noch zu überprüfen und zu stoppen !?!?
 
-    _decode_MAX_PROFIT_GPU_Algo_Combination_to_GPUINDEXES
+    # Es handelt sich um durch Kommas getrennte Kombinationen aus GPU-Index und entsprechendem AlgoIndex,
+    #     die durch einen Doppelpunkt getrennt sind.
+    #
+    #    z.B.    "0:1,4:0,6:3,8:1,"   bedeutet:
+    #
+    #        4 GPUs mit den IndexNummern #0, #4, #6 und #8 wurden mit den angegebenen AlgorithmenIndexen berechnet:
+    #
+    #        GPU#0 hat (mindestens) 2 gewinnbringende Algorithmen, die über Index 0 und 1 angesteuert werden.
+    #              Bei dieser Berechnung ist GPU#0 mit dem Algo und Watt, der hinter Index 1 steckt, berechnet worden.
+    #        GPU#4 hat (mindestens) 1 gewinnbringenden Algorithmus, der über Index 0 angesteuert wird.
+    #        GPU#6 hat (mindestens) 4 gewinnbringende Algorithmen, die über Index 0 bis 3 angesteuert werden.
+    #              Bei dieser Berechnung ist GPU#6 mit dem Algo und Watt, der hinter Index 3 steckt, berechnet worden.
+    #        GPU#8 hat (mindestens) 2 gewinnbringende Algorithmen, die über Index 0 und 1 angesteuert werden.
+    #              Bei dieser Berechnung ist GPU#8 mit dem Algo und Watt, der hinter Index 1 steckt, berechnet worden.
+    #
+    unset GPUINDEXES; declare -ag GPUINDEXES
+    read -a GPUINDEXES <<<"${MAX_PROFIT_GPU_Algo_Combination//,/ }"
 
     declare -i SwitchOnCnt=${#GPUINDEXES[@]}
     declare -i GPUsCnt=${#index[@]}
@@ -1209,18 +1200,15 @@ while : ; do
     ###                                                             ###
     #   Zuerst die am Gewinn beteiligten GPUs, die laufen sollen...   #
     ###                                                             ###
-    for (( i=0; $i<${SwitchOnCnt}; i++ )); do
+    for (( i=0; i<${SwitchOnCnt}; i++ )); do
         # Split the "String" at ":" into the 2 variables "gpu_idx" and "algoidx"
         read gpu_idx bc_algoidx <<<"${GPUINDEXES[$i]//:/ }"
 
-        # Ausfiltern der Guten GPUs aus PossibleCandidateGPUidx.
+        # Ausfiltern des guten gpu_idx aus PossibleCandidateGPUidx, das nun immer mehr abnimmt.
         # PossibleCandidateGPUidx enthält dann zum Schluss nur noch ebenfalls abzuschaltende GPUs
-        unset tmparray
-        for p in ${!PossibleCandidateGPUidx[@]}; do
-            [[ "${PossibleCandidateGPUidx[$p]}" != "${gpu_idx}" ]] && tmparray+=( ${PossibleCandidateGPUidx[$p]} )
-        done
-        PossibleCandidateGPUidx=( ${tmparray[@]} )
-
+	pString=${PossibleCandidateGPUidx[@]}
+	PossibleCandidateGPUidx=( ${pString/@(${gpu_idx})} )
+	
         declare -n actGPUalgoName="GPU${gpu_idx}Algos"
         declare -n actGPUalgoWatt="GPU${gpu_idx}Watts"
         # Korrektur vom bc-indirekt-AlgoIdx zum tatsächlichen algoIdx
@@ -1255,11 +1243,11 @@ while : ; do
             printf "${gpu_uuid}:${gpu_idx}" >>${RUNNING_STATE}
 
             # Ist die GPU generell Enabled oder momentan nicht zu behandeln?
-            if ((${WasItEnabled[${gpu_uuid}]} == 1)); then
+            if [ ${WasItEnabled[${gpu_uuid}]} -eq 1 ]; then
                 #
                 # Die Karte WAR generell ENABLED
                 #
-                if [[ ${uuidEnabledSOLL[${gpu_uuid}]} == 1 ]]; then
+                if [ ${uuidEnabledSOLL[${gpu_uuid}]} -eq 1 ]; then
 
                     #
                     # Die Karte BLEIBT generell ENABLED
@@ -1419,11 +1407,11 @@ while : ; do
                 fi
                 #############################   CHAOS BEHADLUNG  Ende  #############################
 
-                if ((${WasItEnabled[${gpu_uuid}]} == 1)); then
+                if [ ${WasItEnabled[${gpu_uuid}]} -eq 1 ]; then
                     #
                     # Die Karte WAR generell ENABLED
                     #
-                    if [[ -n "${WhatsRunning[${gpu_uuid}]}" ]]; then
+                    if [ -n "${WhatsRunning[${gpu_uuid}]}" ]; then
                         # MINER- Behandlung
                         echo "---> SWITCH-OFF: GPU#${gpu_idx} ist ABZUSTELLEN!"
                         echo "---> SWITCH-OFF: GPU#${gpu_idx} läuft noch mit \"${WhatsRunning[${gpu_uuid}]}\""
@@ -1459,12 +1447,12 @@ while : ; do
                 fi
                 #############################   CHAOS BEHADLUNG  Ende  #############################
 
-                if ((${WasItEnabled[${gpu_uuid}]} == 1)); then
+                if [ ${WasItEnabled[${gpu_uuid}]} -eq 1 ]; then
                     runningWatts=${RunningWatts[${gpu_uuid}]}
                     #
                     # Die Karte WAR generell ENABLED
                     #
-                    if [[ -n "${WhatsRunning[${gpu_uuid}]}" ]]; then
+                    if [ -n "${WhatsRunning[${gpu_uuid}]}" ]; then
                         # MINER- Behandlung
                         echo "---> SWITCH-NOT: GPU#${gpu_idx} läuft noch mit \"${WhatsRunning[${gpu_uuid}]}\""
                     fi

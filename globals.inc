@@ -229,14 +229,12 @@ function _read_in_actual_RUNNING_STATE () {
             | grep -e "^GPU-" \
             | readarray -n 0 -O 0 -t RUNNING_STATE_CONTENT
 
-        for (( i=0; $i<${#RUNNING_STATE_CONTENT[@]}; i++ )); do
-            if [[ "${RUNNING_STATE_CONTENT[$i]:0:4}" == "GPU-" ]]; then
-                read RunningUUID RunningGPUidx GenerallyEnabled Watt RunningAlgo <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
-                RunningGPUid[${RunningUUID}]=${RunningGPUidx}
-                WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
-                RunningWatts[${RunningUUID}]=${Watt}
-                WhatsRunning[${RunningUUID}]=${RunningAlgo}
-            fi
+        for (( i=0; i<${#RUNNING_STATE_CONTENT[@]}; i++ )); do
+            read RunningUUID RunningGPUidx GenerallyEnabled Watt RunningAlgo <<<"${RUNNING_STATE_CONTENT[$i]//:/ }"
+            RunningGPUid[${RunningUUID}]=${RunningGPUidx}
+            WasItEnabled[${RunningUUID}]=${GenerallyEnabled}
+            RunningWatts[${RunningUUID}]=${Watt}
+            WhatsRunning[${RunningUUID}]=${RunningAlgo}
         done
 
         if [[ ${verbose} == 1 ]]; then

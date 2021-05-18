@@ -97,25 +97,25 @@ while :; do
         echo "------------------   WhatToMine BLOCK_REWARD  ----------------------"
         _prepare_COIN_PRICING_from_the_Web; RC=$?
         echo "--------------------------------------------------------------------"
-        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) BLOCK_REWARD Abruf nicht erfolgreich." | tee -a ${ERRLOG}
+        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S %s" ) BLOCK_REWARD Abruf nicht erfolgreich." | tee -a ${ERRLOG}
 
         echo "------------------   Bittrex COIN-BTC-Faktor  ----------------------"
         _prepare_COIN_TO_BTC_EXCHANGE_from_the_Web; RC=$?
         echo "--------------------------------------------------------------------"
-        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) COIN-BTC-Faktor Abruf nicht erfolgreich." | tee -a ${ERRLOG}
+        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S %s" ) COIN-BTC-Faktor Abruf nicht erfolgreich." | tee -a ${ERRLOG}
     fi
 
     if [ ${PoolActive["nh"]} -eq 1 ]; then
         echo "------------------   Nicehash-Kurse           ----------------------"
         _prepare_ALGO_PORTS_KURSE_from_the_Web; RC=$?
         echo "--------------------------------------------------------------------"
-        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) NiceHash api-Abruf nicht erfolgreich." | tee -a ${ERRLOG}
+        [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S %s" ) NiceHash api-Abruf nicht erfolgreich." | tee -a ${ERRLOG}
     fi
     
     echo "------------------   BTC-EUR-KURS-Abfrage     ----------------------"
     _prepare_Strompreise_in_BTC_from_the_Web; RC=$?
     echo "--------------------------------------------------------------------"      
-    [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) Strompreise in BTC Aktualisierung nicht erfolgreich." | tee -a ${ERRLOG}
+    [[ $RC -ne 0 ]] && echo "${This}.sh: $(date "+%Y-%m-%d %H:%M:%S %s" ) Strompreise in BTC Aktualisierung nicht erfolgreich." | tee -a ${ERRLOG}
 
     # Alle Daten stabil in den Dateien. Startschuss für die anderen Prozesse
     _reserve_and_lock_file ${SYNCFILE}

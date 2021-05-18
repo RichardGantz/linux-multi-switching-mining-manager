@@ -251,7 +251,7 @@ function _terminate_MinerShell_and_logger_terminal {
 # Aufräumarbeiten beim ordungsgemäßen kill -15 Signal
 #
 function _On_Exit () {
-    [ ${debug} -eq 1 ] && echo "_On_Exit() entered..."
+    [ ${debug} -eq 1 ] && echo -e "\n_On_Exit() entered..."
 
     if [ -n "${DoAutoBenchmark}" ] && [ ${DoAutoBenchmark} -eq 1 ]; then
         echo "Prozess wurde aus dem Auto-Benchmarking gerissen... GPU #${gpu_idx} wird wieder global Enabled."

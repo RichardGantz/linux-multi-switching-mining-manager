@@ -13,6 +13,29 @@
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_delays.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_yeses.inc
 
+#for gpu_idx in {22..0}; do
+for gpu_idx in {0..22}; do
+    # Wie am schnellsten einen bestimmten gpu_idx herausschneiden?
+    PossibleCandidateGPUidx=( {0..22} )
+
+    # Das funktioniert
+    # p=$(echo ${PossibleCandidateGPUidx[@]})
+
+    # Das funktioniert auch
+    p="${PossibleCandidateGPUidx[@]}"
+
+    # Das funktioniert auch
+    p=${PossibleCandidateGPUidx[@]}
+    PossibleCandidateGPUidx=( ${p/@(${gpu_idx})} )
+
+    echo ${gpu_idx}: ${PossibleCandidateGPUidx[@]}
+done
+
+exit
+for p in ${PossibleCandidateGPUidx[@]}; do
+done
+exit
+    
 _func_gpu_abfrage_sh
 [ -n "${NVIDIA_SMI_PM_LAUNCHED_string}" ] && {
     read -a arr_indexes <_func_gpu_abfrage_sh.test

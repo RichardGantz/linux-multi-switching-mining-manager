@@ -25,3 +25,4 @@ screen -t MAIN
 # F2 macht ein "C-a F", falls nicht der ganze Platz im Window genutzt wird
 bindkey "^[OQ" fit
 
+chdir $LMMS_SRC_ROOT

@@ -61,6 +61,7 @@ function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
     declare -i jsonValid=0
     searchPattern='^[{]"miningAlgorithms":\['
 
+    _reserve_and_lock_file ${algoID_KURSE__PAY__WEB}
     # PAYING muss aus dieser Datei geholt werden.
     # https://api2.nicehash.com/main/api/v2/public/simplemultialgo/info
     jsonValid=$(curl "https://api2.nicehash.com/main/api/v2/public/simplemultialgo/info" \
@@ -76,7 +77,11 @@ function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
     # https://api2.nicehash.com/main/api/v2/mining/algorithms
     # Da sich die Ports wohl kaum ändern, genügt es, jede Stunde abzurufen
     Pay_Time=$(date --reference=${algoID_KURSE__PAY__WEB} +%s)
-    [ -s ${algoID_KURSE_PORTS_WEB} ] && PortTime=$(date --reference=${algoID_KURSE_PORTS_WEB} +%s) || PortTime=0
+    if [ -s ${algoID_KURSE_PORTS_WEB} ]; then
+	PortTime=$(date --reference=${algoID_KURSE_PORTS_WEB} +%s)
+    else
+	PortTime=0
+    fi
     if [ $((${Pay_Time}-3600)) -gt ${PortTime} ]; then
 	jsonValid=$(curl "https://api2.nicehash.com/main/api/v2/mining/algorithms" \
 			| tee ${algoID_KURSE_PORTS_WEB} \
@@ -98,6 +103,8 @@ function _prepare_ALGO_PORTS_KURSE_from_the_Web () {
              >${algoID_KURSE_PORTS_ARR}
 	# Das Flag für _read_in_ALGO_PORTS_KURSE, die Arrays aus der eben erstellten Datei einzulesen
     fi
+    _remove_lock                             # ... und wieder freigeben
+
     unset NoAlgoNames_notified NoAlgoNames_recorded
     # Auswertung und Erzeugung der PAY-Datei, aus der das Array KURSE eingelesen wird
     gawk -e 'BEGIN { RS=":[\[]{|},{|}\],"} \
