@@ -63,7 +63,9 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/GPU-skeleton/gpu_gv-algo.sh \
     ${SRC_DIR}/GPU-skeleton/MinerShell.sh \
     ${SRC_DIR}/GPU-skeleton/README.md \
-    ${SRC_DIR}/miners/* \
+    ${SRC_DIR}/miners/*.starts \
+    ${SRC_DIR}/miners/*.algos \
+    ${SRC_DIR}/miners/*.ALGOS \
     ${SRC_DIR}/distribution/make_install_package.sh \
     ${SRC_DIR}/distribution/multi_mining_calc.sh.header \
     ${SRC_DIR}/estimate_yeses.sh \
@@ -74,6 +76,10 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/.logs/diagramm_avgs.php \
     ${SRC_DIR}/.logs/diagramm_cuts.php \
     ${SRC_DIR}/.logs/tests.sh \
+    ${SRC_DIR}/tests.sh \
+    ${SRC_DIR}/benchmarking/tests.sh \
+    ${SRC_DIR}/GPU-skeleton/tests.sh \
+    ${SRC_DIR}/miners/tests.sh \
     ${SRC_DIR}/screen/screenrc.* \
     ${SRC_DIR}/screen/.screenrc.* \
     ${SRC_DIR}/GPU-[^s]*/benchmark_GPU*.json \

@@ -34,23 +34,12 @@
 [[ ${#BencherTitle}  -eq 0 ]] && BencherTitle=MAIN
 [[ ${#BenchLogTitle} -eq 0 ]] && BenchLogTitle=BENCHLOGFILE
 [[ ${#TweakerTitle}  -eq 0 ]] && TweakerTitle=TWEAKER
-# Die folgende Variable verhindert das Absetzen der nvidia-Befehle vor dem und den echten Start des ausgewählten Miners...
-#     statt des dadurch entfallenden BENCHLOGs und des nicht funktionierenden "tail -f BENCHLOG" wird ein less -Kommando abgesetzt, um screen layouts zu testen...
-#     verhindert, dass beim Beenden in die entsprechende bench...json geschrieben wird (durch NICHT Ausführen von BENCHMARKING_WAS_STARTED=1)
-#     verhindert den Eintritt in die Endlosschleife, die Hash- und Wattwerte sekündlich ausgibt und wartet stattdessen auf eine Eingabe, die den BENCHER BEENDET
-# 0 bedutet normaler Betrieb mit Miner-Start
-# 1 bedeutet "Trockenbetrieb" ohne Minerstart
-# ScreenTest wird jetzt in globals.inc definiert
-#ScreenTest=0
 
 # GLOBALE VARIABLEN, nützliche Funktionen
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/logfile_analysis.inc
 
 # Um die miniZ - Algos zunächst mit der am schlechtesten laufenden GPU zu erstellen
-ScreenTest=0
-ScreenTest=1
-
 if [ ${ScreenTest} -eq 1 ]; then
     pwd
     echo "\$MULTI_MINERS_PID: $MULTI_MINERS_PID"

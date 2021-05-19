@@ -6,7 +6,38 @@
 # Welche Methode zum push auf ein Array ist schneller?
 # arr+=( $x ) oder arr[${#arr[@]}]=$x ?
 
-gpu_idx=999
+durchgaenge=1
+while ((durchgaenge--)); do
+    COUNT=10 #0000
+
+    count=${COUNT}
+    rm -f .test.out
+    { time while ((count--)); do
+
+	# Put your code to test BELOW this line
+
+	cat ../.logs/.bc_progs/.bc_prog_GPUs_10_0_1_2_3_4_5_6_7_8_9 \
+	    | bc
+
+	# Put your code to test ABOVE this line
+
+    done ; } >.test.out 2>&1
+    until [ -s .test.out ]; do sleep .01; done
+
+    read muck good rest <<<$(cat .test.out | grep -m1 "^real")
+    good=${good//,/.}
+    minutes=${good%m*}
+    seconds=${good#*m}
+    seconds=${seconds%s}
+    echo "scale=4; sekunden=${minutes}*60 + ${seconds}; print sekunden, \"\n\"" | bc | tee .test.1
+
+    #    echo 'scale=2; print "Das Verhältnis von Test1 zu Test2 beträgt ", '$(< .test.1)'/'$(< .test.2)'*100, " %\n"' | bc
+
+    #sleep .1
+done
+
+rm -f .test.*
+exit
 
 durchgaenge=10
 while ((durchgaenge--)); do
