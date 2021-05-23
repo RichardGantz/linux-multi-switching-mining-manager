@@ -1,0 +1,21 @@
+
+
+
+/* So können wir den Inhalt unserer INT-Arrays, die alle dieselbe MAX_GOOD_GPUs+1 Members haben.
+   Die Anzahl der aktuell gültigen Members (von 0 an gerechnet) steht dabei immer in INT-Array[ MAX_GOOD_GPUs ]
+   */
+    char members[ MAX_GOOD_GPUs*(3+1) + 1 ] = "";
+    char member[ 3+1 + 1 ] = "";
+    for (int i=0; i<TestCombinationGPUs[MAX_GOOD_GPUs]; i++) {
+      sprintf( member, "%u,", (unsigned int) TestCombinationGPUs[i] );
+      strcat( members, member );
+    }
+    char Tmembers[ MAX_GOOD_GPUs*(3+1) + 1 ] = "";
+    char Tmember[ 3+1 + 1 ] = "";
+    for (int i=0; i<testGPUs[MAX_GOOD_GPUs]; i++) {
+      sprintf( Tmember, "%u,", (unsigned int) testGPUs[i] );
+      strcat( Tmembers, Tmember );
+    }
+    printf( "_CALCULATE_GV_of_all_TestCombinationGPUs_members() called with %i Members: %s, %i initial TestMembers: %s\n",
+	    TestCombinationGPUs[MAX_GOOD_GPUs], members,
+	    testGPUs[MAX_GOOD_GPUs], Tmembers );

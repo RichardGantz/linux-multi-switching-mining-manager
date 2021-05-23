@@ -8,7 +8,7 @@
 
 durchgaenge=1
 while ((durchgaenge--)); do
-    COUNT=10 #0000
+    COUNT=100 #0000
 
     count=${COUNT}
     rm -f .test.out
@@ -16,8 +16,7 @@ while ((durchgaenge--)); do
 
 	# Put your code to test BELOW this line
 
-	cat ../.logs/.bc_progs/.bc_prog_GPUs_10_0_1_2_3_4_5_6_7_8_9 \
-	    | bc
+	cat ../.logs/.bc_progs/11_GPUs/.bc_prog_GPUs_11_0_1_2_3_4_5_6_7_8_9_10 | bc
 
 	# Put your code to test ABOVE this line
 
@@ -31,7 +30,27 @@ while ((durchgaenge--)); do
     seconds=${seconds%s}
     echo "scale=4; sekunden=${minutes}*60 + ${seconds}; print sekunden, \"\n\"" | bc | tee .test.1
 
-    #    echo 'scale=2; print "Das Verhältnis von Test1 zu Test2 beträgt ", '$(< .test.1)'/'$(< .test.2)'*100, " %\n"' | bc
+    count=${COUNT}
+    rm -f .test.out
+    { time while ((count--)); do
+
+	# Put your code to test BELOW this line
+
+	../.CUDA/11_GPUs_0_1_2_3_4_5_6_7_8_9_10
+
+	# Put your code to test ABOVE this line
+
+    done ; } >.test.out 2>&1
+    until [ -s .test.out ]; do sleep .01; done
+
+    read muck good rest <<<$(cat .test.out | grep -m1 "^real")
+    good=${good//,/.}
+    minutes=${good%m*}
+    seconds=${good#*m}
+    seconds=${seconds%s}
+    echo "scale=4; sekunden=${minutes}*60 + ${seconds}; print sekunden, \"\n\"" | bc | tee .test.2
+
+    echo 'scale=2; print "Das Verhältnis von Test1 zu Test2 beträgt ", '$(< .test.1)'/'$(< .test.2)'*100, " %\n"' | bc
 
     #sleep .1
 done
