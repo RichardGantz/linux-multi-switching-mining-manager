@@ -123,7 +123,7 @@ Danach den MultiMiner neu starten.
 fi
 
 #2021-05-25: Die Berechnungen wurden nun in C geschrieben unter Verwendung von Multi-Threading als Vorstufe für die Verlagerung in GPU's
-cd ./CUDA
+cd .CUDA
 make &>make.out
 RC=$?
 if [ ! ${RC} -eq 0 ]; then
@@ -315,7 +315,7 @@ while : ; do
     #        _read_in_minerFees_to_MINER_FEES
     #        _set_ALLE_LIVE_MINER
     _func_gpu_abfrage_sh
-
+    echo "Anzahl Enabled GPUs: ${NumEnabledGPUs}"
     #
     # Wir schalten jetzt die GPU-Abfragen ein, wenn sie nicht schon laufen...
     # ---> Müssen auch daran denken, sie zu stoppen, wenn die GPU DISABLED wird <---
@@ -545,7 +545,7 @@ while : ; do
     # Möglicherweise sollte diese "Beschleunigung" anders gelöst werden.
     # Es funktioniert im Moment jedenfalls
     # Da _progressbar im weiteren Verlauf IMMER gleich '\r' ist, wird diese Kontrolle nur beim allerersten Mal gemacht
-    [[ "${_progressbar}" != "\r" ]] && { _get_SYSTEM_STATE_in; echo "Enabled, ValidatedGPUs: ${NumEnabledGPUs}, ${NumValidatedGPUs}"; }
+    [[ "${_progressbar}" != "\r" ]] && { _get_SYSTEM_STATE_in; echo "Erster Start (eventuell bechmarken schon manche GPUs). Enabled GPUs: ${NumEnabledGPUs}"; }
 
     if [ ${NumEnabledGPUs} -gt 0 ]; then
 
@@ -570,6 +570,7 @@ while : ; do
             sleep .1
 	    { read nowSecs nowFrac <<<$(date "+%s %N"); nowFrac=${nowFrac##*(0)}; nowFrac=${nowFrac:-1}; }
         done
+	echo "Enabled, ValidatedGPUs: ${NumEnabledGPUs}, ${NumValidatedGPUs}";
     else
         echo "---> ACHTUNG: Im Moment sind ALLE GPU's DISABLED..."
     fi
@@ -987,7 +988,8 @@ while : ; do
 	    # Um die Anzahl an Berechnungen einzuschränken, starten wir mal mit der Anzahl an GPU's -3, wenn die Zahl größer ist als 8 GPU's
 	    #[ ${MAX_GOOD_GPUs} -ge 8 ] && MIN_GOOD_GPUs=8
 
-	    if [ 1 -eq 1 ]; then
+	    echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
+	    if [ 1 -eq 0 ]; then
 
 		# Wir starten alle Kombinationene parallel
 		#     Key(!)=BackgroundPID, Value=OutputFileNameGPU_TIEFE
@@ -1010,7 +1012,6 @@ while : ; do
 
 		rm -f .bc_result_GPUs_* .bc_prog_GPUs_* .bc_results_all 
 		start[$c]=$(date +%s)
-		echo "MAX_GOOD_GPUs: ${MAX_GOOD_GPUs} bei SolarWattAvailable: ${SolarWattAvailable}"
 		for (( numGPUs=${MIN_GOOD_GPUs}; $numGPUs<=${MAX_GOOD_GPUs}; numGPUs++ )); do
                     # Parameter: $1 = maxTiefe
                     #            $2 = Beginn Pointer1 bei Index 0
@@ -1054,7 +1055,6 @@ while : ; do
 		RC=$?
 		ende[$c]=$(date +%s)
 		echo "$(date -d "@${ende[$c]}" "+%Y-%m-%d %H:%M:%S" ) ${ende[$c]} Ergebnis des \"wait \${!bc_THREAD_PIDS[@]}\": ->$RC<-" >>${ERRLOG}
-		echo "Benötigte Zeit zur parallelen Berechnung aller Kombinationen:" $(( ${ende[$c]} - ${start[$c]} )) Sekunden
 
 		# GEWALTIGES Timing-Problem entdeckt, das nicht anders gelöst werden konnte, als die Pieline aufzugeben...
 		if [ 1 -eq 1 ]; then
@@ -1088,15 +1088,15 @@ while : ; do
 			      >/dev/null
 		    while [[ -f .MAX_PROFIT.in.lock || -f .MAX_FP_MINES.in.lock || -f .GLOBAL_GPU_COMBINATION_LOOP_COUNTER.lock ]]; do sleep .01; done
 		else
-			    # Die pipeline hängt immer noch. Die daten sind durch, aber die greps/awk/sorts/tail warten immer noch auf input. Komisch... $$$$$$$$$$$$$$$$$$$$
-			    # cat $(ls .bc_result_GPUs_*) \
-				cat $(ls .bc_result_GPUs_*) >.bc_results_all
-				cat .bc_results_all \
-				    | tee >(grep -E -e '^#TOTAL '  | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER) \
-					  >(grep -e '^MAX_PROFIT:' | sort -g -k2 | tail -n 1 >.MAX_PROFIT.in) \
-					  >(grep -e '^FP_M:'       | sort -g -k2 | tail -n 1 >.MAX_FP_MINES.in) \
-					  >.bc_results_all_out
-				until [[ -s .MAX_PROFIT.in || -s .MAX_FP_MINES.in || -s .GLOBAL_GPU_COMBINATION_LOOP_COUNTER ]]; do sleep .01; done
+		    # Die pipeline hängt immer noch. Die Daten sind durch, aber die greps/awk/sorts/tail warten immer noch auf input. Komisch... $$$$$$$$$$$$$$$$$$$$
+		    # cat $(ls .bc_result_GPUs_*) \ #
+		    cat $(ls .bc_result_GPUs_*) >.bc_results_all
+		    cat .bc_results_all \
+			| tee >(grep -E -e '^#TOTAL '  | awk -e 'BEGIN {sum=0} {sum+=$NF} END {print sum}' >.GLOBAL_GPU_COMBINATION_LOOP_COUNTER) \
+			      >(grep -e '^MAX_PROFIT:' | sort -g -k2 | tail -n 1 >.MAX_PROFIT.in) \
+			      >(grep -e '^FP_M:'       | sort -g -k2 | tail -n 1 >.MAX_FP_MINES.in) \
+			      >.bc_results_all_out
+		    until [[ -s .MAX_PROFIT.in || -s .MAX_FP_MINES.in || -s .GLOBAL_GPU_COMBINATION_LOOP_COUNTER ]]; do sleep .01; done
 		fi
 
 		# Warten auf die bc Threads und Auswerten der Ergebnisse.
@@ -1106,50 +1106,16 @@ while : ; do
 		#
 		read muck MAX_PROFIT   MAX_PROFIT_GPU_Algo_Combination <<<$(< .MAX_PROFIT.in)   #${_MAX_PROFIT_in}
 		# echo -e "\$muck: $muck\n \$MAX_PROFIT: $MAX_PROFIT\n \$MAX_PROFIT_GPU_Algo_Combination: $MAX_PROFIT_GPU_Algo_Combination"
-		if [ ${#MAX_PROFIT} -eq 0 ]; then
-                    echo "${ende[$c]}: Stopping MultiMiner because of no MAX_PROFIT with exit code 77" | tee -a ${ERRLOG} .MM_STOPPED_INTERALLY
-                    exit 77
-		fi
+
 		# Das steht in .MAX_FP_MINES.in:
 		# FP_M: .00295375 1:0,2:0,3:0,4:0,5:0,6:1 FP_W: 1199
 		read muck MAX_FP_MINES MAX_FP_GPU_Algo_Combination     muck2 MAX_FP_WATTS <<<$(< .MAX_FP_MINES.in) #${_MAX_FP_MINES_in}
 
 		GLOBAL_GPU_COMBINATION_LOOP_COUNTER=$(< .GLOBAL_GPU_COMBINATION_LOOP_COUNTER)
-		msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
-		MAX_PROFIT_MSG_STACK+=( ${msg} )
-		msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
-		MAX_FP_MSG_STACK+=( ${msg} )
-		let GLOBAL_MAX_PROFIT_CALL_COUNTER+=GLOBAL_GPU_COMBINATION_LOOP_COUNTER
-		#exit 77
 
-		if [ 1 -eq 1 ]; then
-		    echo "=========    Berechnungsverlauf    ========="
-		    if [ 1 -eq 0 ]; then
-			# Veränderungen an MIN_GOOD_GPUs, PossibleCandidateGPUidx=( {0..10} ), etc. müssen in dieser Datei manuell vorgenommen werden!
-			# Lauf bei 8 von 11 bis 11 von 11 GPUs bis zu 2 Sekunden, die man sich sparen kann :-)
-			./bc_berechnungs_historie.sh
-		    else
-			for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
-			    echo ${MAX_PROFIT_MSG_STACK[$msg]}
-			done
-		    fi
-		fi
-		if [[ "${MAX_PROFIT_GPU_Algo_Combination}" != "${MAX_FP_GPU_Algo_Combination}" \
-			  && "${MAX_FP_MINES}" > "${MAX_PROFIT}" ]]; then
-		    echo "FULL POWER MINES ${MAX_FP_MINES} wären mehr als die EFFIZIENZ Mines ${MAX_PROFIT}"
-		    FP_echo="FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower"
-		    FP_echo+=" und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
-		    if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
-			for msg in ${!MAX_FP_MSG_STACK[@]}; do
-			    echo ${MAX_FP_MSG_STACK[$msg]}
-			done
-			echo ${FP_echo}
-		    else
-			echo "KEIN(!)" ${FP_echo}
-		    fi
-		fi
 	    else  # hier ist letztlich [ 1 -eq 1 ]
 		unset mm_calc_RESULTS
+		start[$c]=$(date +%s)
 		.CUDA/mm_calc ${MIN_GOOD_GPUs} ${MAX_GOOD_GPUs} ${BEST_ALGO_CNT} ${SolarWattAvailable} \
 			      ${kWhMin} ${kWhMax} ${MAX_PROFIT} ${MAX_FP_MINES} \
 			      "${PossibleCandidateGPUidx[*]}" "${exactNumAlgos[*]}" \
@@ -1159,6 +1125,49 @@ while : ; do
 		# MAX_PROFIT: 0.0011031243 0:2,1:2,2:2,3:2,4:2,5:2,6:2,7:2,8:2,9:2,10:2,11:2,12:2,
 		# FP_M:       0.0015441198 0:2,1:2,2:2,3:2,4:2,5:2,6:2,7:2,8:2,9:2,10:2,11:2,12:2, FP_W: 2038
 		# GLOBAL_GPU_COMBINATION_LOOP_COUNTER: 67108824
+		read muck MAX_PROFIT   MAX_PROFIT_GPU_Algo_Combination                    <<<${mm_calc_RESULTS[0]}
+		read muck MAX_FP_MINES MAX_FP_GPU_Algo_Combination     muck2 MAX_FP_WATTS <<<${mm_calc_RESULTS[1]}
+		read muck GLOBAL_GPU_COMBINATION_LOOP_COUNTER                             <<<${mm_calc_RESULTS[2]}
+		ende[$c]=$(date +%s)
+	    fi
+	    echo "Benötigte Zeit zur parallelen Berechnung aller Kombinationen:" $(( ${ende[$c]} - ${start[$c]} )) Sekunden
+
+	    if [ ${#MAX_PROFIT} -eq 0 ]; then
+                echo "${ende[$c]}: Stopping MultiMiner because of no MAX_PROFIT with exit code 77" | tee -a ${ERRLOG} .MM_STOPPED_INTERALLY
+                exit 77
+	    fi
+	    msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+	    MAX_PROFIT_MSG_STACK+=( "${msg}" )
+	    msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+	    MAX_FP_MSG_STACK+=( "${msg}" )
+
+	    GLOBAL_MAX_PROFIT_CALL_COUNTER+=GLOBAL_GPU_COMBINATION_LOOP_COUNTER
+	    #exit 77
+	    if [ 1 -eq 1 ]; then
+		echo "=========    Berechnungsverlauf    ========="
+		if [ 1 -eq 0 ]; then
+		    # Veränderungen an MIN_GOOD_GPUs, PossibleCandidateGPUidx=( {0..10} ), etc. müssen in dieser Datei manuell vorgenommen werden!
+		    # Lauf bei 8 von 11 bis 11 von 11 GPUs bis zu 2 Sekunden, die man sich sparen kann :-)
+		    ./bc_berechnungs_historie.sh
+		else
+		    for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
+			echo ${MAX_PROFIT_MSG_STACK[$msg]}
+		    done
+		fi
+	    fi
+	    if [[ "${MAX_PROFIT_GPU_Algo_Combination}" != "${MAX_FP_GPU_Algo_Combination}" \
+		      && "${MAX_FP_MINES}" > "${MAX_PROFIT}" ]]; then
+		echo "FULL POWER MINES ${MAX_FP_MINES} wären mehr als die EFFIZIENZ Mines ${MAX_PROFIT}"
+		FP_echo="FULL POWER MODE wäre möglich bei ${SolarWattAvailable}W SolarPower"
+		FP_echo+=" und maximal ${MAX_FP_WATTS}W GPU-Verbrauch:"
+		if [[ ${MAX_FP_WATTS} -lt ${SolarWattAvailable} ]]; then
+		    for msg in ${!MAX_FP_MSG_STACK[@]}; do
+			echo ${MAX_FP_MSG_STACK[$msg]}
+		    done
+		    echo ${FP_echo}
+		else
+		    echo "KEIN(!)" ${FP_echo}
+		fi
 	    fi
         else
 	    echo "Keine Gesamtberechnung nötig. Es ist nur 1 GPU aktiv und die wurde schon berechnet."
@@ -1512,6 +1521,8 @@ while : ; do
     [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 
     printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
+    # Nach der obigen Freigabe laufen die GPUs los und starten/switchen/stoppen ihre MinerShells.
+    # Und die algo_multi_abfrage.sh wartet 5 Sekunden vor dem erneuten Web-Abruf und touch des SYNCFILE
     while [ "${new_Data_available}" == "$(date --reference=${SYNCFILE} +%s)" ] ; do
         sleep 1
     done

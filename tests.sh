@@ -1,7 +1,7 @@
 #!/bin/bash
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source globals.inc
 [[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.sh
-source ./multi_mining_calc.inc
+#source ./multi_mining_calc.inc
 #[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
 #[[ ${#_ALGOINFOS_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 #[[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
@@ -14,6 +14,20 @@ source ./multi_mining_calc.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_delays.inc
 #source ${LINUX_MULTI_MINING_ROOT}/estimate_yeses.inc
 
+msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+MAX_PROFIT_MSG_STACK+=( "${msg}" )
+msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+MAX_FP_MSG_STACK+=( "${msg}" )
+for msg in ${!MAX_PROFIT_MSG_STACK[@]}; do
+    echo ${MAX_PROFIT_MSG_STACK[$msg]}
+done
+for msg in "${MAX_PROFIT_MSG_STACK[@]}"; do
+    echo ${msg}
+done
+exit
+
+# Die mm_calc.c Tests
+source ./multi_mining_calc.inc
 verbose=1
 debug=1
 SolarWattAvailable=0

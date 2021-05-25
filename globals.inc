@@ -43,6 +43,18 @@ shopt -s extglob
 BEST_ALGO_CNT=5 # 2021-05-02 Mehr als 60 Mio Berechnungen bei 10 GPU's, 210 Sekunden Berechnungsdauer
 BEST_ALGO_CNT=4 # 2021-05-02 Fast     10 Mio Berechnungen bei 10 GPU's,  36 Sekunden Berechnungsdauer
 BEST_ALGO_CNT=3 # 2021-05-02 Gut       1 Mio Berechnungen bei 10 GPU's,   9 Sekunden Berechnungsdauer
+# 2021-05-25 Test wegen Integration von mm_calc, das zu lange dauert und sich immer noch irgendetwas überholt
+#            Mit 2 max. Algos werden bei 13 GPUs nur knapp 1,6 Mio Berechnungen durchgeführt (2 von 13 bis 13 von 13),
+#            während es bei 3 Algos über 67 Mio Berechnungen sind.
+#            Durch die vorübergehende Herabsetzung der Algos konnte ein "Überholungs-Bug" entdeckt und ausgemerzt werden.
+#BEST_ALGO_CNT=2
+
+# Ein erst kürzlich gestarteter Miner soll nicht zu schnell wieder abgeschaltet werden.
+# Eine einfache Lösung war die Einführung dieser Variablen, damit ein Miner mindestens 2 Zyklen läuft, bevor er wieder umgeswitcht werden kann.
+# ZUKÜNFTIG müssen
+# a) die abgegebenen Werte pro Minute berücksichtigt werden,
+# b) der prozentuele Mehrwert der Gesamtkombination aller GPU's
+# c) der prozentuale Anteil der zu schaltenden GPU am Gesamtergebnis, der einen bestimmten Prozentsatz übersteigen muss.
 declare -Ag cycle_counter
 
 # Die SLEEP Zeit nach dem Abbruch eines Miners in Sekunden. Experimentell, .5 bis 3 ???

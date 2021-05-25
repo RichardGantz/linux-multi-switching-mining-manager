@@ -77,7 +77,7 @@ _check_InternetConnection
 declare -i SECS=31
 while :; do
 
-    # Wir warten mit dem Abruf, bis die Datei RUNNING_STATE 10s älter ist als SYNCFILE.
+    # Wir warten mit dem Abruf, bis die Datei RUNNING_STATE ${RUN_SYNC_delay} (z.B. 5s) älter ist als SYNCFILE.
     # Nach dem SYNCFILE touch haben die GPU's losgelegt, ...
     #      der Multiminer hat auf deren Daten gewartet, ...
     #      der Multiminer hat die Effizienz-Berechnungen durchgeführt, ...
@@ -137,6 +137,15 @@ while :; do
 
     while :; do
         _check_InternetConnection
-        (( $(date +%s) - ${SleepingStart} <= ${SECS} )) && sleep 1 || break
+	# Beim Start des multi_mining_calc.sh ist noch keine Datei ${RUNNING_STATE} vorhanden.
+	# Deshalb muss nach dem ersten Abruf gewartet werden, bis der MM diese Datei geschrieben hat.
+	# Sonst kann der Fall eintreten, dass nach SECS (31) Sekunden aufgrund länger dauernder Berechnungen immer noch kein File ${RUNNING_STATE} da ist,
+	#       was zu einem verfrühten Abruch neuer Webdaten führen würde, woraufhin sich wiederum der MM selbst überholen würde.
+	timeout=$(( $(date +%s) - ${SleepingStart} <= ${SECS} ))
+        if [ ${timeout} -eq 1 -o ! -s ${RUNNING_STATE} ]; then
+	    sleep 1
+	else
+	    break
+	fi
     done
 done
