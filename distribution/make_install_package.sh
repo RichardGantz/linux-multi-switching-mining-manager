@@ -83,6 +83,8 @@ tar -cvzf ${ARCHIVE_NAME} \
     ${SRC_DIR}/screen/screenrc.* \
     ${SRC_DIR}/screen/.screenrc.* \
     ${SRC_DIR}/GPU-[^s]*/benchmark_GPU*.json \
+    ${SRC_DIR}/.CUDA/Makefile \
+    ${SRC_DIR}/.CUDA/mm_calc.c \
     ${SRC_DIR}/tar_logs.sh
 
 #    ${SRC_DIR}/benchmarking/nvidia-befehle/nvidia-settings \

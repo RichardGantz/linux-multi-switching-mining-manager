@@ -3,6 +3,11 @@
 #include <string.h>
 //#include <unistd.h>  //Header file for sleep(). man 3 sleep for details.
 
+#define DEBUG 0
+#define VERBOSE 0
+#define OVERSIZED 50 // Das war mal MAX_GOOD_GPUs, bevor es als Parameter übergeben wurde, um Array-Dimensionen richtig zu dimensioniern
+                     // Auf das muss geachtet werden !!!
+
 #define useThreads 1
 // Ohne Verwendung von malloc (also Variablen im Stack) verschwindet irgendwann die Funktion (und damit ihr Stack), die den Thread gestartet hat,
 //      BEVOR die CPUs Gelegenheit hatten, den Thread überhaupt zu starten.
@@ -12,120 +17,41 @@
 // Nein, die Werte müssen in Speicher gelegt werden, der immer noch da ist, auch wenn der Thread Stunden später gestartet werden sollte.
 #if useThreads
 #include <pthread.h>
-#define useMALLOC 1
-#else
-#define useMALLOC 0
-#endif
-
-#define DEBUG 0
-#define VERBOSE 0
-#define MAX_GOOD_GPUs 13
-#define BEST_ALGO_CNT  3
-
-/*********************************************************************************
-
-Noch zu klären:
-
-1. BEST_ALGO_CNT und MAX_GOOD_GPUs müssen als Parameter übergeben werden.
-2. Übergeben werden muss alles mögliche:
-   exactNumAlgos[ gpu_idx ] Array
-
-/*********************************************************************************/
-
-long GLOBAL_GPU_COMBINATION_LOOP_COUNTER=0;
-int  max_watts = 0;
-char best_profit_algo_combi[ (3+1+3+1)*MAX_GOOD_GPUs + 1 ]; // 3 Stellen gpu_idx + 1x":" + 3 algoIdx + 1x","
-char max_mines_algo_combi  [ (3+1+3+1)*MAX_GOOD_GPUs + 1 ]; // 3 Stellen gpu_idx + 1x":" + 3 algoIdx + 1x","
-double solar_kosten_btc;
-
-// Zu übergebende Variablen:
-int SolarWattAvailable = 0;
-double kWhMax = .0000090161;
-double kWhMin = .0000036064;
-double max_profit=.0000965496; // Von den Einzelberechnungen (Frage: Was ist mit der GPU:Algo-Kombination? Ist die notfals auch noch bekannt?
-double max_mines=.0001231651;
-
-//int PossibleCandidateGPUidx[MAX_GOOD_GPUs+1] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, MAX_GOOD_GPUs };
-//int PossibleCandidateGPUidx[MAX_GOOD_GPUs+1] = { 0, 2, 4, 6, 8, 10, 12, 1, 3, 5, 7, 9, 11, 10 };
-//int exactNumAlgos[MAX_GOOD_GPUs+1] = { 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 10 };
-int PossibleCandidateGPUidx[MAX_GOOD_GPUs+1] = { 0, 2, 4, 6, 8, 10, 12, 1, 3, 5, 7, 9, 11, MAX_GOOD_GPUs };
-int exactNumAlgos[MAX_GOOD_GPUs+1] = { 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, MAX_GOOD_GPUs };
-
-/* Well sorted */
-int WATTS [MAX_GOOD_GPUs][BEST_ALGO_CNT] = {
-    { 123, 123, 118 }
-  , { 167, 167, 166 }
-  , { 202, 202, 202 }
-  , { 202, 202, 202 }
-  , { 202, 202, 202 }
-  , { 123, 123, 123 }
-  , { 202, 202, 202 }
-  , { 123, 123, 123 }
-  , { 123, 123, 123 }
-  , { 123, 123, 123 }
-  , { 123, 123, 123 }
-  , { 123, 123, 123 }
-  , { 202, 202, 202 }
-};
-double MINES [MAX_GOOD_GPUs][BEST_ALGO_CNT] = {
-    { .0001007585, .0001004522, .0000881206 }
-  , { .0000888402, .0000888380, .0000680249 }
-  , { .0001231061, .0001230783, .0001230404 }
-  , { .0001231061, .0001230783, .0001230404 }
-  , { .0001231061, .0001230783, .0001230404 }
-  , { .0001231651, .0001219336, .0001085930 }
-  , { .0001231061, .0001230783, .0001230404 }
-  , { .0001231651, .0001219336, .0001085930 }
-  , { .0001231651, .0001219336, .0001085930 }
-  , { .0001231651, .0001219336, .0001085930 }
-  , { .0001231651, .0001219336, .0001085930 }
-  , { .0001231651, .0001219336, .0001085930 }
-  , { .0001231061, .0001230783, .0001230404 }
-};
-/**/
-/* Reihenfolge vertauscht
-int WATTS [MAX_GOOD_GPUs][BEST_ALGO_CNT] = {
-    { 118, 123, 123 }
-  , { 166, 167, 167 }
-  , { 202, 202, 202 }
-  , { 202, 202, 202 }
-  , { 202, 202, 202 }
-  , { 123, 123, 123 }
-  , { 202, 202, 202 }
-  , { 123, 123, 123 }
-  , { 123, 123, 123 }
-  , { 123, 123, 123 }
-  , { 123, 123, 123 }
-  , { 123, 123, 123 }
-  , { 202, 202, 202 }
-};
-double MINES [MAX_GOOD_GPUs][BEST_ALGO_CNT] = {
-    { .0000881206, .0001004522, .0001007585 }
-  , { .0000680249, .0000888380, .0000888402 }
-  , { .0001230404, .0001230783, .0001231061 }
-  , { .0001230404, .0001230783, .0001231061 }
-  , { .0001230404, .0001230783, .0001231061 }
-  , { .0001085930, .0001219336, .0001231651 }
-  , { .0001230404, .0001230783, .0001231061 }
-  , { .0001085930, .0001219336, .0001231651 }
-  , { .0001085930, .0001219336, .0001231651 }
-  , { .0001085930, .0001219336, .0001231651 }
-  , { .0001085930, .0001219336, .0001231651 }
-  , { .0001085930, .0001219336, .0001231651 }
-  , { .0001230404, .0001230783, .0001231061 }
-};
- */
-
-#if useThreads
+#define useCALLOC 1
 #define TIDS 10000
 pthread_mutex_t lock;
 pthread_t tid[ TIDS ];
 int tidsCnt = 0;
 #else
+#define useCALLOC 0
 // Für eine fortlaufende Ausgabe, die bei der Verwendung von Threads nicht gebraucht werden
-double old_max_profit;
-double old_max_mines;
+double old_MAX_PROFIT;
+double old_MAX_FP_MINES;
 #endif
+
+#define ARRAYMEMBERS(x) (sizeof(x) / sizeof((x)[0]))
+//printf( "PossibleCandidateGPUidx[] kann %li Member aufnehmen\n", ARRAYMEMBERS( PossibleCandidateGPUidx ) );
+
+// Globale Variablen, deren Zugriff durch Mutexes zu isolieren sind.
+long   GLOBAL_GPU_COMBINATION_LOOP_COUNTER=0;
+int    max_watts = 0;
+char   best_profit_algo_combi[ (3+1+3+1)*OVERSIZED + 1 ];
+char   max_mines_algo_combi  [ (3+1+3+1)*OVERSIZED + 1 ];
+double solar_kosten_btc;
+
+// Zu übergebende Variablen:
+int    MIN_GOOD_GPUs;                        //  1.
+int    MAX_GOOD_GPUs;                        //  2.
+int    BEST_ALGO_CNT;                        //  3.
+int    SolarWattAvailable;                   //  4.
+double kWhMin;                               //  5.
+double kWhMax;                               //  6.
+double MAX_PROFIT;                           //  7.
+double MAX_FP_MINES;                         //  8.
+int    PossibleCandidateGPUidx[OVERSIZED];   //  9.
+int    exactNumAlgos[OVERSIZED];             // 10.
+int    WATTS[OVERSIZED][OVERSIZED];          // 11.
+double MINES[OVERSIZED][OVERSIZED];          // 12.
 
 void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
   // Der Compiler weiss dadurch, dass TestCombinationGPUs auf ein int zeigt und kann damit Arrays richtig indexieren
@@ -134,8 +60,6 @@ void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
 #if DEBUG
   char intArrayStr[ (3+1)*(MAX_GOOD_GPUs+1) + 1 ];
   char intValStr  [  3+1 + 1 ];
-  intArrayStr[0] = '\0';
-  intValStr[0]   = '\0';
   for (int i=0; i<MAX_GPU_TIEFE; i++) {
     sprintf( intValStr, "%3i,", TestCombinationGPUs[i] );
     strcat( intArrayStr, intValStr );
@@ -143,17 +67,17 @@ void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
   printf( "Entered _CALCULATE_GV_of_all_TestCombinationGPUs_members with %i Members: %s\n",
 	  MAX_GPU_TIEFE, intArrayStr );
 #endif
-  double LOCAL_max_profit = 0;
-  double LOCAL_max_mines  =.0;
+  double LOCAL_MAX_PROFIT   = 0;
+  double LOCAL_MAX_FP_MINES =.0;
+  int    LOCAL_max_watts    = 0;
   char   LOCAL_best_profit_algo_combi[ (3+1+3+1)*MAX_GOOD_GPUs + 1 ]; // 3 Stellen gpu_idx + 1x":" + 3 algoIdx + 1x","
   char   LOCAL_max_mines_algo_combi  [ (3+1+3+1)*MAX_GOOD_GPUs + 1 ]; // 3 Stellen gpu_idx + 1x":" + 3 algoIdx + 1x","
   long   LOCAL_GPU_COMBINATION_LOOP_COUNTER = 0;
-  int    LOCAL_max_watts  = 0;
 
   double gesamt_kosten;
   double real_profit;
-  double mines_sum;
   int    watts_sum;
+  double mines_sum;
 
   // Initialisierung des verschachtelten for-Loop-Simulations-Stellwerk testGPUs mit Nullen, Anzahl Members ist dieselbe wie die von TestCombinationGPUs
   // Der key in testGPUs ist dabei identisch mit dem val des TestCombinationGPUs[ key ], was ein gpu_idx ist.
@@ -168,8 +92,8 @@ void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
   int lfdGPU;
 
 #if !useThreads
-  old_max_profit = max_profit;
-  old_max_mines  = max_mines;
+  old_MAX_PROFIT = MAX_PROFIT;
+  old_MAX_FP_MINES  = MAX_FP_MINES;
 #endif
 
   int finished=0;
@@ -184,7 +108,6 @@ void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
     for ( lfdGPU=0; lfdGPU<MAX_GPU_TIEFE; lfdGPU++ ) {
       // Index innerhalb der "GPU${idx}*" Arrays, dessen Werte zu verarbeiten sind
       int gpu_idx = TestCombinationGPUs[ lfdGPU ];
-      // ???
       //declare -n actPossibleCandidateAlgoIndex="PossibleCandidate${gpu_idx}AlgoIndexes"
       //algoIdx=${actPossibleCandidateAlgoIndex[${testGPUs[$lfdGPU]}]}
       int algoIdx = testGPUs[lfdGPU];
@@ -201,10 +124,6 @@ void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
       mines_sum += MINES[ gpu_idx ][ algoIdx ];
     }
 
-    /* bash Funktionsaufruf, dessen Code anschließend hier rein gesetzt wird
-    _calculate_ACTUAL_REAL_PROFIT_and_set_MAX_PROFIT
-      ( SolarWattAvailable, CombinationWatts/watts_sum, CombinationMines/mines_sum );
-    */
     // Um die Gesamtformel besser zu verstehen:
     // Wir haben die Summe aller Brutto BTC "Mines" nun in ${mines_sum}
     //   ${CombinationMines}
@@ -218,12 +137,12 @@ void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
       gesamt_kosten = solar_kosten_btc + ( watts_sum - SolarWattAvailable ) * kWhMax;
     }
     real_profit = mines_sum - gesamt_kosten * 24 / 1000;
-    if ( real_profit > LOCAL_max_profit ) {
-      LOCAL_max_profit = real_profit;
+    if ( real_profit > LOCAL_MAX_PROFIT ) {
+      LOCAL_MAX_PROFIT = real_profit;
       memcpy( LOCAL_best_profit_algo_combi, algosCombinationKey, (3+1+3+1)*MAX_GOOD_GPUs + 1 );
     }
-    if ( mines_sum > LOCAL_max_mines ) {
-      LOCAL_max_mines = mines_sum;
+    if ( mines_sum > LOCAL_MAX_FP_MINES ) {
+      LOCAL_MAX_FP_MINES = mines_sum;
       memcpy( LOCAL_max_mines_algo_combi, algosCombinationKey, (3+1+3+1)*MAX_GOOD_GPUs + 1 );
       LOCAL_max_watts = watts_sum;
     }
@@ -244,33 +163,30 @@ void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
     //     bzw. UNTER den Index [0] des Arrays greifen müsste.
     // while ( testGPUs[lfdGPU] == exactNumAlgos[ TestCombinationGPUs[lfdGPU] ] ) {
 
-    testGPUs[ --lfdGPU ]++;
-    while ( testGPUs[lfdGPU] == exactNumAlgos[ TestCombinationGPUs[lfdGPU] ] ) {
-      // zurücksetzen...
-      testGPUs[lfdGPU]=0;
-      // und jetzt die anderen nach unten prüfen, solange es ein "unten" gibt...
-      if ( lfdGPU > 0 ) {
-	testGPUs[ --lfdGPU ]++;
-	continue;
-      } else {
-	finished=1;
-	break;
+    do {
+      testGPUs[ --lfdGPU ]++;
+      if ( testGPUs[lfdGPU] == exactNumAlgos[ TestCombinationGPUs[lfdGPU] ] ) {
+	// zurücksetzen...
+	testGPUs[lfdGPU]=0;
+	// und jetzt die anderen nach unten prüfen, solange es ein "unten" gibt...
+	if ( lfdGPU > 0 ) continue;
+	else finished=1;
       }
-    }
+      break;
+    } while( 1 );
   }  // while [[ $finished == 0 ]]; do
 
 #if useThreads
   pthread_mutex_lock(&lock);
 #endif
-  if ( LOCAL_max_profit > max_profit ) {
-    max_profit = LOCAL_max_profit;
+  if ( LOCAL_MAX_PROFIT > MAX_PROFIT ) {
+    MAX_PROFIT = LOCAL_MAX_PROFIT;
     memcpy( best_profit_algo_combi, LOCAL_best_profit_algo_combi, (3+1+3+1)*MAX_GOOD_GPUs + 1 );
   }
-  if ( LOCAL_max_mines > max_mines ) {
-    max_mines = LOCAL_max_mines;
+  if ( LOCAL_MAX_FP_MINES > MAX_FP_MINES ) {
+    MAX_FP_MINES = LOCAL_MAX_FP_MINES;
     memcpy( max_mines_algo_combi, LOCAL_max_mines_algo_combi, (3+1+3+1)*MAX_GOOD_GPUs + 1 );
     max_watts = LOCAL_max_watts;
-
   }
   GLOBAL_GPU_COMBINATION_LOOP_COUNTER += LOCAL_GPU_COMBINATION_LOOP_COUNTER;
 #if useThreads
@@ -278,8 +194,8 @@ void * _CALCULATE_GV_of_all_TestCombinationGPUs_members( void * arg ) {
 #endif
 
 #if !useThreads
-  if ( old_max_profit < max_profit ) printf( "MAX_PROFIT: %.10f %s\n",          max_profit, best_profit_algo_combi );
-  if ( old_max_mines  < max_mines  ) printf( "FP_M:       %.10f %s FP_W: %i\n", max_mines,  max_mines_algo_combi, max_watts );
+  if ( old_MAX_PROFIT   < MAX_PROFIT   ) printf( "MAX_PROFIT: %.10f %s\n",          MAX_PROFIT,   best_profit_algo_combi );
+  if ( old_MAX_FP_MINES < MAX_FP_MINES ) printf( "FP_M:       %.10f %s FP_W: %i\n", MAX_FP_MINES, max_mines_algo_combi, max_watts );
 #endif
 
 }
@@ -290,15 +206,9 @@ int _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES( int maxTie
 	  maxTiefe, myStart, myDepth, (myStack == NULL) ? 0 : myStack[MAX_GOOD_GPUs] );
 #endif
   int iii;
-#if useMALLOC
-  int *TestCombinationGPUs;   //= {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-  TestCombinationGPUs = (int *) malloc( (MAX_GOOD_GPUs+1) * sizeof(int) );
-#if 0
-  // Ist der Speicher automatisch mit {0,0,0,0,0,0,0,0,0,0,0,0,0,0} initialisiert? JA, bisher war das bei allen Testläufen so.
-  for (int i=0;i<=(MAX_GOOD_GPUs); i++) {
-    printf( "key=%2i, value=%4i\n", i, TestCombinationGPUs[i] );
-  }
-#endif
+#if useCALLOC
+  int *TestCombinationGPUs;
+  TestCombinationGPUs = (int *) calloc( MAX_GOOD_GPUs+1, sizeof(int) );
 #else
   // Speicherplatz im Stack
   int TestCombinationGPUs[MAX_GOOD_GPUs+1] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -314,7 +224,7 @@ int _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES( int maxTie
   */
   int lfdGPUidx = TestCombinationGPUs[MAX_GOOD_GPUs]++;
 
-  if ( myDepth >= maxTiefe ) {
+  if ( myDepth == maxTiefe ) {
     // Das ist die "Abbruchbedingung", die innerste Schleife überhaupt.
 
     /* Das Array muss um EINEN Member, ein durchlaufender gpu_idx erweitert werden (wurde oben gemacht).
@@ -330,21 +240,18 @@ int _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES( int maxTie
 	     (void *) TestCombinationGPUs );
 #endif
 #if useThreads
-      // Das gibt einen Deadlock
-      //pthread_mutex_lock(&lock);
       pthread_create( & tid[ tidsCnt++ ], NULL,
 		      _CALCULATE_GV_of_all_TestCombinationGPUs_members,
-#if useMALLOC
-		      (void *) TestCombinationGPUs );
+#if useCALLOC
+                      (void *) TestCombinationGPUs );
 #else
-		      (void *) &TestCombinationGPUs );
+                      (void *) &TestCombinationGPUs );
 #endif
-      //pthread_mutex_lock(&lock);
 #if DEBUG
-      printf( "tidsCnt: %i\n", tidsCnt );
+    printf( "tidsCnt: %i\n", tidsCnt );
 #endif
 #else
-      _CALCULATE_GV_of_all_TestCombinationGPUs_members( TestCombinationGPUs );
+    _CALCULATE_GV_of_all_TestCombinationGPUs_members( TestCombinationGPUs );
 #endif
   }
 #if DEBUG
@@ -352,32 +259,189 @@ int _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES( int maxTie
 	  maxTiefe, myStart, myDepth, (myStack == NULL) ? 0 : myStack[MAX_GOOD_GPUs] );
 #endif
 } else {
-    // Hier wird eine Schleife begonnen und dann die Funktion selbst wieder gerufen
-    // Dies dient dem Initiieren des zweiten bis letzten Zeigers
+  // Hier wird eine Schleife begonnen und dann die Funktion selbst wieder gerufen
+  // Dies dient dem Initiieren des zweiten bis letzten Zeigers
 
-    /* Das Array muss um EINEN Member, ein durchlaufender gpu_idx erweitert werden (wurde oben gemacht).
-       Und innerhalb der Schleife wird dieser Member jeweils gesetzt. Deshalb muss innerhalb der Schleife -1 abgezogen werden
-    */
-    for ( iii=myStart; iii<myDepth; iii++ ) {
-      // Jede Ebene vorher hat ihren aktuelen Indexwert an die Parameterliste gehängt.
-      // Das Array TestCombinationGPUs, das die zu untersuchenden GPU-Indexe enthält,
-      // wird jetzt komplett für die Berechnungsroutine aufgebaut.
-      TestCombinationGPUs[ lfdGPUidx ] = PossibleCandidateGPUidx[ iii ];
+  /* Das Array wurde oben um EINEN Member, ein durchlaufender gpu_idx erweitert.
+     Und innerhalb der Schleife wird dieser Member jeweils gesetzt. Deshalb muss innerhalb der Schleife -1 abgezogen werden
+  */
+  for ( iii=myStart; iii<myDepth; iii++ ) {
+    // Jede Ebene vorher hat ihren aktuelen Indexwert an die Parameterliste gehängt.
+    // Das Array TestCombinationGPUs, das die zu untersuchenden GPU-Indexe enthält,
+    // wird jetzt komplett für die Berechnungsroutine aufgebaut.
+    TestCombinationGPUs[ lfdGPUidx ] = PossibleCandidateGPUidx[ iii ];
 #if DEBUG
-      printf("Call to STACK-UP  TestCombinationGPUs Address = %p\n",
-	     (void *) TestCombinationGPUs );
+    printf("Call to STACK-UP  TestCombinationGPUs Address = %p\n",
+	   (void *) TestCombinationGPUs );
 #endif
-      _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES
-	( maxTiefe, (iii+1), (myDepth+1), TestCombinationGPUs );
-    }
+    _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES
+      ( maxTiefe, iii+1, myDepth+1, TestCombinationGPUs );
   }
+ }
 }
 
+/* Der Aufruf aus dem multimining_calc.sh
+.CUDA/mm_calc ${MIN_GOOD_GPUs} ${MAX_GOOD_GPUs} ${BEST_ALGO_CNT} ${SolarWattAvailable} \
+	  ${kWhMin} ${kWhMax} ${MAX_PROFIT} ${MAX_FP_MINES} \
+          "${PossibleCandidateGPUidx[*]}" "${exactNumAlgos[*]}" \
+          "${WATTS_Parameter_String_for_mm_calC%% }" "${MINES_Parameter_String_for_mm_calC%% }"
+*/
 int main( int argc, char* argv[] ) {
-  int MIN_GOOD_GPUs=2;
-  //if (MAX_GOOD_GPUs > 10) MIN_GOOD_GPUs = 8;
-  int max_good_gpus=PossibleCandidateGPUidx[ MAX_GOOD_GPUs ];
-  //max_good_gpus=13;
+  const char s[2] = " ";
+  char *token;
+  char *IntVal;
+  char *DoubleVal;
+  int p, a;
+  const char msg__98[] = "Die Anzahl an übergebenen %s[]-Members=%i ist ungleich MAX_GOOD_GPUs=%i%s\n";
+  const char msg_a98[] = " ODER es wurden zu viele Werte übergeben";
+  const char exitmsg[] = "Es erfolgt ein Abbruch mit exit-Code %i\n";
+
+  for (int i=1; i<argc; i++) {
+    switch(i) {
+    case 1:
+      MIN_GOOD_GPUs = (int) strtol( argv[i], NULL, 10 );
+#if DEBUG
+      printf("MIN_GOOD_GPUs: %i\n", MIN_GOOD_GPUs );
+#endif
+      break;
+
+    case 2:
+      MAX_GOOD_GPUs = (int) strtol( argv[i], NULL, 10 );
+#if DEBUG
+      printf("MAX_GOOD_GPUs: %i\n", MAX_GOOD_GPUs );
+#endif
+      if (MAX_GOOD_GPUs > OVERSIZED) {
+	printf( "MAX_GOOD_GPUs=%i > OVERSIZED=%i. Bitte im C-Sourcecode erhöhen\n", MAX_GOOD_GPUs, OVERSIZED );
+	printf( exitmsg, 99 );
+	return( 99 );
+      }
+      break;
+
+    case 3:
+      BEST_ALGO_CNT = (int) strtol( argv[i], NULL, 10 );
+#if DEBUG
+      printf("BEST_ALGO_CNT: %i\n", BEST_ALGO_CNT );
+#endif
+      break;
+
+    case 4:
+      SolarWattAvailable = (int) strtol( argv[i], NULL, 10 );
+#if DEBUG
+      printf("SolarWattAvailable: %i\n", SolarWattAvailable );
+#endif
+      break;
+
+    case 5:
+      kWhMin = strtod( argv[i], NULL );
+#if DEBUG
+      printf("kWhMin: %.10f\n", kWhMin );
+#endif
+      break;
+
+    case 6:
+      kWhMax = strtod( argv[i], NULL );
+#if DEBUG
+      printf("kWhMax: %.10f\n", kWhMax );
+#endif
+      break;
+
+    case 7:
+      MAX_PROFIT = strtod( argv[i], NULL );
+#if DEBUG
+      printf("MAX_PROFIT: %.10f\n", MAX_PROFIT );
+#endif
+      break;
+
+    case 8:
+      MAX_FP_MINES = strtod( argv[i], NULL );
+#if DEBUG
+      printf("MAX_FP_MINES: %.10f\n", MAX_FP_MINES );
+#endif
+      break;
+
+    case 9:
+      p=0;
+      token = strtok( argv[i], s );
+      while( token != NULL ) {
+	PossibleCandidateGPUidx[p] = (int) strtol( token, NULL, 10 );
+#if DEBUG
+	printf( "PossibleCandidateGPUidx[%i] = %i\n", p, PossibleCandidateGPUidx[p] );
+#endif
+	p++;
+	token = strtok( NULL, s );
+      }
+      PossibleCandidateGPUidx[p] = p;
+      if ( p != MAX_GOOD_GPUs) {
+	printf( msg__98, "PossibleCandidateGPUidx", p, MAX_GOOD_GPUs, "" );
+	printf( exitmsg, 98 );
+	return( 98 );
+      }
+      break;
+
+    case 10:
+      p=0;
+      token = strtok( argv[i], s );
+      while( token != NULL ) {
+        exactNumAlgos[p] = (int) strtol( token, NULL, 10 );
+#if DEBUG
+	printf( "exactNumAlgos[%i] = %i\n", p, exactNumAlgos[p] );
+#endif
+	p++;
+	token = strtok( NULL, s );
+      }
+      if ( p != MAX_GOOD_GPUs) {
+	printf( msg__98, "exactNumAlgos", p, MAX_GOOD_GPUs, "" );
+	printf( exitmsg, 98 );
+	return( 98 );
+      }
+      break;
+
+    case 11:
+#if DEBUG
+      printf( "WATTS: %s\n", argv[i] );
+#endif
+      p=0; a=0;
+      IntVal = strtok( argv[i], s );
+      while( IntVal != NULL && p < MAX_GOOD_GPUs ) {
+        WATTS[p][a] = (int) strtol( IntVal, NULL, 10 );
+#if DEBUG
+	printf( "WATTS[%i][%i] = %i\n", p, a, WATTS[p][a] );
+#endif
+	if (++a == exactNumAlgos[p]) { p++; a=0; }
+	IntVal = strtok( NULL, s );
+      }
+      if ( p != MAX_GOOD_GPUs || IntVal != NULL ) {
+	printf( msg__98, "WATTS[GPUs]", p, MAX_GOOD_GPUs, msg_a98 );
+	printf( exitmsg, 98 );
+	return( 98 );
+      }
+      break;
+
+    case 12:
+#if DEBUG
+      printf("MINES: %s\n", argv[i] );
+#endif
+      p=0; a=0;
+      DoubleVal = strtok( argv[i], s );
+      while( DoubleVal != NULL && p < MAX_GOOD_GPUs ) {
+        MINES[p][a] = (double) strtod( DoubleVal, NULL );
+#if DEBUG
+	printf( "MINES[%i][%i] = %.10f\n", p, a, MINES[p][a] );
+#endif
+	if (++a == exactNumAlgos[p]) { p++; a=0; }
+	DoubleVal = strtok( NULL, s );
+      }
+      if ( p != MAX_GOOD_GPUs || DoubleVal != NULL ) {
+	printf( msg__98, "MINES[GPUs]", p, MAX_GOOD_GPUs, msg_a98 );
+	printf( exitmsg, 98 );
+	return( 99 );
+      }
+      break;
+
+    default:
+      printf( "Parameter %2i: %s\n", i, argv[i] );
+    }
+  }
 
   solar_kosten_btc = kWhMin * (double) SolarWattAvailable;
 
@@ -393,20 +457,20 @@ int main( int argc, char* argv[] ) {
 #endif
 
 #if (VERBOSE > 0)
-  printf( "MAX_GOOD_GPUs: %i bei SolarWattAvailable: %i\n", max_good_gpus, SolarWattAvailable );
+  printf( "MAX_GOOD_GPUs: %i bei SolarWattAvailable: %i\n", MAX_GOOD_GPUs, SolarWattAvailable );
 #endif
-  for ( int numGPUs=MIN_GOOD_GPUs; numGPUs<=max_good_gpus; numGPUs++ ) {
+  for ( int numGPUs=MIN_GOOD_GPUs; numGPUs<=MAX_GOOD_GPUs; numGPUs++ ) {
     // Parameter: $1 = maxTiefe
     //            $2 = Beginn Pointer1 bei Index 0
     //            $3 = Ende letzter Pointer 5
     //            $4-  Jede Ebene hängt dann ihren aktuellen Wert in der Schleife hin,
     //                 in der sie sich selbst gerade befindet.
 #if (VERBOSE > 0)
-    printf( "\nBerechnung aller Kombinationen des Falles, dass nur %i GPUs von %i laufen:\n", numGPUs, max_good_gpus );
+    printf( "\nBerechnung aller Kombinationen des Falles, dass nur %i GPUs von %i laufen:\n", numGPUs, MAX_GOOD_GPUs );
 #endif
     //return 0;
     _CREATE_AND_CALCULATE_EVERY_AND_ALL_SUBSEQUENT_COMBINATION_CASES
-      ( max_good_gpus, 0, (max_good_gpus - numGPUs + 1), NULL );
+      ( MAX_GOOD_GPUs, 0, (MAX_GOOD_GPUs - numGPUs + 1), NULL );
   }
 #if (VERBOSE > 0)
   printf( "MAIN for-Loop finished\n" );
@@ -425,8 +489,8 @@ int main( int argc, char* argv[] ) {
   
   // Wurde in den einzenlen .bc_result_* - Dateien ausgegeben
   //printf( "#TOTAL NUMBER OF LOOPS = 3*3*3*3*3*3*3*3*3*3*3*3*3 = %i\n", 3*3*3*3*3*3*3*3*3*3*3*3*3 );
-  printf( "MAX_PROFIT: %.10f %s\n",          max_profit, best_profit_algo_combi );
-  printf( "FP_M:       %.10f %s FP_W: %i\n", max_mines,  max_mines_algo_combi, max_watts );
+  printf( "MAX_PROFIT: %.10f %s\n",          MAX_PROFIT,    best_profit_algo_combi );
+  printf( "FP_M:       %.10f %s FP_W: %i\n", MAX_FP_MINES,  max_mines_algo_combi, max_watts );
 #endif
   printf( "GLOBAL_GPU_COMBINATION_LOOP_COUNTER: %li\n", GLOBAL_GPU_COMBINATION_LOOP_COUNTER );
 }
