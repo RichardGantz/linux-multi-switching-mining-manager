@@ -58,7 +58,7 @@ find . -name \*\.lock                -delete
 find . -name ALGO_WATTS_MINES\.in    -delete
 find . -name .sort_profit_algoIdx_\* -delete
 rm -f ${algoID_KURSE__PAY__WEB} ${algoID_KURSE_PORTS_WEB} \
-   .NVIDIA_SMI_PM_LAUNCHED_GPUs
+   .NVIDIA_SMI_PM_LAUNCHED_GPUs .CUDA/make.out
 
 # Aktuelle PID der 'multi_mining_calc.sh' ENDLOSSCHLEIFE
 This=$(basename $0 .sh)
@@ -123,19 +123,23 @@ Danach den MultiMiner neu starten.
 fi
 
 #2021-05-25: Die Berechnungen wurden nun in C geschrieben unter Verwendung von Multi-Threading als Vorstufe für die Verlagerung in GPU's
-cd .CUDA
-make &>make.out
-RC=$?
-if [ ! ${RC} -eq 0 ]; then
-    echo "
+if [ 1 -eq 0 ]; then
+    #2021-05-26: Dieses make wird als kurze Zeitverzögerung vor den Start des algo_multi_abfrage.sh gelegt, damit die GPUs ein bisschen mehr Zeit haben,
+    #            sich aus dem System zu nehmen, um zu Benchmarken (damit der MM das auch mitbekommt und vor der ersten Berechnung nicht unnötig wartet).
+    cd .CUDA
+    make &>make.out
+    RC=$?
+    if [ ! ${RC} -eq 0 ]; then
+	echo "
 Der make des Multithreading-Berechnungsroutinen-Programms mm_calc meldet keinen Erfolg.
 Die Ausgaben stehen in der Datei .CUDA/make.out und werden hier ausgegeben.
 Danach erfolgt ein exit.
 "
-    cat make.out
-    exit 5 # mm_calc did not compile properly
+	cat make.out
+	exit 5 # mm_calc did not compile properly
+    fi
+    cd ..
 fi
-cd ..
 
 export BC_LINE_LENGTH=0
 export MULTI_MINERS_PID=$$
@@ -381,9 +385,26 @@ while : ; do
     # Dann starten wir die algo_multi_abfrage.sh, wenn sie nicht schon läuft...
     #
     if [ ! -f algo_multi_abfrage.pid ]; then
-	# Hier könnten wir noch 2s oder so warten, bis alle 11 GPUs gestartet sind und sich aus dem Spiel genommen haben,
-	#      falls sie ein paar algos benchen müssen
+	# Hier könnten wir noch 2s oder so warten, bis alle 13 GPUs gestartet sind und sich aus dem Spiel genommen haben,
+	#      falls sie ein paar algos benchen müssen...
 	# sleep 2
+
+	#2021-05-26: Dieses make dient an dieser Stelle als kurze Zeitverzögerung.
+	if [ ! -s .CUDA/make.out ]; then
+	    cd .CUDA
+	    make &>make.out
+	    RC=$?
+	    if [ ! ${RC} -eq 0 ]; then
+		echo "
+Der make des Multithreading-Berechnungsroutinen-Programms mm_calc meldet keinen Erfolg.
+Die Ausgaben stehen in der Datei .CUDA/make.out und werden hier ausgegeben.
+Danach erfolgt ein exit.
+"
+		cat make.out
+		exit 5 # mm_calc did not compile properly
+	    fi
+	    cd ..
+	fi
 
         # Das lohnt sich erst, wenn wir den curl dazu gebracht haben, ebenfalls umzuleiten...
         # ${_TERMINAL_} -x ./abc.sh
