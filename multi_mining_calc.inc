@@ -276,7 +276,6 @@ print \"FP_M: \",   max_mines,  \" ${gpu_algo_mines_str%\"\,} \" FP_W: \", max_w
     # Für Diagnose-Zwecke diesen tee vor | bc einfügen
     #   | tee .bc_prog_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
     echo "$bc_prog" \
-       | tee .bc_prog_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
 	| bc >.bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi} \
     &
     bc_THREAD_PIDS[$!]=".bc_result_GPUs_${MAX_GPU_TIEFE}${FN_combi}"
