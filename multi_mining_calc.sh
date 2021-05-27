@@ -181,7 +181,7 @@ function _On_Exit () {
     ### SCREEN ADDITIONS: ###
     if [ ${UseScreen} -eq 1 ]; then
 	# Die Background-Session entfernen durch Abmeldung von der Shell, in der das Window immer noch steht
-	screen -drx ${BG_SESS} -p "BG-Procs" -X stuff "exit\n"
+	screen -drx ${BG_SESS} -p "BG-Procs" -X stuff "HISTSIZE=0\nexit\n"
 	rm -f ${LINUX_MULTI_MINING_ROOT}/screen/.screenrc.${BG_SESS}
     fi
 
@@ -254,7 +254,7 @@ LOG_PTY_CMD[999]="tail -f ${ERRLOG}"
 # Das war nur, um den Namen der .pid-datei zu verifizieren
 if [ ${UseScreen} -eq 1 ]; then
     screen -X screen -t "ERRLOG"
-    screen -p "ERRLOG" -X stuff "${LOG_PTY_CMD[999]}\nexit\n"
+    screen -p "ERRLOG" -X stuff "${LOG_PTY_CMD[999]}\nHISTSIZE=0\nexit\n"
     screen -X other
 else
     ofsX=$((ii*60+50))
@@ -344,7 +344,7 @@ while : ; do
                 fi
 		cmd+=" ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/gpu_gv-algo.sh &>>${GPU_GV_LOG}"
 		if [ ${UseScreen} -eq 1 ]; then
-		    cmd+='\nexit\n'
+		    cmd+='\nHISTSIZE=0\nexit\n'
 		    GPU_gv_Title="GV#${lfd_gpu_idx}"
 		    screen -drx ${BG_SESS} -X screen -t ${GPU_gv_Title}
 		    screen -drx ${BG_SESS} -p ${GPU_gv_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n ${cmd}"
@@ -359,7 +359,7 @@ while : ; do
                 LOG_PTY_CMD[${lfd_gpu_idx}]="tail -f ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}/${GPU_GV_LOG}"
 		### SCREEN ADDITIONS: ###
 		if [ ${UseScreen} -eq 1 ]; then
-		    cmd="${LOG_PTY_CMD[${lfd_gpu_idx}]}"'\nexit\n'
+		    cmd="${LOG_PTY_CMD[${lfd_gpu_idx}]}"'\nHISTSIZE=0\nexit\n'
 		    GPU_gv_LOG_Title="GV#${lfd_gpu_idx}"
 		    screen -X screen -t ${GPU_gv_LOG_Title}
 		    screen -p ${GPU_gv_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${lfdUuid}\n"
@@ -424,14 +424,14 @@ Danach erfolgt ein exit.
 	    #screen -drx -X eval detach
 
 	    #screen -p + -t ${PREISE_Title} ${BASH} -c "${cmd}"
-	    cmd+='\nexit\n'
+	    cmd+='\nHISTSIZE=0\nexit\n'
 	    screen -drx ${BG_SESS} -X screen -t ${PREISE_Title}
 	    screen -drx ${BG_SESS} -p ${PREISE_Title} -X chdir "${LINUX_MULTI_MINING_ROOT}" # nicht sicher, ob dieses Kommando einen Effekt hat...
 	    screen -drx ${BG_SESS} -p ${PREISE_Title} -X stuff "${cmd}"
             exec 1>>${MultiMining_log}
 
             ##LOG_PTY_CMD[998]="${LOG_PTY_CMD[998]} &; screen -X eval detach"
-	    cmd="${LOG_PTY_CMD[998]}"'\nexit\n'
+	    cmd="${LOG_PTY_CMD[998]}"'\nHISTSIZE=0\nexit\n'
 	    PREISE_LOG_Title="PREISE-LOG"
 	    #screen -rx ${BG_SESS} -p + -t ${PREISE_LOG_Title} ${BASH} -c "${LOG_PTY_CMD[998]}"
 	    screen -X screen -t ${PREISE_LOG_Title} 98

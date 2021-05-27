@@ -2274,7 +2274,7 @@ fi
 if [ ${UseScreen} -eq 1 ]; then
     Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
     if [ ${CALLED_FROM_GPU} -eq 1 ]; then
-	cmd="${Bench_Log_PTY_Cmd}"'\nexit\n'
+	cmd="${Bench_Log_PTY_Cmd}"'\nHISTSIZE=0\nexit\n'
 	Miner_LOG_Title="M#${gpu_idx}"
 	if [ $(screen -ls|grep -c ${BG_SESS}) -eq 1 ]; then
 	    screen -drx ${FG_SESS} -X screen -t ${Miner_LOG_Title}

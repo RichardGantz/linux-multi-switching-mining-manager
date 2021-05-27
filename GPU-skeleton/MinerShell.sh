@@ -285,7 +285,7 @@ while :; do
 	    # Erzeugen des Logger-Terminals
 	    # (Die function _terminate_Logger_Terminal in gpu-bENCH.inc beendet genau den Prozess ${Bench_Log_PTY_Cmd})
 	    Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
-	    cmd="${Bench_Log_PTY_Cmd}"'\nexit\n'
+	    cmd="${Bench_Log_PTY_Cmd}"'\nHISTSIZE=0\nexit\n'
 	    Miner_LOG_Title="M#${gpu_idx}"
 	    screen -drx ${FG_SESS} -X screen -t ${Miner_LOG_Title}
 	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"

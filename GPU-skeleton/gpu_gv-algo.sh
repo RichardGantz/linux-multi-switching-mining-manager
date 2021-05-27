@@ -459,7 +459,7 @@ function _do_all_auto_benchmarks {
 	    if [ $(screen -ls|grep -c ${BG_SESS}) -eq 1 ]; then
 		cmd+=" >>../${gpu_uuid}/gpu_gv-algo_${gpu_uuid}.log"
 	    fi
-	    cmd+='\nexit\n'
+	    cmd+='\nHISTSIZE=0\nexit\n'
 	    # Vom mm aus gerufen befinden wir uns hier in der ${BG_SESS}!
 	    # Merkmal: ${STY} == ${BG_SESS} - aber wir brauchen wahrscheinlich andere Kriterien, um das sicher zu erkennen.
 	    screen -X screen -t ${BencherTitle}
@@ -1435,7 +1435,7 @@ ${cmdParameterString}"
 
 		### SCREEN ADDITIONS: ###
 		if [ ${UseScreen} -eq 1 ]; then
-		    cmd="${cmd} ${m_cmd}"'\nexit\n'
+		    cmd="${cmd} ${m_cmd}"'\nHISTSIZE=0\nexit\n'
 		    echo "cmd == ${cmd}"
 
 		    MinerShell_RUN_title="MSh#${gpu_idx}"
@@ -1465,7 +1465,7 @@ ${cmdParameterString}"
 
 		    # Jetzt noch das Logfile im Vordergrund anzeigen
 		    LOG_PTY_CMD="tail -f ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/${MinerShell}.log"
-		    cmd="${LOG_PTY_CMD}"'\nexit\n'
+		    cmd="${LOG_PTY_CMD}"'\nHISTSIZE=0\nexit\n'
 		    MinerShell_LOG_title="MShLOG#${gpu_idx}"
 		    screen -X screen -t ${MinerShell_LOG_title}
 		    screen -p ${MinerShell_LOG_title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
