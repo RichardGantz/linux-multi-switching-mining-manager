@@ -573,21 +573,23 @@ _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
     declare -i tempazb=0
     # Full Power ($?=100) oder Effizienz Messung ($?=99)
-    [[ ${bENCH_KIND} -eq 888 ]] \
-        && sed_search='/"Name": "'${miningAlgo}'",/{           # if found ${miningAlgo}
-                 N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 1 line;  if found ${miner_name}
-                 N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
+    if [ ${bENCH_KIND} -eq 888 ]; then
+        sed_search='/"Name": "'${miningAlgo}'",/{           # if found ${miningAlgo}
+                  N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 1 line;  if found ${miner_name}
+                  N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
                      N;N;N;N;N;N;N;/"BENCH_KIND": 888,/{       # appe(N)d 7 lines; if found BENCH_KIND 888
              =;Q100}}}};                                       # (=) print line-number; Quit and set $?=100
              ${Q99}                                            # on last line Quit and set $?=99 (NOT FOUND)
-             ' \
-		 || sed_search='/"Name": "'${miningAlgo}'",/{           # if found ${miningAlgo}
-                 N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 1 line;  if found ${miner_name}
-                 N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
+             '
+    else
+	sed_search='/"Name": "'${miningAlgo}'",/{           # if found ${miningAlgo}
+                  N;/"MinerName": "'${miner_name}'",/{          # appe(N)d 1 line;  if found ${miner_name}
+                  N;/"MinerVersion": "'${miner_version}'",/{    # appe(N)d 1 line;  if found ${miner_version}
                      N;N;N;N;N;N;N;/"BENCH_KIND": 888,/d;{     # appe(N)d 7 lines; if found 888, (d)elete and continue
              =;Q100}}}};                                       # otherwise (=) print line-number; Quit and set $?=100
              ${Q99}                                            # on last line Quit and set $?=99 (NOT FOUND)
              '
+    fi
     sed -n -e "${sed_search}" \
         ${IMPORTANT_BENCHMARK_JSON} \
         >${TEMPAZB_FILE}
@@ -642,56 +644,56 @@ _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
 
         echo "der Hash wert $avgHASH wird nun in der Zeile $tempazb eingefügt"
         echo "der WATT wert $avgWATT wird nun in der Zeile $((tempazb+1)) eingefügt"
-        echo     "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"            >${TEMPSED_FILE}
-        echo "$((tempazb+1))s/: [0-9.]*,$/: ${avgWATT},/"           >>${TEMPSED_FILE}
+        echo     "${tempazb}s/: [0-9.]*,$/: ${avgHASH},/"                    | tee -a ${BENCHLOGFILE}  >${TEMPSED_FILE}
+        echo "$((tempazb+1))s/: [0-9.]*,$/: ${avgWATT},/"                    | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         if [[ ${#maxWATT} -ne 0 ]]; then
             echo "der MAX_WATT Wert ${maxWATT} wird nun in der Zeile $((tempazb+2)) eingefügt"
-            echo "$((tempazb+2))s/: [0-9.]*,$/: ${maxWATT},/"       >>${TEMPSED_FILE}
+            echo "$((tempazb+2))s/: [0-9.]*,$/: ${maxWATT},/"                | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#hashCount} -ne 0 ]]; then
             echo "der HASHCOUNT Wert ${hashCount} wird nun in der Zeile $((tempazb+3)) eingefügt"
-            echo "$((tempazb+3))s/: [0-9.]*,$/: ${hashCount},/"     >>${TEMPSED_FILE}
+            echo "$((tempazb+3))s/: [0-9.]*,$/: ${hashCount},/"              | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#hASH_DURATION} -ne 0 ]]; then
             echo "der HASH_DURATION Wert ${hASH_DURATION} wird nun in der Zeile $((tempazb+4)) eingefügt"
-            echo "$((tempazb+4))s/: [0-9.]*,$/: ${hASH_DURATION},/" >>${TEMPSED_FILE}
+            echo "$((tempazb+4))s/: [0-9.]*,$/: ${hASH_DURATION},/"          | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#bENCH_DATE} -ne 0 ]]; then
             echo "der BENCH_DATE Wert ${bENCH_DATE} wird nun in der Zeile $((tempazb+5)) eingefügt"
-            echo "$((tempazb+5))s/: [0-9.]*,$/: ${bENCH_DATE},/"    >>${TEMPSED_FILE}
+            echo "$((tempazb+5))s/: [0-9.]*,$/: ${bENCH_DATE},/"             | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#bENCH_KIND} -ne 0 ]]; then
             echo "der BENCH_KIND Wert ${bENCH_KIND} wird nun in der Zeile $((tempazb+6)) eingefügt"
-            echo "$((tempazb+6))s/: [0-9.]*,$/: ${bENCH_KIND},/"    >>${TEMPSED_FILE}
+            echo "$((tempazb+6))s/: [0-9.]*,$/: ${bENCH_KIND},/"             | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#grafik_clock} -ne 0 ]]; then
             echo "der GRAFIK_CLOCK Wert ${grafik_clock} wird nun in der Zeile $((tempazb+7)) eingefügt"
-            echo "$((tempazb+7))s/: [0-9.]*,$/: ${grafik_clock},/"  >>${TEMPSED_FILE}
+            echo "$((tempazb+7))s/: [-0-9.]*,$/: ${grafik_clock},/"          | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#memory_clock} -ne 0 ]]; then
             echo "der MEMORY_CLOCK Wert ${memory_clock} wird nun in der Zeile $((tempazb+8)) eingefügt"
-            echo "$((tempazb+8))s/: [0-9.]*,$/: ${memory_clock},/" >>${TEMPSED_FILE}
+            echo "$((tempazb+8))s/: [-0-9.]*,$/: ${memory_clock},/"          | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#fan_speed}    -ne 0 ]]; then
             echo "der FanSpeed Wert ${fan_speed} wird nun in der Zeile $((tempazb+9)) eingefügt"
-            echo "$((tempazb+9))s/: [0-9.]*,$/: ${fan_speed},/"    >>${TEMPSED_FILE}
+            echo "$((tempazb+9))s/: [0-9.]*,$/: ${fan_speed},/"              | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#power_limit}  -ne 0 ]]; then
             [ ${power_limit} -eq 0 ] && power_limit=${defPowLim[${gpu_idx}]}
             echo "der POWER_LIMIT Wert ${power_limit} wird nun in der Zeile $((tempazb+10)) eingefügt"
-            echo "$((tempazb+10))s/: [0-9.]*,$/: ${power_limit},/"  >>${TEMPSED_FILE}
+            echo "$((tempazb+10))s/: [0-9.]*,$/: ${power_limit},/"           | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#hashCountPerSeconds}  -ne 0 ]]; then
             echo "der HashCountPerSeconds Wert ${hashCountPerSeconds} wird nun in der Zeile $((tempazb+11)) eingefügt"
-            echo "$((tempazb+11))s/: [0-9.]*,$/: ${hashCountPerSeconds},/"  >>${TEMPSED_FILE}
+            echo "$((tempazb+11))s/: [0-9.]*,$/: ${hashCountPerSeconds},/"   | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#benchMode}  -ne 0 ]]; then
             echo "der BenchMode Wert ${benchMode} wird nun in der Zeile $((tempazb+12)) eingefügt"
-            echo "$((tempazb+12))s/: [lo],$/: ${benchMode},/"  >>${TEMPSED_FILE}
+            echo "$((tempazb+12))s/: [lo],$/: ${benchMode},/"                | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         if [[ ${#less_threads}  -ne 0 ]]; then
             echo "der LESS_THREADS Wert ${less_threads} wird nun in der Zeile $((tempazb+13)) eingefügt"
-            echo "$((tempazb+13))s/: [0-9.]*$/: ${less_threads}/"   >>${TEMPSED_FILE}
+            echo "$((tempazb+13))s/: [0-9.]*$/: ${less_threads}/"            | tee -a ${BENCHLOGFILE} >>${TEMPSED_FILE}
         fi
         #
         # Das ist die tatsächliche Bearbeitung der IMPORTANT_BENCHMARK_JSON
@@ -751,12 +753,12 @@ _edit_BENCHMARK_JSON_and_put_in_the_new_values () {
             ${benchMode}
             ${less_threads}
         )
-        echo "Der MiningAlgo \"${miningAlgo}\" wird zur Datei ${IMPORTANT_BENCHMARK_JSON} hinzugefügt"
+        echo "Der MiningAlgo \"${miningAlgo}\" wird zur Datei ${IMPORTANT_BENCHMARK_JSON} hinzugefügt" | tee -a ${BENCHLOGFILE}
         sed -i -e '/^ \+]/,/}$/d'  ${IMPORTANT_BENCHMARK_JSON}
         printf ",   {\n"         >>${IMPORTANT_BENCHMARK_JSON}
         for (( i=0; i<${#BLOCK_FORMAT[@]}; i++ )); do
             printf "${BLOCK_FORMAT[$i]}" "${BLOCK_VALUES[$i]}" \
-                | tee -a           ${IMPORTANT_BENCHMARK_JSON}
+                | tee -a           ${IMPORTANT_BENCHMARK_JSON} -a ${BENCHLOGFILE}
         done
         printf "    }\n  ]\n}\n" >>${IMPORTANT_BENCHMARK_JSON}
     fi
@@ -886,7 +888,7 @@ _On_Exit () {
                 done
                 for tweak_msg in "${!TWEAK_MSGs[@]}"; do
                     echo "${TWEAK_MSGs[${tweak_msg}]}" >>${TWEAKLOGFILE}
-                    value=$(echo "${TWEAK_MSGs[${tweak_msg}]}" | grep -E -o -e '[[:digit:]]+$')
+                    value=$(echo "${TWEAK_MSGs[${tweak_msg}]}" | grep -E -o -e '[-[:digit:]]+$')
                     # Nochmal die Kommandos suchen, um die Werte zuordnen zu können
                     tweak_pat="${tweak_msg//[[]/\\[}"
                     tweak_pat="${tweak_pat//[\]]/\\]}"
