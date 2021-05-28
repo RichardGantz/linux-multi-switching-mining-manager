@@ -34,6 +34,21 @@ fi
 # Sobald das Problem gelöst ist, kann die Variable nvidia_settings_unsolved auf 0 gesetzt werden
 nvidia_settings_unsolved=1
 
+if [ "$(uname -n)" == "mining-2" ]; then
+    ScreenTest=0
+    nvidia_settings_unsolved=0
+fi
+
+bareDefaultFanSpeed=88
+declare -Ag DO_AUTO_BENCHMARK_FOR
+TWEAK_CMD_START_PARAMS="${LINUX_MULTI_MINING_ROOT}/benchmarking/.start_params_for_tweak_commands_sh"
+
+# Das hat auf der Maschine/Node "miner" unerklärlicherweise nicht geklappt. Die Variable wurde nicht exportiert.
+# Deshalb musst der Umweg über das Dateisystem gegangen werden.
+#declare -g NVIDIA_SMI_PM_LAUNCHED_string
+#[ -z "${NVIDIA_SMI_PM_LAUNCHED_string}" ] && export NVIDIA_SMI_PM_LAUNCHED_string
+#export NVIDIA_SMI_PM_LAUNCHED_string
+
 # Wir verwenden oft "readarray" am Ende einer Pipe. Deshalb wollen wir, dass diese Option global verfügbar ist.
 # An jeder Stelle im Source-Code, wo diese Zeile gefunden wird, kann sie also entfernt werden.
 shopt -s lastpipe
@@ -99,10 +114,6 @@ FATAL_ERRORS="${LINUX_MULTI_MINING_ROOT}/FATAL_ERRORS.log"
 # Wieviele Zeilen der gpu_system.out gehören zu jeweils einer GPU
 declare -ig num_gpu_rows=7
 
-#declare -g NVIDIA_SMI_PM_LAUNCHED_string
-#[ -z "${NVIDIA_SMI_PM_LAUNCHED_string}" ] && export NVIDIA_SMI_PM_LAUNCHED_string
-#export NVIDIA_SMI_PM_LAUNCHED_string
-
 # Der zm miner muss etwas anders behandelt werden und ist nur vorhanden, bzw. wird nur berücksichtigt,
 # wenn die folgende Variable in der nächsten Zeile (zm_list_devices_cmd) NICHT leer ist.
 # (Vorhanden sein sollte sie aber schon, damit die Abfragen keine Fehlermeldungen auslösen.
@@ -141,9 +152,6 @@ declare -i k_base=1024          # CCminer scheint gemäß bench.cpp mit 1024 zu 
 GRID[0]="netz"
 GRID[1]="solar"
 GRID[2]="solar_akku"
-
-declare -Ag DO_AUTO_BENCHMARK_FOR
-TWEAK_CMD_START_PARAMS="${LINUX_MULTI_MINING_ROOT}/benchmarking/.start_params_for_tweak_commands_sh"
 
 GPU_alive_delay=6
 GPU_ALIVE_FLAG=.willing_to_deliver_data     # Not used since 2021-04-24 and beyond. Remove comment, if used again.

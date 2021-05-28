@@ -324,23 +324,32 @@ _measure_one_whole_WattsHashes_Cycle () {
     # Wenn die Mindestanzahl an Hashwerten erreicht oder überschritten ist, die Hashwerte-Zähl-Flagge $countHashes für die while-Schleife einholen
     # Dieser Grund, in der while-Schleife verweilen zu müssen, ist nun beseitigt.
     # (Es gibt allerdings noch zwei weitere Gründe, in der while-Schleife zu verweilen, das Zählen der Watt-Werte oder das Tweaken)
-    [ $hashCount -ge $MIN_HASH_COUNT ] && countHashes=0
+    [ $hashCount -ge ${MIN_HASH_COUNT} ] && countHashes=0
 
     # Wenn die Mindestanzahl an Wattwerten erreicht oder überschritten ist, die Wattwerte-Zähl-Flagge $countWatts für die while-Schleife einholen
     # Dieser Grund, in der while-Schleife verweilen zu müssen, ist nun beseitigt.
     # (... und eventuell den ganzen Vorgang abbrechen, wenn bis dahin noch keine gültigen Hashwerte ermittelt wurden.
     #      Dann stimmt nämlich möglicherweise etwas nicht [seit t-rex steht fest, dass es SEHR lange dauern kann, bis ein Hashwert erscheint]
     #      Das muss nochmal durchdacht werden...)
-    if [ $wattCount -ge $MIN_WATT_COUNT ]; then
+    if [ $wattCount -ge ${MIN_WATT_COUNT} ]; then
 	countWatts=0
-	# Wenn innerhalb der Mindestlaufzeit für Wattwerte kein Hashwert ermittelt wurde, wird hier abgebrochen.
-	# Diese Abfrage ist im Moment DISABLED durch den Zusatz "-a 1 -eq 0"
-	if [ $hashCount -eq 0 -a 1 -eq 0 ]; then
-            # Abbruch wegen ${MIN_WATT_COUNT}s kein Hashwert
-            #countHashes=0
-            _disable_algorithm "${algorithm}" "Abbruch wegen ${MIN_WATT_COUNT}s nach dem Start noch kein Hashwert erhalten." "${gpu_idx}"
-            BENCHMARKING_WAS_STARTED=0
-            exit 95
+	# Wenn innerhalb der Mindestlaufzeit für Wattwerte kein Hashwert ermittelt wurde,
+	#      wird hier 1x die Anzahl der Wattwerte (Benchmark-Dauer) verdoppelt,
+	#      und wenn dann immer noch keine Hashwerte da sind, wird abgebrochen.
+	if [ $hashCount -eq 0 ]; then
+	    if [ -z "${doubledMinWattCountOnce}" ]; then
+		doubledMinWattCountOnce=yes
+		countWatts=1
+		M_W_C=${MIN_WATT_COUNT}
+		MIN_WATT_COUNT=$((2*MIN_WATT_COUNT))
+		printf "Da nach %s Sekunden noch kein Hashwert gefunden wurde, wird die Mindestlaufzeit 1x auf %s Sekunden verdoppelt\n" \
+		       ${M_W_C} ${MIN_WATT_COUNT}
+	    else
+		echo "Abbruch wegen ${MIN_WATT_COUNT}s kein Hashwert und Eintrag des ${algorithm} in die Datei BENCH_ALGO_DISABLED"
+		_disable_algorithm "${algorithm}" "Abbruch wegen ${MIN_WATT_COUNT}s nach dem Start noch kein Hashwert erhalten." "${gpu_idx}"
+		BENCHMARKING_WAS_STARTED=0
+		exit 95
+	    fi
 	fi
     fi
 
@@ -512,13 +521,11 @@ _measure_one_whole_WattsHashes_Cycle () {
                ${avgWATT:0:$(($(expr index "${avgWATT}" ".")+2))} \
                ${quotient:0:$(($(expr index "${quotient}" ".")+2))} \
             | tee -a ${TWEAKLOGFILE}
-    else
-        ###
-        ### "Normal" BENCHMARK MODE
-        ###
-        printf "%3s von $MIN_HASH_COUNT Hashwerten und %3s von $MIN_WATT_COUNT Wattwerten\n" \
-               ${hashCount} ${wattCount}
     fi
+
+    # 2021-05-28: Diese Ausgabe erfolgt jetzt immer, damit man sieht, wie lange der Benchmark/Tweak-Vorgang noch laufen muss
+    printf "%3s von %3s Hashwerten und %3s von %3s Wattwerten\n" \
+           ${hashCount} ${MIN_HASH_COUNT} ${wattCount} ${MIN_WATT_COUNT}
 
     # Eine Sekunde pausieren vor dem nächsten Wattwert.
     # Jetzt auch bereit für Unterbrechnungen bzw. Beenden der Messzyklen
@@ -784,9 +791,10 @@ _On_Exit () {
     #
     echo "Vor der Prüfung von \$BENCHMARKING_WAS_STARTED == $BENCHMARKING_WAS_STARTED"
     if [[ ${BENCHMARKING_WAS_STARTED} -eq 1 ]]; then
-	if [ 1 -eq 0 ]; then
+	if [ 1 -eq 1 ]; then
             # Einen eventuell unvollständigen Messzyklus kontrolliert und gültig zu Ende bringen?
 	    # 2021-04-15: Wird erst mal rausgenommen, da z.B. beim equihash viel zu lange keine Hashwerte kommen
+	    # 2021-05-28: Wieder reingenommen nach Verdopplung der Messzeit, falls kein Hashwert innerhalb von ${MIN_WATT_COUNT} gefunden wurde
 	    echo "Vor der while-Schleife countHashes == $countHashes"
             while [ $countWatts -eq 1 ] || [ $countHashes -eq 1 ] ; do
 		echo "in der while-Schleife"
@@ -797,7 +805,11 @@ _On_Exit () {
 		_measure_one_whole_WattsHashes_Cycle
             done
 	else
-            [ $countWatts -eq 1 -o $countHashes -eq 1 ] && BENCHMARKING_WAS_STARTED=0
+            if [ $countWatts -eq 1 -o $countHashes -eq 1 ]; then
+		echo "Die Minimalanzahl an Watt- oder Hashwerten wurde noch nicht erreicht."
+		echo "Es erfolgt daher KEIN Eintrag in die benchmark_*.json"
+		BENCHMARKING_WAS_STARTED=0
+	    fi
 	fi
     fi
 
@@ -2015,7 +2027,8 @@ fi
 #nvidiaCmd[2]="nvidia-settings --assign [fan:%i]/GPUTargetFanSpeed=%i"
 #nvidiaCmd[3]="./nvidia-befehle/smi --id=%i -pl %i"
 #nvidiaCmd[4]="nvidia-settings --assign [gpu:%i]/GPUFanControlState=%i"
-_setup_Nvidia_Default_Tuning_CmdStack
+# 2021-05-28 - Beim Benchmarken und Tweaken sollen jetzt die puren Standarddaten wie nach dem Booten eingestellt werden (bareDefaults):
+_setup_Nvidia_Default_Tuning_CmdStack "bareDefaults"
 
 miner_device=${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]}
 echo""
@@ -2029,26 +2042,6 @@ echo "das ist der \$coin_algorithm, der ausgewählt wurde : ${coin_algorithm}"
 echo "Der " $([ "$live_mode" == "l" ] && echo "LIVE" || echo "OFFLINE") " Modus ist eingestellt"
 echo ""
 echo "DIE FOLGENDEN KOMMANDOS WERDEN NACH BESTÄTIGUNG ABGESETZT:"
-
-###  2021-04-11 - AUSNAHME START
-###  Die nächsten Zeilen müssen im Vollbetrieb wieder raus (1 -eq 0 ] oder ganz löschen).
-###  Wurden nur eingeführt, um die ersten automatischen Benchmarks erstellen zu lassen und einen manuell ermittelten PowerLimit-Wert zu verwenden.
-###  In diesem Betrieb ist das der einzige nvidia-Befehl, der abgesetzt wird.
-if [ 1 -eq 1 ]; then
-    if [ 1 -eq 0 ]; then
-	nvidiaPara[3]=125
-	[ ${gpu_idx} -eq 5 ] && nvidiaPara[3]=120
-	[ ${gpu_idx} -eq 0 ] && nvidiaPara[3]=100
-	printf -v cmd "${nvidiaCmd[3]}" ${gpu_idx} ${nvidiaPara[3]}
-	CmdStack=( "$cmd" )
-    fi
-    # Und mindestanzahl Hashes bei allen ausser octopus hochsetzen auf 100
-    [ "${miningAlgo}" != "octopus" ] && MIN_HASH_COUNT=50
-    echo "Sonderregelung zum erstellen der ersten Benchmarks für die RTX 3070 Karten bei DAGGERHASHIMOTO:"
-    echo "MIN_HASH_COUNT = ${MIN_HASH_COUNT}"
-fi
-###  2021-04-11 - AUSNAHME ENDE
-
 for (( i=0; i<${#CmdStack[@]}; i++ )); do
     echo "---> ${CmdStack[$i]} <---"
 done

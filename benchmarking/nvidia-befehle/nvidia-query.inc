@@ -42,23 +42,32 @@ nvidiaCmd[4]="nvidia-settings --assign [gpu:%i]/GPUFanControlState=%i"
 # 2. $IMPORTANT_BENCHMARK_JSON muss eingelesen sein, damit die Arrays gefüllt sind
 #        Trotzdem kann es vorkommen, dass die Array-Variablen leer sind, wenn der Algo noch nicht enthalten ist!
 #
+# 2021-05-28 Beim Benchmarken und Tweaken sollen immer die Defaults eingestellt werden.
+#            Dazu kann der Parameter "bareDefaults" übergeben werden
 function _declare_and_fill_nvidiPara_Array () {
     local    G=0; [[ ${#GRAFIK_CLOCK[${algorithm}]} -gt 0 ]] && G=${GRAFIK_CLOCK[${algorithm}]}
     local    M=0; [[ ${#MEMORY_CLOCK[${algorithm}]} -gt 0 ]] && M=${MEMORY_CLOCK[${algorithm}]}
     local    F=0; [[ ${#FAN_SPEED[${algorithm}]}    -gt 0 ]] && F=${FAN_SPEED[${algorithm}]}
     local -i P=0; [[ ${#POWER_LIMIT[${algorithm}]}  -gt 0 ]] && P=${POWER_LIMIT[${algorithm}]}
     [ ${P} -eq 0 ] && P=${defPowLim[${gpu_idx}]}
-    unset nvidiaPara
-    declare -ag nvidiaPara=( $G $M $F $P )
+
+    unset nvidiaPara; declare -ag nvidiaPara
+    if [ "$1" == "bareDefaults" ]; then
+	nvidiaPara=( 0 0 ${bareDefaultFanSpeed} ${defPowLim[${gpu_idx}]} )
+    else
+	nvidiaPara=( $G $M $F $P )
+    fi
 }
 
+# 2021-05-28 Beim Benchmarken und Tweaken sollen immer die Defaults eingestellt werden.
+#            Dazu kann der Parameter "bareDefaults" übergeben werden
 function _setup_Nvidia_Default_Tuning_CmdStack () {
     local push_it
     if [ ${#nvidiaPara[@]} -gt 0 ];then
         unset lastNvPara
         declare -ag lastNvPara=( ${nvidiaPara[@]} )
     fi
-    _declare_and_fill_nvidiPara_Array
+    _declare_and_fill_nvidiPara_Array "$1"
 
     # Die Clocks nach den Werten in der JSON setzen
     unset CmdStack

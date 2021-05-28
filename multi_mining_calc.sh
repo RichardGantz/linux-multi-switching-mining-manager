@@ -566,7 +566,7 @@ Danach erfolgt ein exit.
     # Möglicherweise sollte diese "Beschleunigung" anders gelöst werden.
     # Es funktioniert im Moment jedenfalls
     # Da _progressbar im weiteren Verlauf IMMER gleich '\r' ist, wird diese Kontrolle nur beim allerersten Mal gemacht
-    [[ "${_progressbar}" != "\r" ]] && { _get_SYSTEM_STATE_in; echo "Erster Start (eventuell bechmarken schon manche GPUs). Enabled GPUs: ${NumEnabledGPUs}"; }
+    [[ "${_progressbar}" != "\r" ]] && { _get_SYSTEM_STATE_in; echo "Erster Start (eventuell benchmarken schon manche GPUs). Enabled GPUs: ${NumEnabledGPUs}"; }
 
     if [ ${NumEnabledGPUs} -gt 0 ]; then
 

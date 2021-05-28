@@ -652,6 +652,8 @@ while :; do
                 "nh")
                     if [ ${PoolActive[${pool}]} -eq 1 ]; then
                         #  4. ###WARTET### jetzt, bis die Datei "../NH_KURSE_PORTS.in" vorhanden und NICHT LEER ist.
+			# $$$ Dieser Fall sollte eigentlich nicht vorkommen, da die GPU zuerst auf SYNCFILE wartet.
+			# $$$ SYNCFILE wird aber erst erzeugt, NACHDEM die folgende Datei geschrieben wurde.
                         until [ -s ${algoID_KURSE_PORTS_PAY} ]; do
                             echo "GPU #${gpu_idx}: ###---> Waiting for ${algoID_KURSE_PORTS_PAY} to become available..."
                             sleep .5
@@ -935,13 +937,15 @@ while :; do
     #
     #############################################################################
     #############################################################################
-    echo "GPU #${gpu_idx}: Waiting for new RUNNING_STATE to get orders..."
+    # Eine Hundertstel Sekunde länger warten, je niedriger der GPU-Index ist,
+    # damit nicht alle gleichzeitig losrennen, wenn die Ergebnisse da sind (und die Desktop-GPU muss wirklich nicht die erste sein)
+    wait_for_RUNNING_STATE_sleep_time=$(( 50 + ${NumEnabledGPUs} - ${gpu_idx} ))
+    echo "GPU #${gpu_idx}: Waiting for new RUNNING_STATE to get orders, checking every 0.${wait_for_RUNNING_STATE_sleep_time} seconds..."
     # RUNNING_STATE muss nun älter sein als diese unsere Datei, die den MM veranlasst haben, auszuwerten und RUNNING_STATE zu schreiben.
+    # Und solange die Datei NICHT da ist, wird "0 1" zurückgegeben
     read RunSecs  RunFrac  <<<$(_get_file_modified_time_ ${RUNNING_STATE})
     until [[ ${ValSecs} -le ${RunSecs} || (${ValSecs} -eq ${RunSecs} && ${ValFrac} -le ${RunFrac}) ]]; do
-        # Eine Hundertstel Sekunde länger warten, je höher der GPU-Index ist,
-        # damit nicht alle gleichzeitig losrennen, wenn die Ergebnisse da sind
-        sleep .$(( 50 + ${gpu_idx} ))
+        sleep .${wait_for_RUNNING_STATE_sleep_time}
         read RunSecs  RunFrac  <<<$(_get_file_modified_time_ ${RUNNING_STATE})
     done
 
@@ -953,9 +957,9 @@ while :; do
         echo "GPU #${gpu_idx}: Einlesen des NEUEN nun einzustellenden ${RUNNING_STATE} und erfahren, was GPU #${gpu_idx} zu tun hat..."
     fi
     echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s) "RUNNING_STATE there now, going to fetch orders..."
-    # Da NUR die multi_mining_calc.sh diese Datei schreibt und da die Datei länger nicht mehr geschrieben wird,
-    # brauchen wir sie hier auch nicht zum Lesen reservieren.
-    # GLEICHZEITIGES LESEN SOLLTE KEIN PROBLEM DARSTELLEN.
+    # $$$ Da NUR die multi_mining_calc.sh diese Datei schreibt und da die Datei länger nicht mehr geschrieben wird,
+    #     bräuchten wir sie hier auch nicht zum Lesen reservieren.
+    # $$$ GLEICHZEITIGES LESEN SOLLTE KEIN PROBLEM DARSTELLEN.
     _reserve_and_lock_file ${RUNNING_STATE}  # Zum Lesen reservieren...
     _read_in_actual_RUNNING_STATE            # ... einlesen...
     _remove_lock                             # ... und wieder freigeben

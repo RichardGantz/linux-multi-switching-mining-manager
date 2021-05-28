@@ -1,12 +1,49 @@
 #!/bin/bash
 [[ ${#_GLOBALS_INCLUDED}     -eq 0 ]] && source ../globals.inc
+#echo ${LINUX_MULTI_MINING_ROOT}
 #[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.sh
-#[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
+[[ ${#_GPU_ABFRAGE_INCLUDED} -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/gpu-abfrage.inc
 #[[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}/gpu-bENCH.inc
 [[ ${#_GPU_BENCH_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/GPU-skeleton/gpu-bENCH.inc
 [[ ${#_MINERFUNC_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/miner-func.inc
 [[ ${#_ALGOINFOS_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
-#[[ ${#_NVIDIACMD_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
+[[ ${#_NVIDIACMD_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
+
+_read_in_SYSTEM_FILE_and_SYSTEM_STATEin
+for gpu_idx in {0..12}; do
+    gpu_uuid=${uuid[${gpu_idx}]}
+    IMPORTANT_BENCHMARK_JSON="../${gpu_uuid}/benchmark_${gpu_uuid}.json"
+    echo $IMPORTANT_BENCHMARK_JSON
+
+    _read_IMPORTANT_BENCHMARK_JSON_in # without_miners
+
+    #miningAlgo=equihash
+
+    MINER=t-rex#0.19.12
+    MINER=miner#2.51
+    MINER=miniZ#1.7x3
+    MINER=t-rex#0.19.14
+    miningAlgo=ethash
+    algorithm=${miningAlgo}#${MINER}
+
+    _declare_and_fill_nvidiPara_Array
+    printf "%2i: " $gpu_idx
+    declare -p nvidiaPara
+
+    _declare_and_fill_nvidiPara_Array "bareDefaults"
+    printf "%2i: " $gpu_idx
+    declare -p nvidiaPara
+
+done
+exit
+
+NumEnabledGPUs=13
+for gpu_idx in {12..0}; do
+    wait_for_RUNNING_STATE_sleep_time=$(( 50 + ${NumEnabledGPUs} - ${gpu_idx} ))
+    echo "GPU #${gpu_idx}: Waiting for new RUNNING_STATE to get orders, checking every 0.${wait_for_RUNNING_STATE_sleep_time} seconds..."
+    sleep .${wait_for_RUNNING_STATE_sleep_time}
+done 
+exit
 
 MINER=t-rex#0.19.14
 miningAlgo=ethash

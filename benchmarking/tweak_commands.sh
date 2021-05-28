@@ -105,7 +105,8 @@ cd ${_WORKDIR_} >/dev/null
 _read_IMPORTANT_BENCHMARK_JSON_in without_miners
 
 # Wenn es noch nichts aus der JSON gibt, sind die Werte mit 0 vorbelegt
-_declare_and_fill_nvidiPara_Array
+# 2021-05-28 Beim Benchmarken und Tweaken sollen immer die Defaults eingestellt werden
+_declare_and_fill_nvidiPara_Array "bareDefaults"
 
 # Fan-Kontrolle ermöglichen. GPUFanControlState=1 heisst: MANUELL. GPUFanControlState=0 heisst AUTOMATIC
 #nvidia-settings --assign [gpu:${gpu_idx}]/GPUFanControlState=1
