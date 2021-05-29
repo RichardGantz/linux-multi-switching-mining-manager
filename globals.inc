@@ -40,6 +40,7 @@ if [ "$(uname -n)" == "mining-2" ]; then
 fi
 
 bareDefaultFanSpeed=88
+bareDefaultFanSpeed=0
 declare -Ag DO_AUTO_BENCHMARK_FOR
 TWEAK_CMD_START_PARAMS="${LINUX_MULTI_MINING_ROOT}/benchmarking/.start_params_for_tweak_commands_sh"
 

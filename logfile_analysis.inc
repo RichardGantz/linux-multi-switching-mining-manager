@@ -73,10 +73,32 @@ detect_zm_hash_count='BEGIN { hash=10 }
 # '16:03:23 New Job: 00000000c62d6c0b Epoch: #407 Diff: 858.22M
 # '16:03:24 GPU1: Share #1 verified on CPU, difficulty: 3.00G
 # '16:03:24 GPU1: Share #1 accepted 37 ms
-detect_zm_hash_count='BEGIN { hash=7; speed=-1; einheit=""; unknownCnt=0; FirstSpeed=-1; FirstEinheit="" }
+#
+# 2021-05-29: Der obige Output ist der des gminer, wenn er am "mining" läuft.
+#             "mining-2" gibt etwas anderes aus, weil er die mehr GPU-Werte aslesen kann.
+# Deshalb funktioniert dieses Suchmuster nur am "mining" !!!
+#
+# "mining-2" Output
+# cuckatoo32
+# '+---+-------+----+-----+---------+--------+------+----+-----+-----+-----------+
+# '| ID   GPU   Temp  Fan    Speed   Fidelity Shares Core  Mem  Power Efficiency |
+# '+---+-------+----+-----+---------+--------+------+----+-----+-----+-----------+
+# '|  1  1080Ti 71 C  48 %  0.64 G/s     0.00    0/0 1809  5005 274 W  2.34 G/mW |
+# '+---+-------+----+-----+---------+--------+------+----+-----+-----+-----------+
+# beamhash
+# '+---+-------+----+-----+-----------+------+----+-----+-----+-----------+
+# '| ID   GPU   Temp  Fan     Speed    Shares Core  Mem  Power Efficiency |
+# '+---+-------+----+-----+-----------+------+----+-----+-----+-----------+
+# '|  1  1080Ti 72 C  51 %  28.6 Sol/s    3/0 1911  5005 285 W 0.10 Sol/W |
+# '+---+-------+----+-----+-----------+------+----+-----+-----+-----------+
+# Die Übereinstimmung beginnt ab dem '%'-Zeichen
+detect_zm_hash_count='BEGIN { speed=-1; einheit=""; unknownCnt=0; FirstSpeed=-1; FirstEinheit="" }
 /^\|[ ]+[[:digit:]]+[ ]+[[:alnum:]]+[ ]+[^%]+%[ ]+[[:digit:].]+[ ]+[^|]+\|$/ \
-    { speed=$hash; einheit=$(hash+1); next; }
-/ GPU[[:digit:]]+: Share #[[:digit:]]+ accepted [[:digit:]]+ .s$/ \
+    {   split( substr( $0, index( $0, "%" )+1 ), SA )
+        speed = SA[1]; einheit = SA[2];
+        next;
+ }
+/ GPU[[:digit:]]+: Share #[[:digit:]]+ accepted [[:digit:]]+ .*s$/ \
     {   if ( speed < 0 ) {
 	    unknownCnt++
 	} else {
@@ -94,11 +116,15 @@ END { for ( i=unknownCnt; i>0; i--) { print FirstSpeed " " FirstEinheit; } }
 #
 # ethash / kawpow:
 # [WARNING] Bad share: Share above target.
-# [ 0d 0h 0m40s] S:  3/0/1 0>RTX 3070  100% [0.C/ 0%]* 52.62(52.62)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
+# [ 0d 0h 0m40s] S:  3/0/1 0>RTX 3070  ...100% .[0.C/ 0%]* 52.62(52.62)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
+# (auf dem mining-2:)
+# [ 0d 0h 1m20s] S:  0/0/0 0>GTX 1080 Ti  100% [44.C/87%]  32.11(32.11)MH/s 192(191.4)W clk=1974MHz mclk=5005MHz MH/W=0.17
+# [ 0d 0h 1m30s] S:  1/0/0 0>GTX 1080 Ti  100% [45.C/87%]* 32.26(32.26)MH/s 192(191.6)W clk=1974MHz mclk=5005MHz MH/W=0.17
+# [ 0d 0h 1m40s] S:  3/0/0 0>GTX 1080 Ti  100% [45.C/86%]* 32.39(32.39)MH/s 193(191.9)W clk=1974MHz mclk=5005MHz MH/W=0.17
 #
 # zhash / beamhash / (equihash):
-# [ 0d 0h 1m00s] S:  4/0/0 0>RTX 3070  100% [0.C/ 0%]*61.51 I/s 126.39(126.39)Sol/s   0(  0.0)W clk=1815MHz mclk=7001MHz Sol/W=inf
-# [ 0d 0h 1m10s] S:  5/0/0 0>RTX 3070  100% [0.C/ 0%]*61.49 I/s 125.40(125.40)Sol/s   0(  0.0)W clk=1815MHz mclk=7001MHz Sol/W=inf
+# [ 0d 0h 1m00s] S:  4/0/0 0>RTX 3070  ...100% .[0.C/ 0%]*61.51 I/s 126.39(126.39)Sol/s   0(  0.0)W clk=1815MHz mclk=7001MHz Sol/W=inf
+# [ 0d 0h 1m10s] S:  5/0/0 0>RTX 3070  ...100% .[0.C/ 0%]*61.49 I/s 125.40(125.40)Sol/s   0(  0.0)W clk=1815MHz mclk=7001MHz Sol/W=inf
 #
 # Fehlen noch:
 # ERREXPR
@@ -109,7 +135,7 @@ detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0; last_shares=0 }
 /[[]WARNING[]] (Bad|Stale) share:/ { booos++; seq_booos++; next }
 match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
    yeses++; seq_booos=0;
-   S1 = substr( $0, RSTART+2, RLENGTH )
+   S1 = substr( $0, RSTART+2, RLENGTH-2 )
    SN = split( S1, SA )
    if (match( SA[ SN ], /\([[:digit:].]+\).*(Sol|H)\/s/ )) {
        M = substr( SA[ SN ], RSTART+1, RLENGTH );
@@ -300,6 +326,8 @@ YES_ACCEPTED_MSGs=(
     # 2021-05-06 - Wir bauen diese Abfragen ebenfalls in das awk-Script ein, das sowieso bemüht werden muss.
     # '[]][*] ?[[:digit:].]+'
 
+    # "gminer":
+    # mining:
     # '+---+-------+----+---+-----------+------+----+---+-----+-----------+
     # '| ID   GPU   Temp Fan    Speed    Shares Core Mem Power Efficiency |
     # '+---+-------+----+---+-----------+------+----+---+-----+-----------+
@@ -311,7 +339,8 @@ YES_ACCEPTED_MSGs=(
     # '16:17:23 GPU1: Share #75 accepted 64 ms
     # '16:17:25 GPU1: Share #76 verified on CPU, difficulty: 674.62M
     # '16:17:25 GPU1: Share #76 accepted 61 ms
-    ' GPU[[:digit:]]+: Share #[[:digit:]]+ accepted [[:digit:]]+ .s$'
+    ' GPU[[:digit:]]+: Share #[[:digit:]]+ accepted [[:digit:]]+ .*s$'
+
 
     # "t-rex .12":
     # " [ OK ] 13216/13228 - 37.28 MH/s, 56ms ... GPU #0

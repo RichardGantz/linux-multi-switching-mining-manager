@@ -187,7 +187,7 @@ _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
     touch ${temp_hash_sum}.lock
     case "${MINER}" in
 	miniZ#*)
-	    read hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
+	    read miniZ_hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
 		| tail -n +$hash_line \
 		| tee >(  gawk -v _BC_="1" -M -e "${detect_miniZ_hash_count}" \
 		        | gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
@@ -195,7 +195,8 @@ _evaluate_BENCH_and_WATT_LOGFILE_and_build_sums_and_averages () {
 			| bc >${temp_hash_sum}; \
 			  rm -rf ${temp_hash_sum}.lock ) \
 		| gawk -e "${detect_miniZ_hash_count}" \
-		)
+		 )
+	    hashCount=$(( miniZ_hashCount - miniZ_hashCount_Before_hash_line ))
 	    ;;
 
 	*)
@@ -283,11 +284,12 @@ _measure_one_whole_WattsHashes_Cycle () {
 	miniZ#*)
 	    # Diese drei haben wir noch nicht implementiert, da sie noch nicht aufgetreten sind.
 	    echo 0 | tee ${FATAL_ERR_CNT} ${RETRIES_COUNT} >${BoooooS_COUNT}
-	    read hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
+	    read miniZ_hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
 		| tail -n +$hash_line \
 		| gawk -v BOOFILE="${BoooooS_COUNT}" -e "${detect_miniZ_hash_count}" \
 		)
 	    rm -f ${FATAL_ERR_CNT}.lock ${RETRIES_COUNT}.lock ${BoooooS_COUNT}.lock
+	    hashCount=$(( miniZ_hashCount - miniZ_hashCount_Before_hash_line ))
 	    ;;
 
 	*)
@@ -490,6 +492,8 @@ _measure_one_whole_WattsHashes_Cycle () {
 				| tail -n 1 \
 				| gawk -e 'BEGIN {FS="-"} {print $1+1}' \
                          )
+		# Den Korrekturwert für die miniZ-Auswertung festhalten
+		miniZ_hashCount_Before_hash_line=${miniZ_hashCount}
                 
                 #
                 # Hinweis für den Benutzer, dass ein neuer Zyklus beginnt.
@@ -1917,6 +1921,8 @@ declare -i watt_line=1
 declare -i hash_line=1
 declare -i wattCount=0
 declare -i hashCount=0
+declare -i miniZ_hashCount=0
+declare -i miniZ_hashCount_Before_hash_line=0
 maxWATT=0
 
 ####################################################################################

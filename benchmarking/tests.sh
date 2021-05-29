@@ -3,6 +3,82 @@
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
 
+miner_name=miner
+miner_version=2.51
+MINER=${miner_name}#${miner_version}
+if [ "$(uname -n)" == "mining-2" ]; then
+    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/cuckatoo32/NoBenchStarted_20210528_203050_benchmark.log"
+#    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/cuckatoo31/NoBenchStarted_20210527_174128_benchmark.log"
+#    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/beamhash/NoBenchStarted_20210528_203258_benchmark.log"
+#    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/beamhash/NoBenchStarted_20210527_215442_benchmark.log"
+#    BENCHLOGFILE="/home/avalon/miner/gminer/gpu-test.log"
+#    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miniZ#1.7x3/ethash/NoBenchStarted_20210528_162304_benchmark.log"
+else
+    #mining
+    BENCHLOGFILE="/mnt/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miniZ#1.7x3/ethash/NoBenchStarted_20210528_162304_benchmark.log"
+fi
+#cat ${BENCHLOGFILE}
+hash_line=1
+
+FATAL_ERR_CNT="${MINER}.FATAL"
+RETRIES_COUNT="${MINER}.retry"
+BoooooS_COUNT="${MINER}.booos"
+
+# "mining-2" Output
+# cuckatoo32
+# '+---+-------+----+-----+---------+--------+------+----+-----+-----+-----------+
+# '| ID   GPU   Temp  Fan    Speed   Fidelity Shares Core  Mem  Power Efficiency |
+# '+---+-------+----+-----+---------+--------+------+----+-----+-----+-----------+
+# '|  1  1080Ti 71 C  48 %  0.64 G/s     0.00    0/0 1809  5005 274 W  2.34 G/mW |
+# '+---+-------+----+-----+---------+--------+------+----+-----+-----+-----------+
+# beamhash
+# '+---+-------+----+-----+-----------+------+----+-----+-----+-----------+
+# '| ID   GPU   Temp  Fan     Speed    Shares Core  Mem  Power Efficiency |
+# '+---+-------+----+-----+-----------+------+----+-----+-----+-----------+
+# '|  1  1080Ti 72 C  51 %  28.6 Sol/s    3/0 1911  5005 285 W 0.10 Sol/W |
+# '+---+-------+----+-----+-----------+------+----+-----+-----+-----------+
+# "mining" Output
+# ethash
+# '|  1 Unknown  N/A 0 %  22.07 MH/s  0/0/0    0   0   N/A        N/A |
+
+#echo ${FATAL_ERR_CNT}.lock ${RETRIES_COUNT}.lock ${BoooooS_COUNT}.lock
+
+#    touch ${FATAL_ERR_CNT}.lock ${RETRIES_COUNT}.lock ${BoooooS_COUNT}.lock
+	    hashCount=$(cat ${BENCHLOGFILE} \
+		| tail -n +$hash_line \
+		| tee >(grep -E -c -m1 -e "${ERREXPR}" >${FATAL_ERR_CNT}; \
+			rm -f ${FATAL_ERR_CNT}.lock) \
+		      >(grep -E -c -m1 -e "${CONEXPR}" >${RETRIES_COUNT}; \
+			rm -f ${RETRIES_COUNT}.lock) \
+		      >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+                               BEGIN { yeses=0; booos=0; seq_booos=0 }
+                               $0 ~ BOO { booos++; seq_booos++; next }
+                               $0 ~ YES { yeses++; seq_booos=0;
+                                            if (match( $NF, /[+*]+/ ) > 0)
+                                               { yeses+=(RLENGTH-1) }
+                                          }
+                               END { print seq_booos " " booos " " yeses;
+			             # zu Debugzwecken die Suchmuster, die angekommen sind, ausgeben
+			             print BOO; print YES; }' >${BoooooS_COUNT} 2>/dev/null; \
+			rm -f ${BoooooS_COUNT}.lock) \
+		| sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+		| gawk -e "${detect_zm_hash_count}" \
+		| grep -E -c "/s\s*$"
+             )
+ #   while [[ -f ${FATAL_ERR_CNT}.lock || -f ${RETRIES_COUNT}.lock || -f ${BoooooS_COUNT}.lock ]]; do sleep .001; done
+#		| grep -E -c "/s\s*$"
+#		| sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+
+    echo $hashCount
+    cat ${BoooooS_COUNT}
+    exit
+
+    hashCount=$(cat ${BENCHLOGFILE} \
+		    | gawk -e "${detect_zm_hash_count}" \
+		    | grep -E -c "/s\s*$"
+             )
+    exit
+    
 miner_name=miniZ
 miner_version=1.7x3
 MINER=${miner_name}#${miner_version}
@@ -12,17 +88,31 @@ BENCHLOGFILE="../miners/miniz-beamhash-test.log"
 #BENCHLOGFILE="../miners/miniz-equihash-test.log" # <--- Hat gerechnet, aber in 12 Minuten keinen einzigen Share abgeliefert. Muss die 320s Regel greifen!
 #BENCHLOGFILE="../miners/miniz-kawpow-test.log"
 BENCHLOGFILE="../miners/miniZ-6.log"
+# mining-2
+if [ "$(uname -n)" == "mining-2" ]; then
+    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miniZ#1.7x3/ethash/NoBenchStarted_20210528_162304_benchmark.log"
+else
+    #mining
+    BENCHLOGFILE="/mnt/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miniZ#1.7x3/ethash/NoBenchStarted_20210528_162304_benchmark.log"
+fi
+#cat ${BENCHLOGFILE}
 
 # [ 0d 0h18m30s] S: 97/1/0 0>RTX 3070  100% [0.C/ 0%]* 61.87(56.98)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
 # [INFO   ] Target set to 00000004F784BD45 (864.72M)
 # [ 0d 0h18m40s] S:101/1/0 0>RTX 3070  100% [0.C/ 0%]* 62.26(57.11)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
 # [ 0d 1h13m30s] S:448/15/4 0>RTX 3070 99.1% [0.C/ 0%]* 62.15(61.88)MH/s   0(  0.0)W clk=1815MHz mclk=7001MHz MH/W=inf
 
+# mining-2 erster Benchmark-Lauf
+# [ 0d 0h 1m20s] S:  0/0/0 0>GTX 1080 Ti  100% [44.C/87%]  32.11(32.11)MH/s 192(191.4)W clk=1974MHz mclk=5005MHz MH/W=0.17
+# [ 0d 0h 1m30s] S:  1/0/0 0>GTX 1080 Ti  100% [45.C/87%]* 32.26(32.26)MH/s 192(191.6)W clk=1974MHz mclk=5005MHz MH/W=0.17
+# [ 0d 0h 1m40s] S:  3/0/0 0>GTX 1080 Ti  100% [45.C/86%]* 32.39(32.39)MH/s 193(191.9)W clk=1974MHz mclk=5005MHz MH/W=0.17
+# [ 0d 0h 1m50s] S:  3/0/0 0>GTX 1080 Ti  100% [45.C/90%]  32.57(32.57)MH/s 193(192.1)W clk=1974MHz mclk=5005MHz MH/W=0.17
+
 detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0; last_shares=0 }
 /[[]WARNING[]] (Bad|Stale) share:/ { booos++; seq_booos++; next }
 match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
    yeses++; seq_booos=0;
-   S1 = substr( $0, RSTART+2, RLENGTH )
+   S1 = substr( $0, RSTART+2, RLENGTH-2 )
    SN = split( S1, SA )
    if (match( SA[ SN ], /\([[:digit:].]+\).*(Sol|H)\/s/ )) {
        M = substr( SA[ SN ], RSTART+1, RLENGTH );
@@ -46,6 +136,7 @@ END {
 }
 '
 BOOFILE_for_GWAK=${MINER}.booos
+rm ${BOOFILE_for_GWAK}
 
 read hashCount speed einheit <<<$(
     cat ${BENCHLOGFILE} \
@@ -54,6 +145,12 @@ read hashCount speed einheit <<<$(
 echo ${hashCount} ${speed} ${einheit}
 cat ${BOOFILE_for_GWAK}
 exit
+
+
+
+
+
+
 rm -f ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock \
    ${BOOFILE_for_GWAK} \
    ${temp_hash_bc} ${temp_hash_sum}
