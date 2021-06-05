@@ -73,7 +73,7 @@ declare -i t_base=3             # Messintervall in Sekunden für Temperatur, Clo
 
 # Durch Parameterübergabe beim Aufruf änderbar:
 declare -i MIN_HASH_COUNT=20    # -m Anzahl         : Mindestanzahl Hashberechnungswerte, die abgewartet werden müssen
-declare -i MIN_WATT_COUNT=60    # -w Anzahl Sekunden: Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
+declare -i MIN_WATT_COUNT=180   # -w Anzahl Sekunden: Mindestanzahl Wattwerte, die in Sekundenabständen gemessen werden
 STOP_AFTER_MIN_REACHED=1        # -t : setzt Abbruch nach der Mindestlaufzeit- und Mindest-Hashzahleenermittlung auf 0
 #      Das ist der Tweak-Mode. Standard ist der Benchmark-Modus
 bENCH_KIND=2                    # -t == 1; Standardwerte == 2; -w/-m used == 3; 0 == unknown; 888 == FullPowerMode

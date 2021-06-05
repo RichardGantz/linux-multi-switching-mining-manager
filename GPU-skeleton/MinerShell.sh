@@ -66,13 +66,14 @@ domain=$7
 server_name=$8
 miner_device=$9
 
+printf "=========         Beginn neues Logfile um:    %s         =========\n" "$(date "+%Y-%m-%d %H:%M:%S     %s")"
 if [ ${debug} -eq 1 ]; then
     echo "Anzahl Parameter: $#" | tee .positionals.last
     for positional in "$@"; do
 	echo ${positional} | tee -a .positionals.last
     done
     echo "--------------------"
-    echo "$coin $pool $miningAlgo $miner_name $miner_version muck:$muck888" | tee -a .positionals.last
+    echo "coin:$coin pool:$pool miningAlgo:$miningAlgo miner_name:$miner_name miner_version:$miner_version muck:$muck888" | tee -a .positionals.last
 fi
 
 # Rest ist Nvidia GPU Default Tuning CmdStack
@@ -146,7 +147,7 @@ _build_minerstart_commandline () {
 
 
 _delete_temporary_files () {
-    [[ -n "${MINER}" ]] && rm -f ${MINER}.retry ${MINER}.booos
+    [[ -n "${MINER}" ]] && rm -f ${MINER}.fatal_err ${MINER}.retry ${MINER}.booos
     rm -f ${BENCHLOGFILE} .positionals.last
 }
 _delete_temporary_files
@@ -161,11 +162,13 @@ _On_Exit () {
 
     # Auf jeden Fall das LOGFILE aufheben... nach möglichen anderen Abgebrochenen als ULTIMATIVES dieses Zyklus
     cp -f ${BENCHLOGFILE} ${LOGPATH}/$(date "+%Y%m%d_%H%M%S")_mining.log
+    cp -f Miner_${MINER}_STARTS_HISTORY Miner_${MINER}_STARTS_HISTORY.BAK
 
     if [ ${debug} -eq 0 ]; then
         _delete_temporary_files
     fi
-    rm -f ${This}.pid
+    rm -f ${This}.pid Miner_${MINER}_STARTS_HISTORY
+    printf "=========         Leaving _On_Exit()   um:    %s         =========\n\n" $(date "+%Y-%m-%d %H:%M:%S     %s")
 }
 trap _On_Exit EXIT
 
@@ -210,7 +213,7 @@ if [ ${nvidia_settings_unsolved} -eq 1 -o ${ScreenTest} -eq 1 ]; then
     done
 else
     for (( i=0; $i<${#CmdStack[@]}; i++ )); do
-	${CmdStack[$i]} | tee -a ${ERRLOG} ${BENCHLOGFILE}
+	${CmdStack[$i]} | tee -a ${BENCHLOGFILE} # | tee -a ${ERRLOG} ${BENCHLOGFILE}
     done
 fi
 
@@ -245,10 +248,11 @@ while :; do
 	zeitstempel_t1=${NOWSECS}.${nowFrac}
         echo $(date -d "@${NOWSECS}" "+%Y-%m-%d %H:%M:%S" ) ${zeitstempel_t1} \
              "GPU #${gpu_idx}: ZEITMARKE t1: Starting Miner alias ${coin_algorithm} with the following command line:" \
-            | tee -a ${ERRLOG} ${BENCHLOGFILE}
-        echo ${minerstart}
+            | tee -a ${BENCHLOGFILE}
+		#| tee -a ${ERRLOG} ${BENCHLOGFILE}
+        echo "${minerstart}" | tee -a ${BENCHLOGFILE}
 
-	m_cmd="${minerstart} > >(tee -a ${BENCHLOGFILE}) 2> >(tee -a ${BENCHLOGFILE} >&2)"
+	m_cmd="${minerstart} &> >(tee -a ${BENCHLOGFILE})"
         if [ ${RT_PRIORITY[${ProC}]} -gt 0 ]; then
 	    cmd="${LINUX_MULTI_MINING_ROOT}/.#rtprio# ${RT_POLICY[${ProC}]} ${RT_PRIORITY[${ProC}]}"
         else
@@ -257,6 +261,7 @@ while :; do
 
 	### SCREEN ADDITIONS: ###
 	if [ ${UseScreen} -eq 1 ]; then
+	    Miner_LOG_Title="M#${gpu_idx}"
 	    if [ ${ScreenTest} -eq 1 ]; then
 		echo '---> Im Normalbetrieb würde jetzt mit folgendem Kommando der binäre Miner im Hintergrund gestartet werden:'
 		echo "cmd == ${cmd} ${m_cmd} &"
@@ -272,13 +277,40 @@ while :; do
 		${find_and_kill_this_pseudo_miner_cmd} &
 		echo $! | tee ${MINER}.pid
 	    else
-		# $$$$$$$$$$$$$$$$$$$$
-		# Warum nicht tatsächlich im eigenen Hintergrund statt in der BACKGROUND-Session laufen lassen?
-		# Wir probieren das mal aus. Können es aber auch ändern, wenn wir doch noch ein kleines bisschen mehr sehen wollen.
-		# Zumindest sieht man in der BACKGROUND-Session ja ein eigens Screen-Fenster und das Aufruf-Kommando.
-		# Für den Fall  mit der BG_SESS, muss auch noch das Problem mit der Datei ${MINER}.pid anders gelöst werden!
-		"${cmd} ${m_cmd}" &
-		echo $! | tee ${MINER}.pid
+		printf -v cmd "%s %s" "${cmd}" "${m_cmd}"
+		#echo "cmd == ${cmd}" >>Miner_${MINER}_STARTS_HISTORY
+		if [ 1 -eq 0 ]; then
+		    # Tja, SO HAT ES LEIDER NICHT FUNKTIONIERT.
+		    #      "Datei oder Verzeichnis nicht gefunden" nach "${cmd} ${m_cmd}" &
+		    #      obwohl das Kommando, in eine kure, ausführe .sh Datei gepackt, sehr wohl den t-rex gestartet hat.
+		    # $$$$$$$$$$$$$$$$$$$$
+		    # Warum nicht tatsächlich im eigenen Hintergrund statt in der BACKGROUND-Session laufen lassen?
+		    # Wir probieren das mal aus. Können es aber auch ändern, wenn wir doch noch ein kleines bisschen mehr sehen wollen.
+		    # Zumindest sieht man in der BACKGROUND-Session ja ein eigens Screen-Fenster und das Aufruf-Kommando.
+		    # Für den Fall  mit der BG_SESS, muss auch noch das Problem mit der Datei ${MINER}.pid anders gelöst werden!
+		    #		"${cmd} ${m_cmd}" &
+		    "${cmd}" &
+
+		    echo "Die PID des Miners, der in den Hintergrund geschickt wurde:"
+		    _pid_=$!
+		    echo ${_pid_} | tee ${MINER}.pid
+		else
+		    # Wir befinden uns hier in der ${BG_SESS} BACKGROUND-Session
+		    screen -X screen -t ${Miner_LOG_Title}
+		    screen -p ${Miner_LOG_Title} -X stuff "${cmd}"'\nHISTSIZE=0\nexit\n'
+		    REGEXP=${minerstart//\+/\\+}
+		    while :; do
+			read _pid_ _cmd_ <<<$(pgrep -fa "${REGEXP}")
+			[[ "${_pid_}" != "" && "${_cmd_}" == "${minerstart}" ]] && break
+			echo "Still waiting for miner to show up in the process table"
+			sleep .5
+		    done
+		    # Der Miner ist erfolgreich gestartet, 1x erscheint die obige Meldung meistens, was bedeutet, dass er nach 1x sleep .5 da ist
+		    echo "${_pid_}" >${MINER}.pid
+		fi
+		printf -v to_cmd_history "%s %5d %s" $(date +%s) ${_pid_} "${cmd}"
+		echo "${to_cmd_history}" >>Miner_${MINER}_STARTS_HISTORY
+		cat Miner_${MINER}_STARTS_HISTORY
 	    fi
 
 	    MINER_pid=$(< ${MINER}.pid)
@@ -286,11 +318,10 @@ while :; do
 	    # (Die function _terminate_Logger_Terminal in gpu-bENCH.inc beendet genau den Prozess ${Bench_Log_PTY_Cmd})
 	    Bench_Log_PTY_Cmd="tail -f ${BENCHLOGFILE}"
 	    cmd="${Bench_Log_PTY_Cmd}"'\nHISTSIZE=0\nexit\n'
-	    Miner_LOG_Title="M#${gpu_idx}"
 	    screen -drx ${FG_SESS} -X screen -t ${Miner_LOG_Title}
 	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "cd ${LINUX_MULTI_MINING_ROOT}/${gpu_uuid}\n"
 	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X stuff "${cmd}"
-	    screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X select LMMS
+	    #screen -drx ${FG_SESS} -p ${Miner_LOG_Title} -X select LMMS
 
 	    # Im Testmodus gleich wieder auf den originalen Wert zurücksetzen
 	    [ -n "${NORMAL_BENCHLOGFILE}" ] && BENCHLOGFILE=${NORMAL_BENCHLOGFILE}

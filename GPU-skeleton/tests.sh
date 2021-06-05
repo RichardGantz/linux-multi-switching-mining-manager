@@ -9,6 +9,35 @@
 [[ ${#_ALGOINFOS_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/algo_infos.inc
 [[ ${#_NVIDIACMD_INCLUDED}   -eq 0 ]] && source ${LINUX_MULTI_MINING_ROOT}/benchmarking/nvidia-befehle/nvidia-query.inc
 
+printf "=========         Beginn neues Logfile um:    %s         =========\n" "$(date "+%Y-%m-%d %H:%M:%S     %s")"
+exit
+
+minerstart="/home/avalon/miner/t-rex/t-rex-0.19.12/t-rex -o stratum+tcp://daggerhashimoto.eu-west.nicehash.com:3353 -u 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.012c54bb -p x --devices 1 -a ethash --no-color --pci-indexing --api-bind-telnet 0 --api-bind-http 0"
+minerstart="./t-rex -a ethash -o stratum+tcp://daggerhashimoto.eu-west.nicehash.com:3353 -u 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.99 -p x --no-color -l /home/avalon/miner/t-rex/t-rex-1-daggerhashimoto.log --api-bind-telnet 0 --api-bind-http 0 --pci-indexing -d 1"
+minerstart="/home/avalon/miner/t-rex/t-rex-0.20.3/t-rex -o stratum+tcp://daggerhashimoto.eu-west.nicehash.com:3353 -u 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.012c54bb -p x --devices 1 -a ethash --no-color --pci-indexing --api-bind-telnet 0 --api-bind-http 0"
+MINER=t-rex#0.20.3
+REGEXP=${minerstart//\+/\\+}
+		    while :; do
+			read _pid_ _cmd_ <<<$(pgrep -fa "${REGEXP}")
+			[[ "${_pid_}" != "" && "${_cmd_}" == "${minerstart}" ]] && break
+			#[[ "${_pid_}" != "" ]] && break
+			echo "Still waiting for miner to show up in the process table"
+			sleep .5
+		    done
+		    echo "${_pid_}" # >${MINER}.pid
+		    cat ~/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/${MINER}.pid
+exit
+		    echo "${REGEXP}"
+read _pid_ _cmd_ <<<$(pgrep -fa "${REGEXP}"; echo $? > .exit_status)
+RC=$? # Immer 0
+echo "Exit Status pgrep: " $(< .exit_status)
+echo "PID: \"${_pid_}\" CMD: \"${_cmd_}\""
+if [ "${_cmd_}" == "${minerstart}" ]; then
+    echo "PROCESS FOUND!"
+fi
+rm .exit_status
+exit
+
 _read_in_SYSTEM_FILE_and_SYSTEM_STATEin
 for gpu_idx in {0..12}; do
     gpu_uuid=${uuid[${gpu_idx}]}

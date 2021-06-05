@@ -185,6 +185,9 @@ function _On_Exit () {
 	rm -f ${LINUX_MULTI_MINING_ROOT}/screen/.screenrc.${BG_SESS}
     fi
 
+    # Da ist wenigstens der "tail -f multi_mining_calc.log" drin
+    kill "${BG_PIDs[@]}"
+    exec 9>&-
     rm -f ${This}.pid
     printf "MultiMiner: CLEANING UP RESOURCES FINISHED... exiting NOW.\n"
 }
@@ -238,11 +241,15 @@ fi
 #read -p "Press ENTER to continue after Screens have built up..." xyz
 #exit
 
-MultiMining_log=${LINUX_MULTI_MINING_ROOT}/${This}.log
+# Kopie von stdout erstellen
 exec 9>&1
+MultiMining_log=${LINUX_MULTI_MINING_ROOT}/${This}.log
 #mv -f ${MultiMining_log} ${MultiMining_log}.BAK
+# stdout in Datei umleiten
 exec 1>>${MultiMining_log}
+# Die Datei auf der Kopie des originalen stdout ausgeben... im Hintergrund ???
 tail -f ${MultiMining_log} >&9 &
+BG_PIDs+=( $! )
 
 exec 2>>${ERRLOG}
 # Error-Kanal in eigenes Terminal ausgeben
@@ -326,6 +333,24 @@ while : ; do
     for lfdUuid in "${!uuidEnabledSOLL[@]}"; do
         if [ ${uuidEnabledSOLL[${lfdUuid}]} -eq 1 ]; then
             if [ ! -f ${lfdUuid}/gpu_gv-algo.pid ]; then
+
+		# 2021-06-01:
+		# Wenn es in diesem Array einen Eintrag für die gpu_idx gibt, war die GPU schon einmal gestartet und hatte sich,
+		# z.B. wegen Auto-Benchmark selbst wieder beendet.
+		# In diesem Fall muss das Logger-Terminal erst wieder beseitigt werden.
+                if [ -n "${LOG_PTY_CMD[${lfd_gpu_idx}]}" ]; then
+		    # Aus man screen (mal sehen, ob das wirklich stimmt):
+		    # "When a program terminates, screen (per default) kills the window that contained it."
+		    #if [ ${UseScreen} -eq 1 ]; then
+		    #   GPU_gv_LOG_Title="GV#${lfd_gpu_idx}"
+		    #   screen -p ${GPU_gv_LOG_Title} -X remove
+		    #else
+			REGEXPAT="${LOG_PTY_CMD[${lfd_gpu_idx}]//\//\\/}"
+			REGEXPAT="${REGEXPAT//\+/\\+}"
+			pkill -f "${REGEXPAT}"
+		    #fi
+		    unset LOG_PTY_CMD[${lfd_gpu_idx}]
+		fi
 
                 # Ins GPU-Verzeichnis wechseln
                 cd ${lfdUuid}
@@ -448,7 +473,6 @@ Danach erfolgt ein exit.
 			  --title="\"RealTime\" Algos und Kurse aus dem Web" \
 			  --geometry="100x24+${ofsX}+${ofsY}" \
 			  -e "${LOG_PTY_CMD[998]}"
-            exec 1>>${MultiMining_log}
 	fi
     fi
 
@@ -833,7 +857,7 @@ Danach erfolgt ein exit.
         declare -n actSortedProfits="SORTED${gpu_idx}PROFITs"
 
         numAlgos=${#actGPUAlgos[@]}
-	if [ 1 -eq 0 -a ${verbose} -eq 1 ]; then
+	if [ ${debug} -eq 1 ]; then
 	    echo "Anzahl aktueller Algos von GPU#${gpu_idx}: ${numAlgos}" 
 	fi
         # Wenn die GPU seit neuestem generell DISABLED ist, pushen wir sie hier auf den
@@ -883,14 +907,31 @@ Danach erfolgt ein exit.
                         # Punkt raus und gucken, ob > 0, sonst interessiert uns das ebenfalls nicht
                         _octal_=${ACTUAL_REAL_PROFIT//\.}
                         _octal_=${_octal_//0}
-			if [ 1 -eq 0 -a ${debug} -eq 1 ]; then
+			if [ 1 -eq 1 -a ${debug} -eq 1 ]; then
 			    echo "\${ACTUAL_REAL_PROFIT}: ${ACTUAL_REAL_PROFIT}"
 			fi
                         if [[ "${ACTUAL_REAL_PROFIT:0:1}" != "-" && ${#_octal_} -gt 0 ]]; then
                             profitableAlgoIndexes+=( ${algoIdx} )
                             actAlgoProfit[${algoIdx}]=${ACTUAL_REAL_PROFIT}
                         fi
-                    done
+                        if [[ ! "${MAX_PROFIT}" == "${OLD_MAX_PROFIT}" ]]; then
+                            MAX_PROFIT_GPU_Algo_Combination="${gpu_idx}:${algoIdx},"
+			    echo "Neue \$MAX_PROFIT_GPU_Algo_Combination: -->${MAX_PROFIT_GPU_Algo_Combination}<--"
+		            msg="New Maximum Profit ${MAX_PROFIT} with GPU:AlgoIndexCombination ${MAX_PROFIT_GPU_Algo_Combination}"
+		            MAX_PROFIT_MSG_STACK+=( ${msg} )
+		        fi
+
+		        # (17.11.2017)
+		        # Wir halten jetzt auch die MAX_FP_MINES und die dabei verbrauchten Watt in MAX_FP_WATTS fest
+		        # Das sind Daten, die wir "nebenbei" festhalten für den Fall,
+		        #     dass IM MOMENT (für den kommenden Zyklus) GARANTIERT KEINE NETZPOWER BEZOGEN WERDEN MUSS
+		        if [[ ! "${MAX_FP_MINES}" == "${OLD_MAX_FP_MINES}" ]]; then
+		            MAX_FP_WATTS=${actAlgoWatt[$algoIdx]}
+		            MAX_FP_GPU_Algo_Combination="${gpu_idx}:${algoIdx},"
+		            msg="New FULL POWER Profit ${MAX_FP_MINES} with GPU:AlgoIndexCombination ${MAX_FP_GPU_Algo_Combination} and ${MAX_FP_WATTS}W"
+		            MAX_FP_MSG_STACK+=( ${msg} )
+		        fi
+		    done
 
                     profitableAlgoIndexesCnt=${#profitableAlgoIndexes[@]}
                     if [[ ${profitableAlgoIndexesCnt} -gt 0 ]]; then
@@ -920,24 +961,13 @@ Danach erfolgt ein exit.
                             | tee .sort_profit_algoIdx_${gpu_idx}.out \
                             | readarray -n 0 -O 0 -t SORTED_PROFITS
                         [ ${profitableAlgoIndexesCnt} -gt ${BEST_ALGO_CNT} ] && profitableAlgoIndexesCnt=${BEST_ALGO_CNT}
-                        if [ ! : ]; then
-                            for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
-                                dstIdx=$((${profitableAlgoIndexesCnt}-${sortIdx}-1))
-                                actSortedProfits[${dstIdx}]=${SORTED_PROFITS[${sortIdx}]}
-                                algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
-                                actCandidatesAlgoIndexes[${dstIdx}]=${algoIdx}
-                                dstAlgoWatts[${dstIdx}]=${actAlgoWatt[${algoIdx}]}
-                                dstAlgoMines[${dstIdx}]=${actAlgoMines[${algoIdx}]}
-                            done
-                        else
-                            for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
-                                actSortedProfits[${sortIdx}]=${SORTED_PROFITS[${sortIdx}]}
-                                algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
-                                actCandidatesAlgoIndexes[${sortIdx}]=${algoIdx}
-                                dstAlgoWatts[${sortIdx}]=${actAlgoWatt[${algoIdx}]}
-                                dstAlgoMines[${sortIdx}]=${actAlgoMines[${algoIdx}]}
-                            done
-                        fi
+                        for ((sortIdx=0; $sortIdx<${profitableAlgoIndexesCnt}; sortIdx++)); do
+                            actSortedProfits[${sortIdx}]=${SORTED_PROFITS[${sortIdx}]}
+                            algoIdx=${SORTED_PROFITS[${sortIdx}]#* }
+                            actCandidatesAlgoIndexes[${sortIdx}]=${algoIdx}
+                            dstAlgoWatts[${sortIdx}]=${actAlgoWatt[${algoIdx}]}
+                            dstAlgoMines[${sortIdx}]=${actAlgoMines[${algoIdx}]}
+                        done
                         exactNumAlgos[${gpu_idx}]=${profitableAlgoIndexesCnt}
 			WATTS_Parameter_String_for_mm_calC+="${dstAlgoWatts[@]} "
 			MINES_Parameter_String_for_mm_calC+="${dstAlgoMines[@]} "
@@ -1192,6 +1222,8 @@ Danach erfolgt ein exit.
 	    fi
         else
 	    echo "Keine Gesamtberechnung nötig. Es ist nur 1 GPU aktiv und die wurde schon berechnet."
+	    echo "Das wäre der \$WATTS_Parameter_String_for_mm_calC: ${WATTS_Parameter_String_for_mm_calC}"
+	    echo "Das wäre der \$MINES_Parameter_String_for_mm_calC: ${MINES_Parameter_String_for_mm_calC}"
         fi  # if [[ ${MAX_GOOD_GPUs} -gt 1 ]]; then
     else
         echo "ACHTUNG: Keine Berechnungsdaten verfügbar oder alle negativ oder alle GPU's Disabled. Es finden im Moment keine Berechnungen statt."
@@ -1249,6 +1281,14 @@ Danach erfolgt ein exit.
     #        GPU#8 hat (mindestens) 2 gewinnbringende Algorithmen, die über Index 0 und 1 angesteuert werden.
     #              Bei dieser Berechnung ist GPU#8 mit dem Algo und Watt, der hinter Index 1 steckt, berechnet worden.
     #
+    # 2021-06-02:
+    # ACHTUNG:
+    # Nach einer Einzelberechnung sieht der String MAX_PROFIT_GPU_Algo_Combination anders aus als nach einer Gesamtberechnung wegen MAX_GOOD_GPUs > 1:
+    # Der String enthält den echten AlgoIndex, der NICHT MEHR konvertiert werden muss, z.B. 3 für daggerhashimoto#t-rex#0.19.12
+    # Bei einer Gesamtberechnung (durch mm_calc) wird dieser String komplett neu geschrieben und enthält INDIREKTE AlgoIndexes in das Array PossibleCandidate${gpu_idx}AlgoIndexes[],
+    #     das sind Werte, die von 0 bis BEST_ALGO_CNT-1 laufen und der Wert in dem Array enthält den echten AlgoIndex.
+    # Deshalb wird etwas weiter unten der Fall MAX_GOOD_GPUs == 1 abgefragt, damit der AlgoIndex NICHT aus dem Array geholt wird,
+    #     sondern so bleibt, wie er in dem String MAX_PROFIT_GPU_Algo_Combination steht.
     unset GPUINDEXES; declare -ag GPUINDEXES
     read -a GPUINDEXES <<<"${MAX_PROFIT_GPU_Algo_Combination//,/ }"
 
@@ -1274,7 +1314,14 @@ Danach erfolgt ein exit.
         declare -n actGPUalgoWatt="GPU${gpu_idx}Watts"
         # Korrektur vom bc-indirekt-AlgoIdx zum tatsächlichen algoIdx
         declare -n actCandidatesAlgoIndexes="PossibleCandidate${gpu_idx}AlgoIndexes"
-        algoidx=${actCandidatesAlgoIndexes[${bc_algoidx}]}
+	if [ ${MAX_GOOD_GPUs} -eq 1 ]; then
+	    algoidx=${bc_algoidx}
+	else
+            algoidx=${actCandidatesAlgoIndexes[${bc_algoidx}]}
+	fi
+	if [ ${debug} -eq 1 ]; then
+	    echo "\$bc_algoidx und \$algoidx: $bc_algoidx und $algoidx"
+	fi
         gpu_uuid=${uuid[${gpu_idx}]}
 
         declare -n actSortedProfits="SORTED${gpu_idx}PROFITs"

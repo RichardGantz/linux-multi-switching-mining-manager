@@ -136,21 +136,21 @@ detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0; last_shares=0 }
 match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
    yeses++; seq_booos=0;
    S1 = substr( $0, RSTART+2, RLENGTH-2 )
-   SN = split( S1, SA )
-   if (match( SA[ SN ], /\([[:digit:].]+\).*(Sol|H)\/s/ )) {
-       M = substr( SA[ SN ], RSTART+1, RLENGTH );
-       speed   = substr( M, 1, index(M,")")-1 )
-       einheit = substr( SA[ SN ], index( SA[ SN ], ")" )+1 )
-       shares  = substr( SA[ 1 ], 1, index(SA[ 1 ],"/")-1 )
-       if (length(_BC_)) {
-       	  delta = shares - last_shares
-	  last_shares = shares
-	  print delta "*" speed " " einheit
-       } else if (length(EINHEIT)) {
-       	      if (einheit ~ /H\/s\s*$/) {einheit = "H/s"; exit}
-	      einheit = "Sol/s"
-       	      exit
-	 }
+   ###  2/0/0 0>GTX 1080 Ti  100% [48.C/ 0%]*48.08 I/s  95.96( 95.96)Sol/s
+   # Die Zahl bis zum ersten "/" sind die abgegebenen Shares
+   shares  = substr( S1, 1, index( S1, "/" )-1 )
+   sStart  = index( S1, "(" )+1
+   eStart  = index( S1, ")" )+1
+   speed   = substr( S1, sStart, eStart-1 - sStart )
+   einheit = substr( S1, eStart )
+   if (length(_BC_)) {
+      delta = shares - last_shares
+      last_shares = shares
+      print delta "*" speed " " einheit
+   } else if (length(EINHEIT)) {
+       if (einheit ~ /H\/s\s*$/) {einheit = "H/s"; exit}
+       einheit = "Sol/s"
+       exit
    }
 }
 END {
@@ -179,6 +179,7 @@ FATAL_ERROR_MSGs=(
     # '16:14:04 Miner terminated, watchdog will restart process after 10 seconds
     ' Error on GPU[[:xdigit:]]+: out of memory'
     ' Stopped Mining on GPU[[:xdigit:]]+'
+
 )
 
 # Regexp Patterns, die den Abbruch oder das nicht Zustandekommen der Verbindung
@@ -276,11 +277,14 @@ NOT_ACCEPTED_MSGs=(
     # '17:02:07 GPU1: Share #2 rejected: Invalid solution size.
     ' GPU[[:xdigit:]]+: Share #[[:digit:]]+ rejected'
 
-    # "t-rex":
+    # "t-rex"
+    # 0.19.x:
     # " [FAIL] 13216/13229 - Job not found., 98ms ... GPU #0
     # '[FAIL] 16256/16273 - Share validation error., 5170ms ... GPU #4
     # '[FAIL] 15318/15331 - Share above target., 67ms ... GPU #4
-    '^\\\s?[[]FAIL[]] [[:digit:]/ -]*(Job not found|Share validation error|Share above target)'
+    # 0.20.3
+    # '20210605 16:31:05 [FAIL] 5341/5374 - Job not found., 507ms ... GPU #1
+    '\\\s?[[]FAIL[]] [[:digit:]/ -]*(Job not found|Share validation error|Share above target)'
 
     # "ccminer"
     #2017-11-20 18:00:37] accepted: 0/1 (diff 9.171), 1608.05 MH/s (booooo)
@@ -341,18 +345,21 @@ YES_ACCEPTED_MSGs=(
     # '16:17:25 GPU1: Share #76 accepted 61 ms
     ' GPU[[:digit:]]+: Share #[[:digit:]]+ accepted [[:digit:]]+ .*s$'
 
-
-    # "t-rex .12":
-    # " [ OK ] 13216/13228 - 37.28 MH/s, 56ms ... GPU #0
-    # " [FAIL] 13216/13229 - Job not found., 98ms ... GPU #0
-    # " [ OK ] 13217/13230 - 37.28 MH/s, 54ms ... GPU #0
-    # " [ OK ] 13218/13231 - 37.28 MH/s, 51ms ... GPU #0
-    # "t-rex .14":
-    #   octopus epoch: 21, block: 11505283, diff: 1.53 G
-    #  "[ OK ] 1/1 - 39.45 MH/s, 63ms ... GPU #2
-    #   WARN: ApiServer: failed to bind socket 127.0.0.1:4067 (Address already in use), next attempt in 5 seconds.
-    #   octopus epoch: 21, block: 11505284, diff: 1.53 G
-    '^\\\s?[[] OK []] [[:digit:]/ ]*- [[:digit:].]* '
+    # "t-rex 0.19.12":
+    # ' [ OK ] 13216/13228 - 37.28 MH/s, 56ms ... GPU #0
+    # ' [FAIL] 13216/13229 - Job not found., 98ms ... GPU #0
+    # ' [ OK ] 13217/13230 - 37.28 MH/s, 54ms ... GPU #0
+    # ' [ OK ] 13218/13231 - 37.28 MH/s, 51ms ... GPU #0
+    # "t-rex 0.19.14":
+    # ' octopus epoch: 21, block: 11505283, diff: 1.53 G
+    # '[ OK ] 1/1 - 39.45 MH/s, 63ms ... GPU #2
+    # ' WARN: ApiServer: failed to bind socket 127.0.0.1:4067 (Address already in use), next attempt in 5 seconds.
+    # ' octopus epoch: 21, block: 11505284, diff: 1.53 G
+    # "t-rex 0.20.3":
+    # '20210605 17:55:17 [ OK ] 5841/5874 - 36.34 MH/s, 55ms ... GPU #1
+    # '20210605 17:55:25 [ OK ] 5842/5875 - 36.34 MH/s, 60ms ... GPU #1
+    # '20210605 17:55:29 [ OK ] 5843/5876 - 36.33 MH/s, 60ms ... GPU #1
+    '\\\s?[[] OK []] [[:digit:]/ ]*- [[:digit:].]* '
 
     # "ccminer"
     #[2017-11-17 19:31:25] GPU #0: Zotac GTX 980 Ti, 6884.15 MH/s

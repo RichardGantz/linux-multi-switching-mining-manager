@@ -3,27 +3,147 @@
 [[ ${#_GLOBALS_INCLUDED} -eq 0     ]] && source ../globals.inc
 [[ ${#_LOGANALYSIS_INCLUDED} -eq 0 ]] && source ../logfile_analysis.inc
 
+# 2021-06-05 - Problem gelöst
+# Die .booos scheinen nicht zu funktionieren bei den t-rex 0.19.14 und 0.20.3 ???
+# Der 0.20.3 hat wieder zusätzlich vor den [ OK ] und [FALS] etwas ausgegeben.
+# Die Entfernung des '^' am Anfang des Suchmusters hat genügt, um das Problem zu beheben.
+miner_name=t-rex
+miner_version=0.20.3
+MINER=${miner_name}#${miner_version}
+BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/live/t-rex#0.20.3_ethash_mining.log"
+
+
+# '20210605 17:55:17 [ OK ] 5841/5874 - 36.34 MH/s, 55ms ... GPU #1
+# '20210605 17:55:25 [ OK ] 5842/5875 - 36.34 MH/s, 60ms ... GPU #1
+# '20210605 17:55:29 [ OK ] 5843/5876 - 36.33 MH/s, 60ms ... GPU #1
+
+echo "${YESEXPR}"
+echo "${BOOEXPR}"
+# YESEXPR:
+# GPU[[:digit:]]+: Share #[[:digit:]]+ accepted [[:digit:]]+ .*s$|^\\s?[[] OK []] [[:digit:]/ ]*- [[:digit:].]* 
+# BOOEXPR:
+# GPU[[:xdigit:]]+: Share #[[:digit:]]+ rejected|^\\s?[[]FAIL[]] [[:digit:]/ -]*(Job not found|Share validation error|Share above target)
+#YESEXPR="^\\s?[[] OK []] [[:digit:]/ ]*- [[:digit:].]* "  # <-- NOGO
+#YESEXPR="\\s?[[] OK []] [[:digit:]/ ]*- [[:digit:].]* "   # GOOD
+
+	    hashCount=$(cat ${BENCHLOGFILE} \
+			| tee >(grep -E -c -m1 -e "${ERREXPR}" >${MINER}.fatal_err; \
+				rm -f ${MINER}.fatal_err.lock) \
+			      >(grep -E -c -m1 -e "${CONEXPR}" >${MINER}.retry; \
+				rm -f ${MINER}.retry.lock) \
+                              >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+                                   BEGIN { yeses=0; booos=0; seq_booos=0 }
+                                   $0 ~ BOO { booos++; seq_booos++; next }
+                                   $0 ~ YES { yeses++; seq_booos=0;
+                                               if (match( $NF, /[+*]+/ ) > 0)
+                                                  { yeses+=(RLENGTH-1) }
+                                            }
+                                   END { print seq_booos " " booos " " yeses }' >${MINER}.booos; \
+				       rm -f ${MINER}.booos.lock) \
+			      >(grep -E -c -e "${OVREXPR}" >${MINER}.overclock; \
+				rm -f ${MINER}.overclock.lock) \
+			| sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+			| gawk -e "${detect_zm_hash_count}" \
+			| grep -E -c "/s\s*$")
+#
+:
+echo $hashCount
+cat ${MINER}.booos
+exit
+
 miner_name=miner
 miner_version=2.51
+
+miner_name=miniZ
+miner_version=1.7x3
 MINER=${miner_name}#${miner_version}
 if [ "$(uname -n)" == "mining-2" ]; then
-    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/cuckatoo32/NoBenchStarted_20210528_203050_benchmark.log"
+#    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/cuckatoo32/NoBenchStarted_20210528_203050_benchmark.log"
 #    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/cuckatoo31/NoBenchStarted_20210527_174128_benchmark.log"
 #    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/beamhash/NoBenchStarted_20210528_203258_benchmark.log"
 #    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miner#2.51/beamhash/NoBenchStarted_20210527_215442_benchmark.log"
 #    BENCHLOGFILE="/home/avalon/miner/gminer/gpu-test.log"
 #    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miniZ#1.7x3/ethash/NoBenchStarted_20210528_162304_benchmark.log"
+    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miniZ#1.7x3/zhash/NoBenchStarted_20210531_130437_benchmark.log"
+    BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miniZ#1.7x3/kawpow/20210529_133154_benchmark.log"
 else
     #mining
     BENCHLOGFILE="/mnt/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/benchmarking/miniZ#1.7x3/ethash/NoBenchStarted_20210528_162304_benchmark.log"
 fi
 #cat ${BENCHLOGFILE}
-hash_line=1
+declare -i watt_line=1
+declare -i hash_line=1
+declare -i wattCount=0
+declare -i hashCount=0
+declare -i miniZ_hashCount=0
+declare -i miniZ_hashCount_Before_hash_line=0
+maxWATT=0
+
+temp_hash_bc="_temp_hash_bc_input"
+temp_hash_sum="_temp_hash_sum"
 
 FATAL_ERR_CNT="${MINER}.FATAL"
 RETRIES_COUNT="${MINER}.retry"
 BoooooS_COUNT="${MINER}.booos"
 
+read miniZ_hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
+					    | tail -n +$hash_line \
+					    | tee >(  gawk -v _BC_="1" -M -e "${detect_miniZ_hash_count}" \
+							  | gawk -v kBase=${k_base} -M -e "${prepare_hashes_for_bc}" \
+							  | tee ${temp_hash_bc} \
+							  | bc >${temp_hash_sum}; \
+						      rm -rf ${temp_hash_sum}.lock ) \
+					    | gawk -e "${detect_miniZ_hash_count}" \
+     )
+hashCount=$(( miniZ_hashCount - miniZ_hashCount_Before_hash_line ))
+echo $hashCount $speed $einheit
+cat ${temp_hash_bc}
+rm ${temp_hash_bc} ${temp_hash_sum}
+
+
+
+	    read miniZ_hashCount speed einheit <<<$(cat ${BENCHLOGFILE} \
+		| tail -n +$hash_line \
+		| gawk -v BOOFILE="${BoooooS_COUNT}" -e "${detect_miniZ_hash_count}" \
+		)
+hashCount=$(( miniZ_hashCount - miniZ_hashCount_Before_hash_line ))
+echo $hashCount $speed $einheit
+cat ${BoooooS_COUNT}
+rm ${BoooooS_COUNT}
+exit
+
+# Funktionierte jetzt einwandfrei
+
+# Der letzte funktionierende Stand
+detect_miniZ_hash_count='BEGIN { yeses=0; booos=0; seq_booos=0; last_shares=0 }
+/[[]WARNING[]] (Bad|Stale) share:/ { booos++; seq_booos++; next }
+match( $0, /S:.*[]][*].*(Sol|H)\/s/ ) {
+   yeses++; seq_booos=0;
+   S1 = substr( $0, RSTART+2, RLENGTH-2 )
+   ###  2/0/0 0>GTX 1080 Ti  100% [48.C/ 0%]*48.08 I/s  95.96( 95.96)Sol/s
+   # Die Zahl bis zum ersten "/" sind die abgegebenen Shares
+   shares  = substr( S1, 1, index( S1, "/" )-1 )
+   sStart  = index( S1, "(" )+1
+   eStart  = index( S1, ")" )+1
+   speed   = substr( S1, sStart, eStart-1 - sStart )
+   einheit = substr( S1, eStart )
+   if (length(_BC_)) {
+      delta = shares - last_shares
+      last_shares = shares
+      print delta "*" speed " " einheit
+   } else if (length(EINHEIT)) {
+       if (einheit ~ /H\/s\s*$/) {einheit = "H/s"; exit}
+       einheit = "Sol/s"
+       exit
+   }
+}
+END {
+    if (length(BOOFILE)) print seq_booos " " booos " >" yeses >BOOFILE
+    if (length(_BC_)==0) print shares " " speed " " einheit
+}
+'
+exit
+						  
 # "mining-2" Output
 # cuckatoo32
 # '+---+-------+----+-----+---------+--------+------+----+-----+-----+-----------+
@@ -189,7 +309,7 @@ exit
 gpu_uuid=GPU-000bdf4a-1a2c-db4d-5486-585548cd33cb
 gpu_uuid=GPU-5c755a4e-d48e-f85c-43cc-5bdb1f8325cd
 miner_name=t-rex
-miner_version=0.10.12
+miner_version=0.19.12
 miner_name=miner
 miner_version=2.51
 miningAlgo=octopus

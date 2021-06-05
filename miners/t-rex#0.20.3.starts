@@ -1,0 +1,52 @@
+#!/bin/bash
+###############################################################################
+#
+# Erstellung der Benchmarkwerte mit Hilfe des CCminers
+#
+#
+# ./t-rex -a ethash -o stratum+tcp://daggerhashimoto.eu-west.nicehash.com:3353 -u 12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg.quadro -p x
+
+minerfolder="/home/avalon/miner/t-rex/t-rex-0.20.3"
+
+extra_params="--api-bind-telnet 0 --api-bind-http 0"
+
+LIVE_START_CMD='%s/%s -o stratum+tcp://%s:%s -u %s.%s -p %s --devices %s -a %s --no-color --pci-indexing '${extra_params}
+LIVE_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "server_name"
+    "algo_port"
+    "user_name"
+    "worker"
+    "password"
+    "miner_device"
+    "miningAlgo"
+)
+
+function PREP_LIVE_PARAMETERSTACK () {
+    # ${pool} muss von gpu_gv-algo.sh an die MinerShell mit übergeben werden
+    #         und  von bench_30s_2.sh selbst richtig eingestellt werden (was bereits der Fall ist)
+    case "${pool}" in
+        "nh")
+            server_name="${coin}.${continent}.${domain}"
+            user_name="12X6Enpg5FBQ332Re3vjU5FAxxQWUioBMg"
+            password=x
+            ;;
+        "sn")
+            user_name="unbekannt"
+            password=x
+            ;;
+    esac
+}
+
+BENCH_START_CMD='%s/%s --devices %s -a %s --no-color --benchmark '${extra_params}
+BENCH_PARAMETERSTACK=(
+    "minerfolder"
+    "miner_name"
+    "miner_device"
+    "miningAlgo"
+)
+
+#function PREP_BENCH_PARAMETERSTACK () {
+#}
+

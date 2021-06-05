@@ -293,9 +293,19 @@ function _On_Exit () {
 
     # Diese beiden Dateien müssen unbedingt weg bei einem geordneten Abbruch, da sie Informationen über laufende Prozesse enthalten,
     #       die benötigt werden, falls gpu_gv-algo.sh "zwischendurch" neu reinkommt (_update_SELF_if_necessary)
-    rm -f ${MinerShell}.ppid ${MinerShell}.sh .now_[0-9]* *.lock \
+    rm -f ${MinerShell}.ppid ${MinerShell}.sh *.lock \
        ${This}.pid &>/dev/null
     [ ${debug} -eq 1 ] && echo "... leaving _On_Exit()"
+
+#    ### SCREEN ADDITIONS: ###
+#    # Dieses Fenster müsste sowieso von selbst verschwinden wegen des Erschaffens über -X stuff
+#    # Was da übrig geblieben ist, ist ein Logging-Fenster im Vordergrund, von der der MM zur Zeit noch nicht mitbekommt, dass es jetzt weg kann.
+#    if [ ${UseScreen} -eq 1 ]; then
+#	# Die Variable BG_SESS gibt es immer. Eine screen Session nur dann, wenn der MM gestartet wurde
+#	if [ $(screen -ls|grep -c ${BG_SESS}) -eq 1 ]; then
+#	    screen -X remove
+#	fi
+#    fi
 }
 trap _On_Exit EXIT # == SIGTERM == TERM == -15
 
@@ -455,6 +465,7 @@ function _do_all_auto_benchmarks {
 	    cmd="export BencherTitle=${BencherTitle}; ${cmd}"
 	    cmd="cd ${LINUX_MULTI_MINING_ROOT}/benchmarking; ${cmd}"
 	    # Vom mm aus gerufen befinden wir uns hier in der ${BG_SESS}!
+	    # Die Variable BG_SESS gibt es immer. Eine screen Session nur dann, wenn der MM gestartet wurde
 	    # Deshalb hier die Umleitung in das eigene Logfile, damit die Aktivitäten vorne gesehen werden können.
 	    if [ $(screen -ls|grep -c ${BG_SESS}) -eq 1 ]; then
 		cmd+=" >>../${gpu_uuid}/gpu_gv-algo_${gpu_uuid}.log"
@@ -515,6 +526,7 @@ _find_algorithms_to_benchmark
 	# Automatische Benchmarks abgeschlossen.
 	# Die GPU ist wieder enabled und wird beim nächsten multi_miner-Zyklus berücksichtigt.
 	# Da es keine Datei gpu_gv-algo.pid mehr in diesem Verzeichnis gibt, startet der multi_miner das Script also wieder automatisch.
+
 	exit 99
     fi
 #fi
@@ -986,7 +998,13 @@ while :; do
                     coin_algorithm="${coin_pool}#${miningAlgo}#${MINER}"
 
                     if [ "${RuningAlgo}" != "${WhatsRunning[${gpu_uuid}]}" ]; then
-
+			#################################################################################
+			### ${IamEnabled} -eq 1
+			### "${WasItEnabled[${gpu_uuid}]}" == "1"
+			### -n "${RuningAlgo}"
+			### "${RuningAlgo}" != "${WhatsRunning[${gpu_uuid}]}"
+			### => Wenigstens muss der laufende ${RuningAlgo} gestoppt werden!
+			#################################################################################
                         StopShell=${miner_name}_${miner_version}_${coin}_${pool}_${miningAlgo}$( [[ ${#muck888} -gt 0 ]] && echo _${muck888} )
                         printf "GPU #${gpu_idx}: STOPPING MinerShell ${StopShell}.sh with Coin/Algo ${RuningAlgo}..."
 
@@ -1002,18 +1020,30 @@ while :; do
                             else
                                 printf "\nGPU #${gpu_idx}: OOOooops... Process ${StopShell}.sh ist weg. "
                                 printf "Möglicherweise hat er den Algo ${coin_algorithm} DISABLED.\n"
+				if [ ${UseScreen} -eq 1 ]; then
+                                    printf "Wir gehen an dieser Stelle davon aus, dass die ${StopShell}.sh tatsächlich nicht mehr läuft - ohne es zu prüfen -\n"
+                                    printf "und beenden hier noch das zugehörige Logger-Terminal\n"
+				    _terminate_screen_logger_terminal
+				fi
                             fi
                         else
                             printf "\n\n"
                             echo "OOOooops... MinerShell File ${StopShell}.ppid already gone. Das darf eigentlich nicht passieren!"
                             echo "In dieser Datei hat die ${This}.sh die Process-ID der MinerShell ${StopShell}.sh gespeichert,"
-                            echo "unmittelbar nachdem die Minershell ${StopShell}.sh in den Hintergrund geschickt wurde."
+                            echo "unmittelbar nachdem die Minershell ${StopShell}.sh in den Hintergrund geschickt (bzw. in der BG_SESS gestartet) wurde."
                             echo "Ja, es ist wahr, die MinerShell speichert die selbe Prozess-ID ebenfalls und es gibt also zwei Dateien"
                             echo "mit dem selben Inhalt und den Endungen .ppid bzw. .pid"
                             echo "Trotzdem darf die .ppid nicht so einfach verschwinden, BEVOR ${This}.sh den Prozess killt."
                             echo ""
+                            echo "ACHTUNG:   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                            echo "Programmtechnisch wird hier fälschlicherweise nicht geprüft, ob die MinerShell ${StopShell}.sh und das Logger-Terminal noch laufen!"
+                            echo "Das ist mit hoher wahrscheinlichkeit aber noch der Fall und muss spätestens dann überprüft werden, wenn diese Meldung zum ersten Mal"
+                            echo "angezeigt wird !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                            echo ""
                         fi
-                        rm -f ${StopShell}.ppid ${StopShell}.sh
+			# Was ist an dieser Stelle mit dem Logger-Terminal-Prozess?
+			# Wenn die .ppid noch da war, sollten beide Prozesse oben beendet worden sein.
+                        rm -f ${StopShell}.ppid ${StopShell}.sh &>/dev/null
 
                         if [ -n "${WhatsRunning[${gpu_uuid}]}" ]; then
                             StartMiner=1
@@ -1076,16 +1106,19 @@ while :; do
                                     # An dieser Stelle können wir sicher sagen, dass sich die MinerShell kurz nach dem Start selbst beendet
                                     # OHNE den Miner zu starten, weil sie vor dem Miner-Start das Internet checkt.
                                     # Und die ${MinerShell}.ppid müssen wir hier nicht löschen, da sie unten einfach überschrieben wird.
-                                    StartMiner=1
+                                    #StartMiner=1
                                 else
                                     echo ""
                                     echo "--->Die MinerShell ${MinerShell}.sh wurde im letzten Zyklus gestartet, hat sich aber beendet."
                                     echo "--->Datei ${MinerShell}.pid ist konsequenterweise auch nicht mehr vorhanden."
-                                    echo "--->Und konsequenterweise wird jetzt auch die Datei ${MinerShell}.ppid gelöscht."
+                                    echo "--->Und konsequenterweise wird jetzt auch die Datei ${MinerShell}.ppid gelöscht und das Logger-Terminal beendet."
+				    echo "--->Und es wird gleich wieder der Start des Miners beantragt durch Setzen von StartMiner=1"
                                     echo ""
 				    rm -f ${MinerShell}.ppid
 				    mv -f MinerShell_STARTS_HISTORY MinerShell_STARTS_HISTORY.BAK &>/dev/null
+				    _terminate_screen_logger_terminal
                                 fi
+                                StartMiner=1
                             fi
                         else
                             echo ""
@@ -1152,7 +1185,9 @@ while :; do
                         echo "--->     und können darüber die PID herausfinden. BITTE IMPLEMTIEREN! SONST LÄUFT MINER WEITER!!! <---"
                         echo ""
                     fi
-		    rm -f ${StopShell}.ppid ${StopShell}.sh
+		    rm -f ${StopShell}.ppid ${StopShell}.sh &>/dev/null
+		    # Das wird doch schon in _terminate_MinerShell_and_logger_terminal gemacht!
+		    # Allerdings tut dieses Kommando nichts, wenn keine Datei MinerShell_STARTS_HISTORY mehr da ist.
 		    mv -f MinerShell_STARTS_HISTORY MinerShell_STARTS_HISTORY.BAK &>/dev/null
 
                 else
@@ -1418,7 +1453,7 @@ ${miner_gpu_idx["${miner_name}#${miner_version}#${gpu_idx}"]} \
 ${cmdParameterString}"
 		p_cmd="${p_cmd%%*( )}"
 
-		m_cmd="${p_cmd} >>${MinerShell}.log"
+		m_cmd="${p_cmd} &>>${MinerShell}.log"
 
 		# Das Kommando p_cmd, wie es in der Prozesstabelle stehen wird, muss hier festgehalten werden, damit wir es mit pgrep finden können.
 		#     Leider wird es, bis in der Prozesstabelle landet, noch ein bisschen durch die Shell verändert.
