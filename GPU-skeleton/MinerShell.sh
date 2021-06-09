@@ -168,7 +168,7 @@ _On_Exit () {
         _delete_temporary_files
     fi
     rm -f ${This}.pid Miner_${MINER}_STARTS_HISTORY
-    printf "=========         Leaving _On_Exit()   um:    %s         =========\n\n" $(date "+%Y-%m-%d %H:%M:%S     %s")
+    printf "=========         Leaving _On_Exit()   um:    %s         =========\n\n" "$(date "+%Y-%m-%d %H:%M:%S     %s")"
 }
 trap _On_Exit EXIT
 

@@ -7,11 +7,67 @@
 # Die .booos scheinen nicht zu funktionieren bei den t-rex 0.19.14 und 0.20.3 ???
 # Der 0.20.3 hat wieder zusätzlich vor den [ OK ] und [FALS] etwas ausgegeben.
 # Die Entfernung des '^' am Anfang des Suchmusters hat genügt, um das Problem zu beheben.
+
+miner_name=t-rex
+miner_version=0.19.12
+MINER=${miner_name}#${miner_version}
+BENCHLOGFILE=/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/live/${MINER}/ethash/20210603_094226_mining.log
+
 miner_name=t-rex
 miner_version=0.20.3
 MINER=${miner_name}#${miner_version}
-BENCHLOGFILE="/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/live/t-rex#0.20.3_ethash_mining.log"
+BENCHLOGFILE=/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/live/${MINER}_ethash_mining.log
 
+BENCHLOGFILE=/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/live/${MINER}/ethash/
+BENCHLOGFILE+=20210604_184136_mining.log
+#BENCHLOGFILE=/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/live/${MINER}_ethash_mining.log
+
+miner_name=miner
+miner_version=2.51
+MINER=${miner_name}#${miner_version}
+BENCHLOGFILE=/home/avalon/lmms/GPU-2c54bba2-342f-d409-3e22-fc70f37bb2d7/live/miner#2.51_cuckatoo31_mining.log
+
+
+touch ${MINER}.fatal_err.lock ${MINER}.retry.lock ${MINER}.booos.lock ${MINER}.overclock.lock
+	    hashCount=$(cat ${BENCHLOGFILE} \
+			| tee >(grep -E -c -m1 -e "${ERREXPR}" >${MINER}.fatal_err; \
+				rm -f ${MINER}.fatal_err.lock) \
+			      >(grep -E -c -m1 -e "${CONEXPR}" >${MINER}.retry; \
+				rm -f ${MINER}.retry.lock) \
+                              >(gawk -v YES="${YESEXPR}" -v BOO="${BOOEXPR}" -e '
+                                   BEGIN { yeses=0; booos=0; seq_booos=0 }
+                                   $0 ~ BOO { booos++; seq_booos++; next }
+                                   $0 ~ YES { yeses++; seq_booos=0;
+                                               if (match( $NF, /[+*]+/ ) > 0)
+                                                  { yeses+=(RLENGTH-1) }
+                                            }
+                                   END { print seq_booos " " booos " " yeses }' >${MINER}.booos; \
+				       rm -f ${MINER}.booos.lock) \
+			      >(grep -E -c -e "${OVREXPR}" >${MINER}.overclock; \
+				rm -f ${MINER}.overclock.lock) \
+			| sed -Ee "${sed_Cut_YESmsg_after_hashvalue}" \
+			| gawk -e "${detect_zm_hash_count}" \
+			| grep -E -c "/s\s*$")
+
+echo $hashCount
+cat ${MINER}.booos
+rm -f ${MINER}.booos{,.lock}
+cat ${MINER}.fatal_err
+rm -f ${MINER}.fatal_err{,.lock}
+cat ${MINER}.retry
+rm -f ${MINER}.retry{,.lock}
+cat ${MINER}.overclock
+rm -f ${MINER}.overclock{,.lock}
+exit
+
+
+# Über 4 MB groß, 23913 OK's, 139 Booos, time sagt:
+# real	0m0,133s
+# user	0m0,187s
+# sys	0m0,028s
+BENCHLOGFILE=/home/avalon/git/linux-multi-switching-mining-manager/GPU-2d93bcf7-ca3d-0ca6-7902-664c9d9557f4/t-rex-4-daggerhashimoto-[1620485607].log
+
+exit
 
 # '20210605 17:55:17 [ OK ] 5841/5874 - 36.34 MH/s, 55ms ... GPU #1
 # '20210605 17:55:25 [ OK ] 5842/5875 - 36.34 MH/s, 60ms ... GPU #1
@@ -49,6 +105,10 @@ echo "${BOOEXPR}"
 :
 echo $hashCount
 cat ${MINER}.booos
+exit
+
+
+grep -m1 -c "\"HashCountPerSeconds\": " ${IMPORTANT_BENCHMARK_JSON}
 exit
 
 miner_name=miner

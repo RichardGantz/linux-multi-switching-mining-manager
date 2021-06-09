@@ -574,7 +574,7 @@ read new_Data_available SynFrac <<<$(_get_file_modified_time_ ${SYNCFILE})
 while :; do
     
     echo ""
-    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
+    echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date "+%s.%N")
     echo "GPU #${gpu_idx}: ###########################---> Anfang der Endlosschleife <---###########################"
 
     # If there is a newer version of this script, update it before the next run
@@ -642,7 +642,8 @@ while :; do
         _remove_lock                             # ... und wieder freigeben
 
         if [ ${#RunningGPUid[${gpu_uuid}]} -gt 0 ]; then
-            echo "GPU #${gpu_idx}: Alter bzw. bisheriger RUNNING_STATE eingelesen."
+	    touch .RUNNING_STATE_read
+            printf "GPU #%2i: %s Alter bzw. bisheriger RUNNING_STATE eingelesen.\n" ${gpu_idx} "$(date "+%s.%N")"
             [[ "${RunningGPUid[${gpu_uuid}]}" != "${gpu_idx}" ]] \
                 && echo "Konsistenzcheck FEHLGESCHLAGEN!!! GPU-Idx aus RUNNING_STATE anders als er sein soll !!!"
             IamEnabled=${WasItEnabled[${gpu_uuid}]}
@@ -651,8 +652,7 @@ while :; do
         fi
 
         if [ $debug -eq 1 ]; then
-            echo $(date "+%Y-%m-%d %H:%M:%S" ) $(date +%s)
-            echo "GPU #${gpu_idx}: Einlesen und verarbeiten der aktuellen Kurse, sobald die Datei vorhanden und nicht leer ist"
+            echo "GPU #${gpu_idx}: Einlesen und verarbeiten der aktuellen Kurse, sobald die Dateien vorhanden und nicht leer sind."
         fi
 
         #  4. ###WARTET### jetzt, bis die Dateien zur Berechnung der Kurse vorhanden und NICHT LEER SIND und

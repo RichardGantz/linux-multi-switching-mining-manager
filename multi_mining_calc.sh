@@ -45,7 +45,7 @@ debug=1
 # >7.< Auswertung und Miner-Steuerungen"
 # >8.< Eintritt in den WARTEZYKLUS..."
 #
-performanceTest=1
+performanceTest=0
 
 # Sicherheitshalber alle .pid Dateien löschen.
 # Das machen die Skripts zwar selbst bei SIGTERM, nicht aber bei SIGKILL und anderen.
@@ -311,7 +311,7 @@ echo "NICE[\"mm\"]        ="${NICE["mm"]}
 # Das gibt Informationen der gpu-abfrage.sh aus
 ATTENTION_FOR_USER_INPUT=1
 while : ; do
-    printf "\n=========         Beginn neuer Zyklus um:     $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
+    printf "\n=========         Beginn neuer Zyklus um:     $(date "+%Y-%m-%d %H:%M:%S" )     $(date "+%s.%N")         =========\n"
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >1.< While Loop ENTRY" >>perfmon.log
 
@@ -512,7 +512,7 @@ Danach erfolgt ein exit.
     # Wer diese Datei schreiben oder lesen will, muss auf das Verschwinden von *.lock warten...
     _reserve_and_lock_file ${RUNNING_STATE}  # Zum Lesen reservieren...
     _read_in_actual_RUNNING_STATE            # ... einlesen...
-    _remove_lock                                     # ... und wieder freigeben
+    _remove_lock                             # ... und wieder freigeben
 
     # Folgende Arrays stehen uns jetzt zur Verfügung, die uns sagen, welche GPU seit den
     # vergangenen 31s mit welchem Algorithmus und welchem Watt-Konsum laufen sollte,
@@ -522,12 +522,18 @@ Danach erfolgt ein exit.
     #      WasItEnabled[ $UUID ]=${GenerallyEnabled} (0/1)
     #      RunningWatts[ $UUID ]=${Watt}             Watt
     #      WhatsRunning[ $UUID ]=${RunningAlgo}      AlgoName
-    unset SUM_OF_RUNNING_WATTS; declare -i SUM_OF_RUNNING_WATTS=0
 
+    unset SUM_OF_RUNNING_WATTS; declare -i SUM_OF_RUNNING_WATTS=0
     unset lfdUUID
     if [[ ${#RunningGPUid[@]} -gt 0 ]]; then
         for lfdUUID in ${!RunningGPUid[@]}; do
             if [[ ${WasItEnabled[$lfdUUID]} == 1 ]]; then
+		# Zuerst müssen wir abwarten, dass die ENABLED GPU's auch die Gelegenheit hatten, die Datei $RUNNING_STATE zu lesen:
+		while :; do
+		    read RS_Secs RS_Frac <<<$(_get_file_modified_time_ ${lfdUUID}/.RUNNING_STATE_read)
+		    if (( ${RS_Secs} > ${new_Data_available} || ( ${RS_Secs} == ${new_Data_available} && ${RS_Frac} > ${SynFrac} ) )); then break; fi
+		    sleep .01
+		done
                 SUM_OF_RUNNING_WATTS+=${RunningWatts[$lfdUUID]}
             fi
         done
@@ -592,10 +598,10 @@ Danach erfolgt ein exit.
     # Da _progressbar im weiteren Verlauf IMMER gleich '\r' ist, wird diese Kontrolle nur beim allerersten Mal gemacht
     [[ "${_progressbar}" != "\r" ]] && { _get_SYSTEM_STATE_in; echo "Erster Start (eventuell benchmarken schon manche GPUs). Enabled GPUs: ${NumEnabledGPUs}"; }
 
+    { read nowSecs nowFrac <<<$(date "+%s %N"); nowFrac=${nowFrac##*(0)}; nowFrac=${nowFrac:-1}; }
     if [ ${NumEnabledGPUs} -gt 0 ]; then
 
         # Warten bis zu maximal 15 Sekunden (${MM_validating_delay}), bis wenigstens 1 GPU gültige Werte signalisiert hat.
-	{ read nowSecs nowFrac <<<$(date "+%s %N"); nowFrac=${nowFrac##*(0)}; nowFrac=${nowFrac:-1}; }
         until (( ${nowSecs} > ${SynSecs} || ( ${nowSecs} == ${SynSecs} && ${nowFrac} > ${SynFrac} ) )); do
             for UUID in ${!uuidEnabledSOLL[@]}; do
                 if [ ${uuidEnabledSOLL[${UUID}]} -eq 1 ]; then
@@ -1588,7 +1594,7 @@ Danach erfolgt ein exit.
 
     [[ ${performanceTest} -ge 1 ]] && echo "$(date +%s): >8.< Eintritt in den WARTEZYKLUS..." >>perfmon.log
 
-    printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )     $(date +%s)         =========\n"
+    printf "=========         Ende des Zyklus um:         $(date "+%Y-%m-%d %H:%M:%S" )     $(date "+%s.%N")         =========\n"
     # Nach der obigen Freigabe laufen die GPUs los und starten/switchen/stoppen ihre MinerShells.
     # Und die algo_multi_abfrage.sh wartet 5 Sekunden vor dem erneuten Web-Abruf und touch des SYNCFILE
     while [ "${new_Data_available}" == "$(date --reference=${SYNCFILE} +%s)" ] ; do
